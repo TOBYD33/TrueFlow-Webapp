@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { UserPlus, Trash2 } from 'lucide-react'
+import { UserPlus, Trash2, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 const ROLE_COLORS: Record<string, string> = {
@@ -92,9 +92,22 @@ export default function TeamPage() {
           <p className="text-sm text-gray-500 mt-0.5">{members.length} members</p>
         </div>
         {canManage && (
-          <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={() => setInviteOpen(true)}>
-            <UserPlus size={16} /> Add Member
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                const url = `${window.location.origin}/signup?org=${orgId}&role=staff`
+                navigator.clipboard.writeText(url)
+                toast.success('Invite link copied — share it with your team member')
+              }}
+            >
+              <Link2 size={16} /> Copy Invite Link
+            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={() => setInviteOpen(true)}>
+              <UserPlus size={16} /> Add WhatsApp Staff
+            </Button>
+          </div>
         )}
       </div>
 
