@@ -99,10 +99,7 @@ export default function DashboardPage() {
       const income = ((paymentData ?? []) as { amount: number }[]).reduce((s, p) => s + Number(p.amount), 0)
       setIncomeThisMonth(income)
 
-      // Load recent WhatsApp messages — try sessions with org_id first,
-      // then fall back to matching by whatsapp_number in org_members
-      let phones: string[] = []
-
+      // Load recent WhatsApp conversations for this org
       const { data: sessions } = await supabase
         .from('whatsapp_sessions')
         .select('phone_number')
@@ -110,19 +107,7 @@ export default function DashboardPage() {
         .order('last_active_at', { ascending: false })
         .limit(10)
 
-      if (sessions && sessions.length > 0) {
-        phones = sessions.map((s: { phone_number: string }) => s.phone_number)
-      } else {
-        // Fallback: get phone numbers from org_members.whatsapp_number
-        const { data: members } = await supabase
-          .from('org_members')
-          .select('whatsapp_number')
-          .eq('org_id', member.org_id)
-          .not('whatsapp_number', 'is', null)
-        phones = (members ?? [])
-          .map((m: { whatsapp_number: string | null }) => m.whatsapp_number)
-          .filter(Boolean) as string[]
-      }
+      const phones = (sessions ?? []).map((s: { phone_number: string }) => s.phone_number)
 
       if (phones.length > 0) {
         const { data: chats } = await supabase
