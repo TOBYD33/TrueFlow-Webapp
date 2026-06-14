@@ -1,0 +1,247 @@
+'use client'
+// reminders/page.tsx
+// View, add, dismiss and delete reminders — sorted by due date, overdue first
+
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase-browser'
+import { Reminder } from '@/types'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { formatDate } from '@/lib/utils'
+import { Plus, Bell, CheckCircle, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+
+const RECURRENCE_OPTIONS = [
+  { value: 'once', label: 'One time' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+]
+
+const CATEGORIES = [
+  { value: 'tax', label: 'Tax' },
+  { value: 'salary', label: 'Salary' },
+  { value: 'supplier', label: 'Supplier' },
+  { value: 'bill', label: 'Bill' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'project_deadline', label: 'Project deadline' },
+  { value: 'custom', label: 'Custom' },
+]
+
+const CATEGORY_COLORS: Record<string, string> = {
+  tax: 'bg-red-100 text-red-700',
+  salary: 'bg-blue-100 text-blue-700',
+  supplier: 'bg-orange-100 text-orange-700',
+  bill: 'bg-yellow-100 text-yellow-700',
+  compliance: 'bg-purple-100 text-purple-700',
+  project_deadline: 'bg-indigo-100 text-indigo-700',
+  custom: 'bg-gray-100 text-gray-600',
+}
+
+function isOverdue(due: string) {
+  return new Date(due) < new Date(new Date().toDateString())
+}
+
+function isDueToday(due: string) {
+  return new Date(due).toDateString() === new Date().toDateString()
+}
+
+export default function RemindersPage() {
+  const supabase = createClient()
+
+  const [reminders, setReminders] = useState<Reminder[]>([])
+  const [orgId, setOrgId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    title: '',
+    due_date: '',
+    recurrence: 'once',
+    category: 'custom',
+  })
+
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
+      if (!member) { setLoading(false); return }
+      setOrgId(member.org_id)
+      const { data } = await supabase
+        .from('reminders')
+        .select('*')
+        .eq('org_id', member.org_id)
+        .eq('status', 'active')
+        .order('due_date', { ascending: true })
+      setReminders((data as Reminder[]) ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  async function handleAdd() {
+    if (!orgId || !form.title.trim() || !form.due_date) return
+    setSaving(true)
+    const { data, error } = await supabase.from('reminders').insert({
+      org_id: orgId,
+      title: form.title,
+      due_date: form.due_date,
+      recurrence: form.recurrence,
+      category: form.category,
+    }).select().single()
+    setSaving(false)
+    if (error) { toast.error(error.message); return }
+    setReminders(prev => {
+      const next = [...prev, data as Reminder]
+      return next.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+    })
+    setModalOpen(false)
+    setForm({ title: '', due_date: '', recurrence: 'once', category: 'custom' })
+    toast.success('Reminder added')
+  }
+
+  async function dismiss(id: string) {
+    const { error } = await supabase.from('reminders').update({ status: 'dismissed' }).eq('id', id)
+    if (error) { toast.error(error.message); return }
+    setReminders(prev => prev.filter(r => r.id !== id))
+    toast.success('Reminder dismissed')
+  }
+
+  async function del(id: string) {
+    const { error } = await supabase.from('reminders').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    setReminders(prev => prev.filter(r => r.id !== id))
+  }
+
+  const overdue = reminders.filter(r => isOverdue(r.due_date))
+  const upcoming = reminders.filter(r => !isOverdue(r.due_date))
+
+  function ReminderRow({ r }: { r: Reminder }) {
+    const overdue = isOverdue(r.due_date)
+    const today = isDueToday(r.due_date)
+    return (
+      <div className={cn('flex items-center gap-4 px-5 py-4', overdue && 'bg-red-50')}>
+        <Bell size={16} className={overdue ? 'text-red-400' : today ? 'text-amber-400' : 'text-gray-300'} />
+        <div className="flex-1">
+          <p className={cn('font-medium', overdue ? 'text-red-700' : 'text-gray-900')}>{r.title}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={cn('text-xs', overdue ? 'text-red-500 font-semibold' : today ? 'text-amber-600 font-semibold' : 'text-gray-400')}>
+              {today ? 'Due today' : overdue ? `Overdue · ${formatDate(r.due_date)}` : formatDate(r.due_date)}
+            </span>
+            {r.recurrence !== 'once' && (
+              <span className="text-xs text-gray-400">· {r.recurrence}</span>
+            )}
+          </div>
+        </div>
+        <Badge variant="outline" className={CATEGORY_COLORS[r.category] ?? 'bg-gray-100 text-gray-500'}>
+          {CATEGORIES.find(c => c.value === r.category)?.label ?? r.category}
+        </Badge>
+        <div className="flex items-center gap-1">
+          <button onClick={() => dismiss(r.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-emerald-600" title="Dismiss">
+            <CheckCircle size={15} />
+          </button>
+          <button onClick={() => del(r.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500" title="Delete">
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Reminders</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{reminders.length} active</p>
+        </div>
+        <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={() => setModalOpen(true)}>
+          <Plus size={16} /> Add Reminder
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8 text-sm text-gray-400">Loading…</div>
+      ) : reminders.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-gray-400">
+            No active reminders. Add one above, or say "Remind me to pay rent on the 1st" on WhatsApp.
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {overdue.length > 0 && (
+            <Card className="border-red-200">
+              <div className="px-5 py-3 border-b border-red-100 bg-red-50">
+                <p className="text-sm font-semibold text-red-700">{overdue.length} Overdue</p>
+              </div>
+              <CardContent className="p-0 divide-y divide-red-100">
+                {overdue.map(r => <ReminderRow key={r.id} r={r} />)}
+              </CardContent>
+            </Card>
+          )}
+          {upcoming.length > 0 && (
+            <Card>
+              <CardContent className="p-0 divide-y divide-gray-100">
+                {upcoming.map(r => <ReminderRow key={r.id} r={r} />)}
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Add Reminder</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Title *</label>
+              <Input className="mt-1" placeholder="Pay PAYE to FIRS" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Due date *</label>
+                <Input type="date" className="mt-1" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Repeats</label>
+                <Select value={form.recurrence} onValueChange={v => v && setForm(f => ({ ...f, recurrence: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Category</label>
+              <Select value={form.category} onValueChange={v => v && setForm(f => ({ ...f, category: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setModalOpen(false)}>Cancel</Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                onClick={handleAdd}
+                disabled={saving || !form.title.trim() || !form.due_date}
+              >
+                {saving ? 'Saving…' : 'Add Reminder'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

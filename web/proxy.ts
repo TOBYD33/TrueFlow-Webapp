@@ -30,14 +30,12 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isProtected = request.nextUrl.pathname.startsWith('/dashboard') ||
-    request.nextUrl.pathname.startsWith('/receipts') ||
-    request.nextUrl.pathname.startsWith('/clients') ||
-    request.nextUrl.pathname.startsWith('/projects') ||
-    request.nextUrl.pathname.startsWith('/reports') ||
-    request.nextUrl.pathname.startsWith('/invoices') ||
-    request.nextUrl.pathname.startsWith('/team') ||
-    request.nextUrl.pathname.startsWith('/settings')
+  const protectedPaths = [
+    '/dashboard', '/receipts', '/budgets', '/reminders',
+    '/clients', '/projects', '/income',
+    '/reports', '/invoices', '/team', '/settings',
+  ]
+  const isProtected = protectedPaths.some(p => request.nextUrl.pathname.startsWith(p))
 
   if (isProtected && !user) {
     const url = request.nextUrl.clone()

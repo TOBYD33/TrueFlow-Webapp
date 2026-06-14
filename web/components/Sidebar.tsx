@@ -16,13 +16,19 @@ import {
   LogOut,
   UserCircle2,
   FolderKanban,
+  TrendingUp,
+  Bell,
+  PiggyBank,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/receipts', label: 'Receipts', icon: Receipt },
+  { href: '/budgets', label: 'Budgets', icon: PiggyBank },
+  { href: '/reminders', label: 'Reminders', icon: Bell },
   { href: '/clients', label: 'Clients', icon: UserCircle2 },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/income', label: 'Income', icon: TrendingUp },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/invoices', label: 'Invoices', icon: FileText },
   { href: '/team', label: 'Team', icon: Users },
