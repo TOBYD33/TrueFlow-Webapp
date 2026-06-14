@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [orgId, setOrgId] = useState<string | null>(null)
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [incomeThisMonth, setIncomeThisMonth] = useState(0)
+  const [recentChats, setRecentChats] = useState<{ id: string; phone_number: string; role: string; content: string; created_at: string }[]>([])
   const [loading, setLoading] = useState(true)
 
   // Derived metrics
@@ -97,6 +98,26 @@ export default function DashboardPage() {
       setReceipts((receiptData as Receipt[]) ?? [])
       const income = ((paymentData ?? []) as { amount: number }[]).reduce((s, p) => s + Number(p.amount), 0)
       setIncomeThisMonth(income)
+
+      // Load recent WhatsApp messages via sessions
+      const { data: sessions } = await supabase
+        .from('whatsapp_sessions')
+        .select('phone_number')
+        .eq('org_id', member.org_id)
+        .order('last_active_at', { ascending: false })
+        .limit(5)
+
+      if (sessions && sessions.length > 0) {
+        const phones = sessions.map((s: { phone_number: string }) => s.phone_number)
+        const { data: chats } = await supabase
+          .from('whatsapp_conversations')
+          .select('id, phone_number, role, content, created_at')
+          .in('phone_number', phones)
+          .order('created_at', { ascending: false })
+          .limit(8)
+        setRecentChats((chats ?? []) as typeof recentChats)
+      }
+
       setLoading(false)
     }
     load()
@@ -200,6 +221,43 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* WhatsApp activity feed */}
+      {(recentChats.length > 0 || !loading) && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageSquare size={16} className="text-[#25D366]" />
+              WhatsApp Activity
+            </CardTitle>
+            <Link href="/whatsapp" className="text-sm text-emerald-600 hover:underline">
+              View all chats
+            </Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            {recentChats.length === 0 ? (
+              <p className="px-5 py-5 text-sm text-gray-400">No WhatsApp messages yet. Send a message to your bot to get started.</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {recentChats.map(msg => (
+                  <div key={msg.id} className="flex items-start gap-3 px-5 py-3">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5 ${msg.role === 'user' ? 'bg-[#25D366] text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      {msg.role === 'user' ? '👤' : '🤖'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-medium text-gray-500">{msg.phone_number}</span>
+                        <span className="text-xs text-gray-300">{new Date(msg.created_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 truncate">{msg.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent receipts */}
       <Card>

@@ -19,10 +19,12 @@ import {
   TrendingUp,
   Bell,
   PiggyBank,
+  MessageSquare,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
   { href: '/receipts', label: 'Receipts', icon: Receipt },
   { href: '/budgets', label: 'Budgets', icon: PiggyBank },
   { href: '/reminders', label: 'Reminders', icon: Bell },
