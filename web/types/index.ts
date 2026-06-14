@@ -142,6 +142,37 @@ export interface ClientPayment {
   created_at: string
 }
 
+export interface LineItem {
+  description: string
+  quantity: number
+  unit_price: number
+  total: number
+}
+
+export interface Invoice {
+  id: string
+  org_id: string
+  client_id: string | null
+  project_id: string | null
+  invoice_number: string | null
+  client_name: string | null
+  client_email: string | null
+  line_items: LineItem[]
+  subtotal: number
+  tax_rate: number
+  tax_amount: number
+  total_amount: number
+  currency: string
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+  issue_date: string
+  due_date: string | null
+  paid_at: string | null
+  pdf_url: string | null
+  notes: string | null
+  created_at: string
+  clients?: { name: string; email: string | null } | null
+}
+
 export interface ScannedReceipt {
   vendor_name: string | null
   amount: number
