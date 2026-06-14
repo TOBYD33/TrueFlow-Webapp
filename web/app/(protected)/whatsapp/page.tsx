@@ -49,11 +49,42 @@ export default function WhatsAppPage() {
       if (!member) { setLoading(false); return }
       setOrgId(member.org_id)
 
-      const { data } = await supabase
+      // Try sessions linked by org_id first
+      let { data } = await supabase
         .from('whatsapp_sessions')
         .select('phone_number, last_active_at, is_new')
         .eq('org_id', member.org_id)
         .order('last_active_at', { ascending: false })
+
+      // Fallback: sessions whose phone_number matches org_members.whatsapp_number
+      if (!data || data.length === 0) {
+        const { data: members } = await supabase
+          .from('org_members')
+          .select('whatsapp_number')
+          .eq('org_id', member.org_id)
+          .not('whatsapp_number', 'is', null)
+        const phones = (members ?? [])
+          .map((m: { whatsapp_number: string | null }) => m.whatsapp_number)
+          .filter(Boolean) as string[]
+        if (phones.length > 0) {
+          const { data: fallback } = await supabase
+            .from('whatsapp_sessions')
+            .select('phone_number, last_active_at, is_new')
+            .in('phone_number', phones)
+            .order('last_active_at', { ascending: false })
+          data = fallback
+        }
+      }
+
+      // Last resort: show all sessions (if RLS is not yet enabled)
+      if (!data || data.length === 0) {
+        const { data: all } = await supabase
+          .from('whatsapp_sessions')
+          .select('phone_number, last_active_at, is_new')
+          .order('last_active_at', { ascending: false })
+          .limit(20)
+        data = all
+      }
 
       const s = (data as Session[]) ?? []
       setSessions(s)
