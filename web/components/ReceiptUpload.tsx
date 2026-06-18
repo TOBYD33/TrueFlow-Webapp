@@ -69,11 +69,19 @@ export function ReceiptUpload({ orgId }: ReceiptUploadProps) {
     if (!scanned || !file) return
     setSaving(true)
 
+    // Get current user id for uploaded_by
+    const { data: { user } } = await supabase.auth.getUser()
+
     // Upload image to Supabase Storage
-    const path = `receipts/${orgId}/${Date.now()}.jpg`
+    const ext = file.name.split('.').pop() ?? 'jpg'
+    const path = `receipts/${orgId}/${Date.now()}.${ext}`
     const { error: uploadError } = await supabase.storage
       .from('receipts')
       .upload(path, file, { contentType: file.type })
+
+    if (uploadError) {
+      console.warn('Storage upload failed (image will not be saved):', uploadError.message)
+    }
 
     const imageUrl = uploadError
       ? null
@@ -81,11 +89,12 @@ export function ReceiptUpload({ orgId }: ReceiptUploadProps) {
 
     const { error } = await supabase.from('receipts').insert({
       org_id: orgId,
+      uploaded_by: user?.id ?? null,
       uploaded_via: 'web',
-      vendor_name: scanned.vendor_name,
+      vendor_name: scanned.vendor_name || null,
       amount: scanned.amount,
       currency: scanned.currency,
-      tax_amount: scanned.tax_amount,
+      tax_amount: scanned.tax_amount ?? null,
       date: scanned.date,
       category: scanned.category,
       ai_confidence: scanned.confidence,
@@ -94,7 +103,8 @@ export function ReceiptUpload({ orgId }: ReceiptUploadProps) {
 
     setSaving(false)
     if (error) {
-      toast.error('Could not save receipt')
+      console.error('Receipt insert failed:', error)
+      toast.error(error.message)
       return
     }
 
