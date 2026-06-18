@@ -33,20 +33,23 @@ export default function InvoiceDetailPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('org_id, organizations(name)')
-        .eq('user_id', user.id)
-        .single()
-      if (!member) return
-      const org = (member as unknown as { org_id: string; organizations: { name: string } | null })
-      setOrgName(org.organizations?.name ?? '')
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data: member } = await supabase
+          .from('org_members')
+          .select('org_id, organizations(name)')
+          .eq('user_id', user.id)
+          .single()
+        if (!member) return
+        const org = (member as unknown as { org_id: string; organizations: { name: string } | null })
+        setOrgName(org.organizations?.name ?? '')
 
-      const { data } = await supabase.from('invoices').select('*, clients(name, email)').eq('id', invoiceId).single()
-      setInvoice(data as unknown as Invoice)
-      setLoading(false)
+        const { data } = await supabase.from('invoices').select('*, clients(name, email)').eq('id', invoiceId).single()
+        setInvoice(data as unknown as Invoice)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [invoiceId])

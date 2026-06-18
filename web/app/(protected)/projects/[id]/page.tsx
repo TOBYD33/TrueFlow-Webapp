@@ -53,26 +53,29 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) return
-      setOrgId(member.org_id)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
+        if (!member) return
+        setOrgId(member.org_id)
 
-      const [{ data: p }, { data: pay }, { data: rec }] = await Promise.all([
-        supabase.from('projects').select('*, clients(*)').eq('id', projectId).single(),
-        supabase.from('client_payments').select('*').eq('project_id', projectId).order('payment_date', { ascending: false }),
-        supabase.from('receipts').select('*').eq('project_id', projectId).order('date', { ascending: false }),
-      ])
+        const [{ data: p }, { data: pay }, { data: rec }] = await Promise.all([
+          supabase.from('projects').select('*, clients(*)').eq('id', projectId).single(),
+          supabase.from('client_payments').select('*').eq('project_id', projectId).order('payment_date', { ascending: false }),
+          supabase.from('receipts').select('*').eq('project_id', projectId).order('date', { ascending: false }),
+        ])
 
-      if (p) {
-        const proj = p as unknown as Project & { clients: Client }
-        setProject(proj)
-        setClient(proj.clients ?? null)
+        if (p) {
+          const proj = p as unknown as Project & { clients: Client }
+          setProject(proj)
+          setClient(proj.clients ?? null)
+        }
+        setPayments((pay as ClientPayment[]) ?? [])
+        setReceipts((rec as Receipt[]) ?? [])
+      } finally {
+        setLoading(false)
       }
-      setPayments((pay as ClientPayment[]) ?? [])
-      setReceipts((rec as Receipt[]) ?? [])
-      setLoading(false)
     }
     load()
   }, [projectId])

@@ -46,36 +46,39 @@ export default function ReceiptDetailPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
 
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('org_id')
-        .eq('user_id', user.id)
-        .single()
+        const { data: member } = await supabase
+          .from('org_members')
+          .select('org_id')
+          .eq('user_id', user.id)
+          .single()
 
-      if (!member) return
-      setOrgId(member.org_id)
+        if (!member) return
+        setOrgId(member.org_id)
 
-      const [{ data: r }, { data: c }] = await Promise.all([
-        supabase.from('receipts').select('*').eq('id', receiptId).single(),
-        supabase.from('clients').select('*').eq('org_id', member.org_id).eq('status', 'active').order('name'),
-      ])
+        const [{ data: r }, { data: c }] = await Promise.all([
+          supabase.from('receipts').select('*').eq('id', receiptId).single(),
+          supabase.from('clients').select('*').eq('org_id', member.org_id).eq('status', 'active').order('name'),
+        ])
 
-      if (r) {
-        setReceipt(r as Receipt)
-        setForm({
-          vendor_name: r.vendor_name ?? '',
-          amount: String(r.amount ?? ''),
-          date: r.date ?? '',
-          category: r.category ?? 'Other',
-          tax_amount: String(r.tax_amount ?? ''),
-          notes: r.notes ?? '',
-        })
+        if (r) {
+          setReceipt(r as Receipt)
+          setForm({
+            vendor_name: r.vendor_name ?? '',
+            amount: String(r.amount ?? ''),
+            date: r.date ?? '',
+            category: r.category ?? 'Other',
+            tax_amount: String(r.tax_amount ?? ''),
+            notes: r.notes ?? '',
+          })
+        }
+        setClients((c as Client[]) ?? [])
+      } finally {
+        setLoading(false)
       }
-      setClients((c as Client[]) ?? [])
-      setLoading(false)
     }
     load()
   }, [receiptId])

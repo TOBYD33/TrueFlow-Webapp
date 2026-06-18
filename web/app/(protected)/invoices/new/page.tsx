@@ -38,8 +38,8 @@ export default function NewInvoicePage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) return
+      const { data: member, error: memberError } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
+      if (!member) { console.error('No org membership found:', memberError?.message); return }
       setOrgId(member.org_id)
       const { data } = await supabase.from('clients').select('*').eq('org_id', member.org_id).eq('status', 'active').order('name')
       setClients((data as Client[]) ?? [])

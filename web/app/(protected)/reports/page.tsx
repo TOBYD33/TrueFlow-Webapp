@@ -45,14 +45,17 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) return
-      setOrgId(member.org_id)
-      const { data } = await supabase.from('receipts').select('*').eq('org_id', member.org_id).order('date', { ascending: false })
-      setReceipts((data as Receipt[]) ?? [])
-      setLoading(false)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
+        if (!member) return
+        setOrgId(member.org_id)
+        const { data } = await supabase.from('receipts').select('*').eq('org_id', member.org_id).order('date', { ascending: false })
+        setReceipts((data as Receipt[]) ?? [])
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])

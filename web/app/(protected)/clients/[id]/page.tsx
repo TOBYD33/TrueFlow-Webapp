@@ -46,22 +46,25 @@ export default function ClientDetailPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) return
-      setOrgId(member.org_id)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
+        if (!member) return
+        setOrgId(member.org_id)
 
-      const [{ data: c }, { data: p }, { data: cp }] = await Promise.all([
-        supabase.from('clients').select('*').eq('id', clientId).single(),
-        supabase.from('projects').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
-        supabase.from('client_payments').select('*').eq('client_id', clientId).order('payment_date', { ascending: false }),
-      ])
+        const [{ data: c }, { data: p }, { data: cp }] = await Promise.all([
+          supabase.from('clients').select('*').eq('id', clientId).single(),
+          supabase.from('projects').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
+          supabase.from('client_payments').select('*').eq('client_id', clientId).order('payment_date', { ascending: false }),
+        ])
 
-      setClient(c as Client)
-      setProjects((p as Project[]) ?? [])
-      setPayments((cp as ClientPayment[]) ?? [])
-      setLoading(false)
+        setClient(c as Client)
+        setProjects((p as Project[]) ?? [])
+        setPayments((cp as ClientPayment[]) ?? [])
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [clientId])
