@@ -57,6 +57,7 @@ export interface Receipt {
   category: ReceiptCategory
   notes: string | null
   image_url: string | null
+  ai_transcript: string | null
   ai_confidence: 'high' | 'medium' | 'low' | null
   is_verified: boolean
   created_at: string

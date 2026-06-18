@@ -31,8 +31,8 @@ export default function ReceiptDetailPage() {
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
-  const [selectedClientId, setSelectedClientId] = useState('')
-  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [selectedClientId, setSelectedClientId] = useState<string>('')
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
 
   // Editable fields
   const [form, setForm] = useState({
@@ -344,7 +344,7 @@ export default function ReceiptDetailPage() {
           <div className="space-y-3">
             <div>
               <label className="text-sm font-medium text-gray-700">Client</label>
-              <Select value={selectedClientId} onValueChange={v => { setSelectedClientId(v); setSelectedProjectId('') }}>
+              <Select value={selectedClientId} onValueChange={v => { setSelectedClientId(v ?? ''); setSelectedProjectId('') }}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select client" /></SelectTrigger>
                 <SelectContent>
                   {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
