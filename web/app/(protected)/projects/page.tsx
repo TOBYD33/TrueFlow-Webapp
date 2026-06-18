@@ -146,7 +146,7 @@ export default function ProjectsPage() {
                       <tr
                         key={p.id}
                         className="hover:bg-gray-50 cursor-pointer"
-                        onClick={() => router.push(`/clients/${p.client_id}`)}
+                        onClick={() => router.push(`/projects/${p.id}`)}
                       >
                         <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
                         <td className="px-4 py-3 text-gray-500">{p.clients?.name ?? '—'}</td>

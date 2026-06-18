@@ -11,16 +11,27 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   if (!user) redirect('/login')
 
-  // Get org name for header
+  // Get org_id first, then fetch org details separately to avoid RLS join issues
   const { data: member } = await supabase
     .from('org_members')
-    .select('organizations(name, plan)')
+    .select('org_id, role')
     .eq('user_id', user.id)
     .single()
 
-  const org = (member?.organizations as unknown as { name: string; plan: string } | null)
-  const orgName = org?.name ?? 'My Business'
-  const plan = org?.plan ?? 'free'
+  let orgName = 'TrueFlow'
+  let plan = 'free'
+
+  if (member?.org_id) {
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name, plan')
+      .eq('id', member.org_id)
+      .single()
+    if (org) {
+      orgName = org.name ?? orgName
+      plan = org.plan ?? plan
+    }
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">

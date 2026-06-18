@@ -7,7 +7,7 @@
 
 ## Goal
 
-The TrueFlio iOS and Android app for business owners who want to scan receipts
+The TrueFlow iOS and Android app for business owners who want to scan receipts
 and check their finances on their phone. Same Supabase account as WhatsApp bot
 and web app — scan on WhatsApp, see it in the app in real time.
 
@@ -318,8 +318,8 @@ Create `/mobile/.env`:
 EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_ANON_KEY=
 EXPO_PUBLIC_ANTHROPIC_KEY=
-EXPO_PUBLIC_WEBAPP_URL=https://app.trueflio.com
-EXPO_PUBLIC_PRICING_URL=https://trueflio.com/pricing
+EXPO_PUBLIC_WEBAPP_URL=https://app.gettrueflow.com
+EXPO_PUBLIC_PRICING_URL=https://gettrueflow.com/pricing
 ```
 
 ---
@@ -353,14 +353,14 @@ EXPO_PUBLIC_PRICING_URL=https://trueflio.com/pricing
 ## App Store Requirements
 
 ### iOS
-- Bundle ID: com.trueflio.app
+- Bundle ID: com.gettrueflow.app
 - Privacy usage descriptions in app.json:
-  - Camera: "TrueFlio uses your camera to scan receipts"
-  - Photo Library: "TrueFlio reads receipt images from your library"
+  - Camera: "TrueFlow uses your camera to scan receipts"
+  - Photo Library: "TrueFlow reads receipt images from your library"
 - Apple Developer account: $99/year — only pay when ready to submit
 
 ### Android
-- Package: com.trueflio.app
+- Package: com.gettrueflow.app
 - Permissions: CAMERA, READ_EXTERNAL_STORAGE
 - Google Play Developer: $25 one-time — only pay when ready to submit
 
@@ -398,3 +398,246 @@ EXPO_PUBLIC_PRICING_URL=https://trueflio.com/pricing
 > Install Expo Router and set up the folder structure.
 > Build services/supabase.ts first, then the auth screens,
 > then the root layout with auth check and redirect logic."
+
+---
+
+## Smart Transfer Recognition — Mobile App Implementation
+
+### Overview
+The mobile app is how SME owners check incoming payments on the go.
+When a client forwards payment proof via WhatsApp and the bot processes it,
+a push notification fires on the owner's phone and the dashboard updates instantly.
+The owner can also manually forward screenshots directly from the mobile app.
+
+### New Screens
+
+#### Income Tab (new bottom tab)
+Add a dedicated Income tab to the bottom navigation alongside Dashboard,
+Scan, Receipts, Reports, and Settings.
+
+```
+Income Tab shows:
+- Total received this month (large stat card, teal colour)
+- Total outstanding across all clients
+- Recent transfers list (last 10)
+- Each item: client name · amount · bank · date · Transfer In badge
+- Pull to refresh
+- Tap item → Payment Detail screen
+```
+
+#### /income/[id] — Payment Detail Screen
+- Full-screen receipt image (pinch to zoom)
+- Swipe up → structured data panel:
+  - Sender name · Bank · Amount · Date · Reference · Narration
+  - AI confidence badge
+- Linked client card (tap → client detail)
+- Linked project (tap → project detail)
+- "Attach to project" button
+- Share button → share screenshot or summary
+
+#### Push Notification — New Transfer Received
+When the WhatsApp bot logs a new client_payment via Smart Transfer Recognition,
+a push notification fires immediately on the owner's mobile:
+
+```
+Title: 💰 Payment received
+Body:  ₦150,000 from Marcus Adebayo · GTBank
+Action: Tap to view in TrueFlow
+```
+
+Implementation in Supabase Edge Function:
+```typescript
+// Triggered by Supabase Database Webhook on client_payments INSERT
+// Sends Expo push notification to owner's device
+
+const pushToken = owner.expo_push_token
+const message = {
+  to: pushToken,
+  sound: 'default',
+  title: '💰 Payment received',
+  body: `₦${payment.amount.toLocaleString()} from ${senderName} · ${bank}`,
+  data: { screen: 'Income', paymentId: payment.id }
+}
+
+await fetch('https://exp.host/--/api/v2/push/send', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(message)
+})
+```
+
+#### Real-time Hook — useIncome
+
+```typescript
+// hooks/useIncome.ts
+// Fetches client payments and subscribes to new ones in real time
+
+import { useState, useEffect } from 'react'
+import { supabase } from '../services/supabase'
+
+export function useIncome(orgId: string) {
+  const [payments, setPayments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [totalThisMonth, setTotalThisMonth] = useState(0)
+  const [totalOutstanding, setTotalOutstanding] = useState(0)
+
+  useEffect(() => {
+    fetchIncome()
+
+    // Realtime — new payment from WhatsApp bot appears instantly
+    const channel = supabase
+      .channel(`income:${orgId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'client_payments',
+        filter: `org_id=eq.${orgId}`
+      }, (payload) => {
+        const payment = payload.new
+        setPayments(prev => [payment, ...prev])
+        setTotalThisMonth(prev => prev + payment.amount)
+        // Show in-app notification banner
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [orgId])
+
+  async function fetchIncome() {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+    const { data } = await supabase
+      .from('client_payments')
+      .select('*, clients(name, outstanding_balance)')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    setPayments(data || [])
+
+    // Total this month
+    const monthTotal = (data || [])
+      .filter(p => p.payment_date >= startOfMonth.split('T')[0])
+      .reduce((sum, p) => sum + p.amount, 0)
+    setTotalThisMonth(monthTotal)
+
+    // Total outstanding from clients table
+    const { data: clients } = await supabase
+      .from('clients')
+      .select('outstanding_balance')
+      .eq('org_id', orgId)
+      .eq('status', 'active')
+
+    const outstanding = (clients || []).reduce((sum, c) => sum + (c.outstanding_balance || 0), 0)
+    setTotalOutstanding(outstanding)
+    setLoading(false)
+  }
+
+  return { payments, loading, totalThisMonth, totalOutstanding }
+}
+```
+
+#### Dashboard Home — Income Widget
+Add to the home dashboard screen between the balance card and recent receipts:
+
+```
+┌──────────────────────────────────┐
+│  💰 INCOME THIS MONTH            │
+│  ₦725,000 received               │
+│  ₦150,000 outstanding            │
+│                                  │
+│  Latest: Marcus Adebayo ₦150k   │
+│  [View all income →]            │
+└──────────────────────────────────┘
+```
+
+#### Transfer In Badge Component (React Native)
+```tsx
+// components/TransferBadge.tsx
+import { View, Text, StyleSheet } from 'react-native'
+
+export function TransferBadge() {
+  return (
+    <View style={styles.badge}>
+      <Text style={styles.text}>Transfer In</Text>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  badge: {
+    backgroundColor: 'rgba(0,212,170,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  text: {
+    color: '#00D4AA',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  }
+})
+```
+
+#### PaymentProofImage Component
+```tsx
+// components/PaymentProofImage.tsx
+// Shows the bank screenshot from Supabase Storage
+// Full screen with pinch-to-zoom
+
+import { Image, TouchableOpacity, StyleSheet } from 'react-native'
+import * as ImageViewing from 'react-native-image-viewing'
+
+export function PaymentProofImage({ imageUrl }: { imageUrl: string }) {
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <>
+      <TouchableOpacity onPress={() => setVisible(true)}>
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.thumbnail}
+          resizeMode="cover"
+        />
+      </TouchableOpacity>
+      <ImageViewing
+        images={[{ uri: imageUrl }]}
+        imageIndex={0}
+        visible={visible}
+        onRequestClose={() => setVisible(false)}
+      />
+    </>
+  )
+}
+```
+
+### Updated Client Detail Screen
+Add "Payments" tab showing all client_payments for that client:
+- PaymentProofImage thumbnail per row
+- Amount · Bank · Date · Reference · Transfer In badge
+- Tap → Payment Detail screen
+- Total received from client
+- Outstanding balance progress bar
+
+### Manual Payment Entry from Mobile
+"Record Payment" button on client detail screen:
+- Opens bottom sheet modal
+- Fields: amount, date, payment type (transfer/cash/POS/cheque)
+- Optional: camera button → photograph a paper receipt or screenshot
+- If photo taken → runs through Smart Transfer Recognition flow
+- Save → logs to client_payments, updates client balance
+
+### Build Order for Smart Transfer Recognition in Mobile App
+
+1. Add Income tab to bottom navigation
+2. Build `useIncome` hook with Realtime subscription
+3. Build Income tab screen — stat cards + payments list
+4. Build `TransferBadge` component
+5. Build `PaymentProofImage` component with zoom viewer
+6. Build Payment Detail screen
+7. Add Income widget to Dashboard home screen
+8. Add Payments tab to Client Detail screen
+9. Set up push notification handler for new transfer alerts
+10. Build manual "Record Payment" bottom sheet modal

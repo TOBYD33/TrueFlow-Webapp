@@ -39,7 +39,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     if (user.plan === 'free') {
       const count = await getMonthlyReceiptCount(user.org_id)
       if (count >= FREE_TIER_LIMIT) {
-        const msg = `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade to Solo (₦3,000/mo) for unlimited receipts.\n\n${process.env.PRICING_PAGE_URL || 'trueflio.com/pricing'}`
+        const msg = `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade to Solo (₦3,000/mo) for unlimited receipts.\n\n${process.env.PRICING_PAGE_URL || 'gettrueflow.com/pricing'}`
         return buildTextResponse(msg)
       }
     }

@@ -22,5 +22,5 @@ export function startScheduler() {
   // Budget alert check — every hour
   cron.schedule('0 * * * *', () => checkBudgetAlerts(), { timezone: 'UTC' })
 
-  console.log('TrueFlio scheduler running ✅')
+  console.log('TrueFlow scheduler running ✅')
 }

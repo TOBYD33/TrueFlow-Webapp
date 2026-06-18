@@ -40,7 +40,7 @@ export default function LoginPage() {
     <Card>
       <CardHeader>
         <CardTitle>Sign in</CardTitle>
-        <CardDescription>Access your TrueFlio dashboard</CardDescription>
+        <CardDescription>Access your TrueFlow dashboard</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleLogin} className="space-y-4">

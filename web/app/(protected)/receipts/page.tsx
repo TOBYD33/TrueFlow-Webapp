@@ -24,9 +24,11 @@ import {
 } from '@tanstack/react-table'
 import { ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 
 export default function ReceiptsPage() {
   const supabase = createClient()
+  const router = useRouter()
   const [orgId, setOrgId] = useState<string | null>(null)
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
@@ -201,7 +203,11 @@ export default function ReceiptsPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {table.getRowModel().rows.map(row => (
-                      <tr key={row.id} className="hover:bg-gray-50">
+                      <tr
+                        key={row.id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => router.push(`/receipts/${row.original.id}`)}
+                      >
                         {row.getVisibleCells().map(cell => (
                           <td key={cell.id} className="px-4 py-3">
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}

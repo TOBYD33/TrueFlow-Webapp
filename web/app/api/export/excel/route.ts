@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(csv, {
       headers: {
         'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="trueflio-receipts${month ? '-' + month : ''}.csv"`,
+        'Content-Disposition': `attachment; filename="trueflow-receipts${month ? '-' + month : ''}.csv"`,
       },
     })
   } catch (err) {

@@ -1,5 +1,5 @@
 // types/index.ts
-// All shared TypeScript interfaces for TrueFlio WhatsApp bot.
+// All shared TypeScript interfaces for TrueFlow WhatsApp bot.
 
 export interface Profile {
   id: string

@@ -106,7 +106,7 @@ function SignupForm() {
         </CardTitle>
         <CardDescription>
           {inviteOrgName
-            ? `You've been invited to join ${inviteOrgName} on TrueFlio`
+            ? `You've been invited to join ${inviteOrgName} on TrueFlow`
             : 'Free forever — no credit card needed'}
         </CardDescription>
       </CardHeader>

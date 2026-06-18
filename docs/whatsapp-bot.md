@@ -109,7 +109,7 @@ import { getConversationHistory, saveMessage } from './conversation'
 const claude = new Anthropic()
 
 const SYSTEM_PROMPT = `
-You are TrueFlio, a friendly and honest WhatsApp financial assistant for small
+You are TrueFlow, a friendly and honest WhatsApp financial assistant for small
 business owners. You help them track expenses, manage budgets, set reminders,
 and understand their finances.
 
@@ -489,13 +489,13 @@ export function startScheduler() {
   // Budget alert check — every hour
   cron.schedule('0 * * * *', () => checkBudgetAlerts())
 
-  console.log('TrueFlio scheduler running ✅')
+  console.log('TrueFlow scheduler running ✅')
 }
 ```
 
 ---
 
-## Reminder Types TrueFlio Handles Via Chat
+## Reminder Types TrueFlow Handles Via Chat
 
 | User says | Category | Recurrence |
 |-----------|----------|-----------|
@@ -513,7 +513,7 @@ export function startScheduler() {
 
 ```json
 {
-  "name": "trueflio-bot",
+  "name": "trueflow-bot",
   "version": "1.0.0",
   "scripts": {
     "dev": "ts-node src/index.ts",
@@ -576,3 +576,408 @@ Paste this into Claude Code to start:
 > conversation.ts, receipt-scanner.ts, report-service.ts,
 > ai-assistant.ts, budget-service.ts, reminder-service.ts,
 > action-executor.ts, message-handler.ts, webhook.ts, index.ts."
+
+---
+
+## Smart Transfer Recognition — WhatsApp Bot Implementation
+
+### Overview
+When a client sends payment proof to the SME owner via WhatsApp or Instagram,
+the owner forwards that screenshot to the TrueFlow WhatsApp bot number.
+The bot reads it, identifies the client, logs the income, and updates everything.
+
+This is one of TrueFlow's most powerful features for Nigerian SMEs.
+It turns forwarded payment screenshots into tracked income records automatically.
+
+### New Files to Build
+
+```
+/bot/src
+  transfer-detector.ts       ← Determines if image is incoming payment vs expense
+  bank-reader.ts             ← Nigerian bank-specific extraction and parsing
+```
+
+### transfer-detector.ts
+
+```typescript
+// transfer-detector.ts
+// First step when any image arrives at the bot.
+// Determines whether the image is:
+// 1. An incoming client payment (MONEY IN) → route to Smart Transfer Recognition
+// 2. An outgoing expense receipt (MONEY OUT) → route to receipt scanner
+// 3. Unknown → ask the owner which it is
+
+import Anthropic from '@anthropic-ai/sdk'
+
+const claude = new Anthropic()
+
+const DETECTION_PROMPT = `
+You are reading an image sent to a Nigerian business owner.
+Determine what type of financial document this is.
+Return ONLY valid JSON:
+{
+  "type": "incoming_payment" | "expense_receipt" | "invoice" | "unknown",
+  "confidence": "high" | "medium" | "low",
+  "reason": "one sentence explaining your determination"
+}
+
+INCOMING PAYMENT signals (client paid the owner):
+- "Credit alert", "You have received", "Inflow", "CR"
+- "Transfer credit", "Payment received", "Successfully received"
+- Bank credit notification, payment confirmation to the recipient
+
+EXPENSE RECEIPT signals (owner paid someone):
+- "Debit alert", "You have paid", "DR", "POS purchase"
+- "Transfer debit", "Payment made", "Receipt for purchase"
+- Shop receipt, vendor invoice, utility bill
+
+INVOICE: a document requesting payment (has due date, line items)
+UNKNOWN: cannot determine from the image
+`
+
+export async function detectImageType(base64: string, mediaType: string): Promise<{
+  type: 'incoming_payment' | 'expense_receipt' | 'invoice' | 'unknown'
+  confidence: string
+  reason: string
+}> {
+  const response = await claude.messages.create({
+    model: 'claude-opus-4-6',
+    max_tokens: 200,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType as any, data: base64 } },
+        { type: 'text', text: DETECTION_PROMPT }
+      ]
+    }]
+  })
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '{}'
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { type: 'unknown', confidence: 'low', reason: 'Could not parse image' }
+  }
+}
+```
+
+### bank-reader.ts
+
+```typescript
+// bank-reader.ts
+// Reads Nigerian bank transfer screenshots and extracts structured payment data.
+// Called after transfer-detector confirms the image is an incoming payment.
+
+import Anthropic from '@anthropic-ai/sdk'
+
+const claude = new Anthropic()
+
+const BANK_READER_PROMPT = `
+You are reading a Nigerian bank transfer screenshot or payment confirmation.
+Extract ALL visible payment information. Return ONLY valid JSON, no markdown:
+{
+  "amount": number (e.g. 150000.00),
+  "currency": "NGN",
+  "sender_name": "full name as shown on screenshot or null",
+  "recipient_name": "null (this is the business owner receiving)",
+  "bank": "bank name e.g. GTBank, Access Bank, Opay, Palmpay etc or null",
+  "payment_reference": "transaction reference number or null",
+  "transaction_id": "session ID or transaction ID or null",
+  "date": "YYYY-MM-DD or null",
+  "time": "HH:MM or null",
+  "narration": "payment narration/description or null",
+  "account_last4": "last 4 digits of sender account or null",
+  "confidence": "high | medium | low"
+}
+
+Nigerian banks and payment apps to recognise:
+GTBank, Access Bank, Zenith Bank, UBA, First Bank, Opay, Palmpay,
+Moniepoint, Kuda, Stanbic IBTC, Sterling Bank, Wema Bank, FCMB,
+Polaris Bank, Union Bank, Providus Bank, Jaiz Bank, Carbon, Fairmoney.
+
+Extract sender_name exactly as printed — do not clean or reformat it.
+If amount shows commas (e.g. 150,000.00) convert to number (150000.00).
+`
+
+export interface TransferData {
+  amount: number
+  currency: string
+  sender_name: string | null
+  bank: string | null
+  payment_reference: string | null
+  transaction_id: string | null
+  date: string | null
+  time: string | null
+  narration: string | null
+  account_last4: string | null
+  confidence: string
+}
+
+export async function readBankTransfer(base64: string, mediaType: string): Promise<TransferData> {
+  const response = await claude.messages.create({
+    model: 'claude-opus-4-6',
+    max_tokens: 500,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType as any, data: base64 } },
+        { type: 'text', text: BANK_READER_PROMPT }
+      ]
+    }]
+  })
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '{}'
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error('Could not read payment screenshot — please try a clearer image')
+  }
+}
+```
+
+### smart-transfer-service.ts
+
+```typescript
+// smart-transfer-service.ts
+// Orchestrates the full Smart Transfer Recognition flow:
+// 1. Read bank screenshot
+// 2. Find or create client
+// 3. Log payment to Supabase
+// 4. Update client balance and project
+
+import { supabase } from './supabase'
+import { readBankTransfer, TransferData } from './bank-reader'
+import { uploadImage } from './storage'
+
+export async function findClientMatch(orgId: string, senderName: string | null) {
+  if (!senderName) return null
+
+  // Try exact match first
+  const { data: exact } = await supabase
+    .from('clients')
+    .select('id, name, outstanding_balance, total_earned')
+    .eq('org_id', orgId)
+    .ilike('name', senderName)
+    .single()
+
+  if (exact) return { match: 'exact', client: exact }
+
+  // Try partial match — any word in sender_name matches
+  const words = senderName.split(' ').filter(w => w.length > 2)
+  for (const word of words) {
+    const { data: partial } = await supabase
+      .from('clients')
+      .select('id, name, outstanding_balance, total_earned')
+      .eq('org_id', orgId)
+      .ilike('name', `%${word}%`)
+      .limit(3)
+
+    if (partial && partial.length > 0) {
+      return { match: 'partial', clients: partial }
+    }
+  }
+
+  return null
+}
+
+export async function logClientPayment(params: {
+  orgId: string
+  clientId: string
+  projectId?: string
+  transfer: TransferData
+  imageUrl: string
+}) {
+  const { orgId, clientId, projectId, transfer, imageUrl } = params
+
+  // 1. Insert client payment record
+  const { data: payment, error } = await supabase
+    .from('client_payments')
+    .insert({
+      org_id: orgId,
+      client_id: clientId,
+      project_id: projectId || null,
+      amount: transfer.amount,
+      currency: transfer.currency || 'NGN',
+      payment_type: 'transfer',
+      payment_date: transfer.date || new Date().toISOString().split('T')[0],
+      payment_reference: transfer.payment_reference || transfer.transaction_id,
+      receipt_image_url: imageUrl,
+      ai_transcript: JSON.stringify(transfer),
+      notes: `${transfer.bank || 'Bank'} transfer · Sender: ${transfer.sender_name}`
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  // 2. Update client totals
+  await supabase.rpc('increment_client_earned', {
+    p_client_id: clientId,
+    p_amount: transfer.amount
+  })
+
+  // 3. Update project if linked
+  if (projectId) {
+    await supabase.rpc('increment_project_received', {
+      p_project_id: projectId,
+      p_amount: transfer.amount
+    })
+  }
+
+  return payment
+}
+```
+
+### Updated message-handler.ts Flow for Smart Transfer Recognition
+
+```typescript
+// In message-handler.ts — updated image routing logic
+
+if (hasImage && mediaUrl) {
+  // Step 1: Download image
+  const { base64, mediaType } = await downloadImage(mediaUrl)
+
+  // Step 2: Detect image type FIRST
+  const detection = await detectImageType(base64, mediaType)
+
+  if (detection.type === 'incoming_payment') {
+    // SMART TRANSFER RECOGNITION FLOW
+    const transfer = await readBankTransfer(base64, mediaType)
+    const imageUrl = await uploadImage(base64, `client-receipts/${user.org_id}`)
+    const match = await findClientMatch(user.org_id, transfer.sender_name)
+
+    // Build context for AI with transfer data + match result
+    const { reply, actions } = await getAIResponse({
+      ...params,
+      userMessage: '[Owner forwarded a client payment screenshot]',
+      incomingTransfer: transfer,
+      clientMatch: match
+    })
+
+    await executeActions(actions, user)
+    return buildTwiML(buildReply(reply))
+
+  } else if (detection.type === 'expense_receipt') {
+    // EXISTING EXPENSE RECEIPT FLOW
+    const receipt = await scanReceiptImage(mediaUrl, user)
+    // ... existing flow
+
+  } else {
+    // UNKNOWN — ask owner
+    const { reply } = await getAIResponse({
+      ...params,
+      userMessage: '[Owner sent an image — type unclear]',
+      unknownImage: true
+    })
+    return buildTwiML(buildReply(reply))
+  }
+}
+```
+
+### Bot Reply Templates for Smart Transfer Recognition
+
+**Exact client match found:**
+```
+📥 *Payment received!*
+
+💰 ₦150,000 from *Marcus Adebayo*
+🏦 GTBank · 14 June 2025
+🔖 Ref: FT25067382910
+
+I found Marcus Adebayo in your clients.
+Outstanding balance: ₦300,000
+
+Which project is this for?
+1️⃣ Website design (₦300,000 remaining)
+2️⃣ Logo & branding (₦50,000 remaining)
+3️⃣ General payment — no project
+```
+
+**Partial match found:**
+```
+📥 *Payment received!*
+
+💰 ₦150,000 from *MARCUS A VENTURES*
+🏦 Access Bank · 14 June 2025
+
+I found a possible match. Is this one of these?
+1️⃣ Marcus Adebayo
+2️⃣ Marcus & Associates Ltd
+3️⃣ None of these — new client
+```
+
+**No match — new client:**
+```
+📥 *Payment received!*
+
+💰 ₦150,000 from *JENNIFER OKAFOR*
+🏦 Opay · 14 June 2025
+
+I don't have a client called Jennifer Okafor.
+
+Reply *NEW* to create her client folder
+Reply *SKIP* to log without a client
+```
+
+**After logging — confirmation:**
+```
+✅ *Payment logged!*
+
+Client: Marcus Adebayo
+Project: Website design
+Amount: ₦150,000 received
+Balance remaining: ₦150,000
+
+Invoice updated. Your web dashboard
+and mobile app have been updated.
+
+Reply INVOICE to send Marcus an updated
+receipt or CLIENTS to see all balances.
+```
+
+### Supabase RPC Functions Needed
+
+```sql
+-- Add these to Supabase SQL editor
+
+-- Increment client total earned
+create or replace function increment_client_earned(
+  p_client_id uuid,
+  p_amount numeric
+) returns void as $$
+begin
+  update clients
+  set
+    total_earned = total_earned + p_amount,
+    outstanding_balance = greatest(0, outstanding_balance - p_amount),
+    updated_at = now()
+  where id = p_client_id;
+end;
+$$ language plpgsql security definer;
+
+-- Increment project amount received
+create or replace function increment_project_received(
+  p_project_id uuid,
+  p_amount numeric
+) returns void as $$
+begin
+  update projects
+  set
+    amount_received = amount_received + p_amount,
+    updated_at = now()
+  where id = p_project_id;
+  -- balance_due auto-updates (generated column)
+end;
+$$ language plpgsql security definer;
+```
+
+### Build Order for Smart Transfer Recognition in Bot
+
+1. Add SQL RPC functions to Supabase
+2. Build `transfer-detector.ts`
+3. Build `bank-reader.ts`
+4. Build `smart-transfer-service.ts`
+5. Update `message-handler.ts` — add detection routing
+6. Update `ai-assistant.ts` — add `incomingTransfer` context block
+7. Update `action-executor.ts` — add `CREATE_CLIENT_PAYMENT`, `MATCH_CLIENT` actions
+8. Test with real GTBank, Access, Opay screenshots

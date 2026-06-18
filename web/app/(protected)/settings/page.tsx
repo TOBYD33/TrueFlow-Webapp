@@ -166,7 +166,7 @@ export default function SettingsPage() {
             ))}
           </div>
           <p className="text-xs text-gray-400 mt-4">
-            To upgrade, visit <a href="https://trueflio.com/pricing" target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">trueflio.com/pricing</a>
+            To upgrade, visit <a href="https://gettrueflow.com/pricing" target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">gettrueflow.com/pricing</a>
           </p>
         </CardContent>
       </Card>

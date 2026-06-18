@@ -1,30 +1,30 @@
-# TrueFlio — Master Project Brief
+# TrueFlow — Master Project Brief
 > This file is read automatically by Claude Code on every session.
 > Do not delete it. Keep it updated as the project evolves.
 > Last updated: June 2025
 
 ---
 
-## What Is TrueFlio
+## What Is TrueFlow
 
-TrueFlio is an AI-powered conversational financial assistant AND client project manager
+TrueFlow is an AI-powered conversational financial assistant AND client project manager
 for small business owners, freelancers, and agencies.
 
 It serves two directions of money simultaneously:
 - MONEY OUT → track your own expenses, budgets, reminders, and financial planning
 - MONEY IN  → track client payments, manage project folders, and delivery deadlines
 
-TrueFlio combines: receipt scanning, expense tracking, budget management, reminders,
+TrueFlow combines: receipt scanning, expense tracking, budget management, reminders,
 financial planning, client CRM, invoice generation, and project delivery tracking —
 all in one product delivered across three channels sharing one Supabase backend.
 
 Company legal name: **True Financial Portfolio Ltd**
-Brand name: **TrueFlio**
+Brand name: **TrueFlow**
 Pronounced: **True-Flow** (like the two words "True Flow" said together)
 Tagline: *"Your true financial flow."*
-Domain: trueflio.com
-App URL: app.trueflio.com
-Email: hello@trueflio.com
+Domain: gettrueflow.com
+App URL: app.gettrueflow.com
+Email: hello@gettrueflow.com
 
 ---
 
@@ -51,7 +51,7 @@ WhatsApp Bot (✅ LIVE)
 → Forward client payment receipts to create client folders
 → Weekly summaries, monthly PDF reports, budget alerts
 
-Web App (🔨 BUILD NOW — app.trueflio.com)
+Web App (🔨 BUILD NOW — app.gettrueflow.com)
 → Full dashboard for MONEY OUT (expenses) + MONEY IN (clients)
 → View all WhatsApp bot data displayed visually
 → Receipt photos + AI transcripts from bot shown side by side
@@ -98,7 +98,7 @@ Scan on WhatsApp → appears in web app in under 2 seconds via Supabase Realtime
 - PDF export: @react-pdf/renderer or html-pdf
 - Excel export: xlsx (SheetJS)
 - Hosting: Vercel
-- URL: app.trueflio.com
+- URL: app.gettrueflow.com
 
 ### Phase 3 — Mobile App (⏳ LATER)
 - React Native + Expo + TypeScript
@@ -128,8 +128,8 @@ PAYSTACK_SECRET_KEY=
 PAYSTACK_WEBHOOK_SECRET=
 
 # App
-NEXT_PUBLIC_APP_URL=https://app.trueflio.com
-NEXT_PUBLIC_SITE_URL=https://trueflio.com
+NEXT_PUBLIC_APP_URL=https://app.gettrueflow.com
+NEXT_PUBLIC_SITE_URL=https://gettrueflow.com
 ```
 
 ### WhatsApp Bot (.env in /bot folder)
@@ -144,8 +144,8 @@ TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
 PAYSTACK_SECRET_KEY=
 PAYSTACK_PUBLIC_KEY=
 PAYSTACK_WEBHOOK_SECRET=
-WEBAPP_URL=https://app.trueflio.com
-PRICING_PAGE_URL=https://trueflio.com/pricing
+WEBAPP_URL=https://app.gettrueflow.com
+PRICING_PAGE_URL=https://gettrueflow.com/pricing
 ```
 
 ---
@@ -572,7 +572,7 @@ create policy "Org admins manage invoices"
 ## Phase 2 Web App — Complete Specification
 
 ### Overview
-app.trueflio.com is ONE unified web app combining:
+app.gettrueflow.com is ONE unified web app combining:
 - Expense Tracking (MONEY OUT) — data flows in from WhatsApp bot in real time
 - Client CRM (MONEY IN) — client folders, projects, income, invoices
 
@@ -826,7 +826,7 @@ app.trueflio.com is ONE unified web app combining:
   - Receipt table (view only — no edit/delete)
   - Reports with charts
   - Export PDF / Excel buttons
-  - "Powered by TrueFlio" footer
+  - "Powered by TrueFlow" footer
 
 #### /pricing
 - Public page — no login needed
@@ -985,20 +985,18 @@ Same product, same infrastructure — different Paystack/Stripe config.
 ## Brand Identity
 
 ### Name & Pronunciation
-- Written: **TrueFlio**
+- Written: **TrueFlow**
 - Pronounced: **True-Flow** (exactly like "True Flow" said together)
 - Phonetic: /truː.fləʊ/
-- Never write: Truelio, TrueFlow, Trueflio, TRUEFLIO, true flio
+- Never write: Truelio, TrueFlio, Trueflio, TRUEFLIO, true flow, true flio
 
 ### Dual Meaning
 | Layer | Meaning |
 |-------|---------|
-| Written | True + Flio (folio = portfolio) → "Your True Financial Portfolio" |
-| Spoken | True + Flow → "Your True Financial Flow" |
+| Written | True + Flow → "Your True Financial Flow" |
 
 ### Taglines
 - Primary: *"Your true financial flow."*
-- Alternative: *"Your true financial portfolio."*
 - Action: *"Scan. Track. Plan."*
 - Trust: *"The truth about your money."*
 
@@ -1064,5 +1062,245 @@ When I ask you to build something:
 15. `receipts` = YOUR expenses out. `client_payments` = money IN from clients.
 16. `balance_due` is a generated column on projects — never update it directly
 17. Always verify Paystack webhook signature before processing
-18. Use TrueFlio brand colours from this file for any UI components built
+18. Use TrueFlow brand colours from this file for any UI components built
 19. When in doubt about a feature, ask before building the wrong thing
+
+---
+
+## Smart Transfer Recognition — Core Feature Spec
+
+### What It Is
+
+Smart Transfer Recognition is TrueFlow's signature income-tracking feature.
+When a client sends a payment proof (transfer screenshot) to an SME owner via
+WhatsApp or Instagram, the owner forwards it to the TrueFlow WhatsApp bot.
+The AI reads the screenshot, extracts all payment data, matches the sender to
+an existing client or creates a new one, and logs the income automatically.
+
+This is built specifically for Nigerian and African SMEs where:
+- Clients always send payment proof via WhatsApp or Instagram after paying
+- SME owners receive these screenshots but do nothing with them
+- No record is kept, no tracking happens, money is lost in chat history
+- TrueFlow turns every forwarded screenshot into a tracked income record
+
+### Feature Name
+- Technical name: Smart Transfer Recognition
+- User-facing name: Smart Transfer Recognition
+- WhatsApp bot trigger message: "📥 Payment proof received"
+- Marketing line: "Forward it. We'll figure it out."
+
+### Supported Screenshot Types
+TrueFlow reads payment screenshots from ALL Nigerian banks and payment apps:
+
+| Bank / App | What Claude reads |
+|-----------|-----------------|
+| GTBank | Amount, sender name, account, date, reference |
+| Access Bank | Amount, sender, narration, date, transaction ID |
+| Zenith Bank | Amount, from account, date, session ID |
+| UBA | Amount, originator, date, reference |
+| First Bank | Amount, sender, date, transaction ref |
+| Opay | Amount, sender name, phone, date |
+| Palmpay | Amount, sender name, date, transaction ref |
+| Moniepoint | Amount, sender, date, reference |
+| Kuda | Amount, sender, date, reference |
+| Any bank | Claude reads whatever text is visible |
+
+### Detection Logic — Income vs Expense
+When an image arrives at the bot, Claude determines direction of money:
+
+INCOMING (client paying owner) — signals:
+- "Credit alert", "You have received", "Transfer credit"
+- "We have credited your account", "Inflow", "CR"
+- "Payment received", "Successful transfer to you"
+
+OUTGOING (owner paying someone) — signals:
+- "Debit alert", "Payment made", "You have paid"
+- "POS purchase", "Transfer debit", "DR"
+- "Receipt for purchase"
+
+If ambiguous → always ask: "Is this money you received from a client,
+or an expense you paid?" Never assume direction.
+
+### Full Bot Conversation Flow
+
+```
+Owner forwards payment screenshot
+            ↓
+Claude Vision reads image → extracts:
+{
+  "detection": "incoming_payment",
+  "amount": 150000,
+  "currency": "NGN",
+  "sender_name": "MARCUS ADEBAYO",
+  "bank": "GTBank",
+  "reference": "FT25067382910",
+  "date": "2025-06-14",
+  "narration": "Payment for website",
+  "confidence": "high"
+}
+            ↓
+Bot checks clients table for sender_name match
+            ↓
+    MATCH FOUND              NO MATCH
+         ↓                       ↓
+"✅ Payment received!      "📥 Payment received!
+ ₦150,000 from             ₦150,000 from
+ Marcus Adebayo            MARCUS ADEBAYO
+ (GTBank)                  on 14 June 2025.
+
+ Is this for an            I don't have a client
+ existing project?         with this name.
+
+ Reply YES — log it        Reply 1 — Create new
+ to his account            client folder
+ Reply NO — skip           Reply 2 — Match to
+ Reply PROJECT — pick      existing client
+ a specific project"       Reply 3 — Skip"
+         ↓                       ↓
+  Owner: YES              Owner: 1
+         ↓                       ↓
+"Which project?           "What is the client's
+ 1. Website design         full name or business
+    Balance: ₦300,000      name?"
+ 2. Logo & branding
+    Balance: ₦50,000"     Owner: "Marcus Adebayo
+         ↓                 Ventures"
+  Owner: 1                       ↓
+         ↓                "✅ New client created:
+"✅ Logged!               Marcus Adebayo Ventures
+
+ Marcus Adebayo           What is this ₦150,000
+ Website design           payment for?
+ ₦150,000 received        Reply or type project
+ Balance remaining:       name."
+ ₦150,000
+
+ Invoice updated.
+ Web dashboard
+ updated."
+```
+
+### What Happens in Supabase
+
+On every successful Smart Transfer Recognition:
+
+1. Insert into `client_payments`:
+   - amount, currency, payment_date
+   - sender_name (from screenshot)
+   - bank (detected from screenshot)
+   - payment_reference (from screenshot)
+   - receipt_image_url (stored in Supabase Storage)
+   - ai_transcript (full text Claude read)
+   - payment_type: 'transfer'
+   - client_id (matched or newly created)
+   - project_id (if owner linked it)
+
+2. Update `clients`:
+   - total_earned += amount
+   - outstanding_balance -= amount (if linked to project)
+   - updated_at = now()
+
+3. Update `projects` (if linked):
+   - amount_received += amount
+   - balance_due auto-updates (generated column)
+   - If amount_received >= total_fee → suggest marking as completed
+
+4. Update `invoices` (if linked):
+   - If payment covers full remaining balance → status = 'paid', paid_at = now()
+   - If partial → status stays 'sent', notes updated
+
+5. Store image:
+   - Path: `/client-receipts/{org_id}/{client_id}/{timestamp}.jpg`
+   - Public URL saved to client_payments.receipt_image_url
+
+6. Supabase Realtime fires:
+   - Web app dashboard updates instantly
+   - Mobile app updates instantly
+   - Income widget shows new payment
+   - Client folder shows updated balance
+
+### Nigerian Bank Screenshot Storage Path
+`/client-receipts/{org_id}/{client_id}/{YYYY-MM-DD}-{reference}.jpg`
+
+### New Files Needed in Bot
+- `transfer-detector.ts` — detects if image is incoming payment vs expense
+- `bank-reader.ts` — bank-specific extraction logic for Nigerian banks
+- Update `receipt-scanner.ts` — add incoming payment branch
+- Update `message-handler.ts` — route to transfer-detector first
+
+### Claude Vision Prompt for Transfer Screenshots
+
+```typescript
+const TRANSFER_PROMPT = `
+You are reading a Nigerian bank transfer screenshot or payment proof.
+Extract all visible information and return ONLY valid JSON:
+{
+  "detection": "incoming_payment" | "outgoing_payment" | "unknown",
+  "amount": number,
+  "currency": "NGN" (or detected currency),
+  "sender_name": "string or null",
+  "recipient_name": "string or null",
+  "bank": "detected bank name or null",
+  "payment_reference": "string or null",
+  "transaction_id": "string or null",
+  "date": "YYYY-MM-DD or null",
+  "time": "HH:MM or null",
+  "narration": "string or null",
+  "account_number": "last 4 digits only or null",
+  "confidence": "high | medium | low"
+}
+
+Nigerian banks to recognise: GTBank, Access Bank, Zenith Bank, UBA,
+First Bank, Opay, Palmpay, Moniepoint, Kuda, Stanbic, Sterling,
+Wema, FCMB, Polaris, Union Bank, Providus, Jaiz.
+
+If the screenshot is not a payment proof, set detection to "unknown".
+`
+```
+
+### UI Labels Across All Channels
+
+| Context | Label |
+|---------|-------|
+| WhatsApp bot reply | "📥 Payment proof received" |
+| Web app section | Income → Payments Received |
+| Web app column | "Transfer In" channel badge |
+| Client folder tab | "Payment History" |
+| Dashboard widget | "Recent Transfers In" |
+| Mobile home screen | "Income" quick stat |
+| Receipt detail | "Proof of Payment" image |
+| Feature name in settings | "Smart Transfer Recognition" |
+| Onboarding tooltip | "Forward any payment proof to this number" |
+
+### Transfer In Channel Badge
+- Label: `Transfer In`
+- Background: rgba(0,212,170,0.1)
+- Text colour: #00D4AA (Mint Verify)
+- Different from expense receipts which use channel badges (WhatsApp/Web/App)
+
+### Marketing Copy for This Feature
+
+Headline: "Forward it. We'll figure it out."
+Sub: "When clients send you payment proof on WhatsApp, forward it to TrueFlow.
+     We read the screenshot, find the client, and update your books automatically.
+     Works with every Nigerian bank."
+
+Feature card title: "Smart Transfer Recognition"
+Feature card desc: "Forward any client payment screenshot to TrueFlow on WhatsApp.
+                   We read the amount, match the client, and log the income instantly
+                   — visible on your web app and mobile in seconds."
+
+### Business Rules for Smart Transfer Recognition
+
+1. Always store the original screenshot image — never discard it
+2. Never auto-create a client without owner confirmation
+3. Never auto-link to a project without owner confirmation
+4. If confidence is "low" → show extracted data and ask owner to confirm each field
+5. If sender_name matches multiple clients → show list and ask owner to pick
+6. Partial name matches (e.g. "MARCUS" matches "Marcus Adebayo") → show suggestion
+7. After logging → always show updated project balance and outstanding amount
+8. If payment exceeds project balance → ask owner: "This payment of ₦X exceeds the
+   remaining balance of ₦Y. Is this for a different project or a new engagement?"
+9. Store bank name in payment record — useful for future bank-specific parsing improvements
+10. Instagram screenshots: owner saves image from Instagram and forwards to WhatsApp bot
+    — same flow, same detection. No special handling needed.

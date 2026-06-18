@@ -84,7 +84,7 @@ export default async function AccountantPortalPage({ params }: { params: Promise
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
-            <span className="text-xl font-bold text-emerald-600">TrueFlio</span>
+            <span className="text-xl font-bold text-emerald-600">TrueFlow</span>
             <span className="text-gray-400 mx-2">·</span>
             <span className="font-semibold text-gray-900">{orgName}</span>
           </div>
@@ -177,7 +177,7 @@ export default async function AccountantPortalPage({ params }: { params: Promise
 
         {/* Footer */}
         <p className="text-center text-xs text-gray-400 pb-4">
-          Powered by TrueFlio · trueflio.com · This report is read-only
+          Powered by TrueFlow · gettrueflow.com · This report is read-only
         </p>
       </div>
     </div>

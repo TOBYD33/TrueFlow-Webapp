@@ -51,7 +51,7 @@ export function Sidebar() {
   return (
     <aside className="w-60 min-h-screen bg-gray-900 text-white flex flex-col">
       <div className="px-6 py-5 border-b border-gray-800">
-        <span className="text-xl font-bold text-emerald-400">TrueFlio</span>
+        <span className="text-xl font-bold text-emerald-400">TrueFlow</span>
         <p className="text-xs text-gray-500 mt-0.5">Financial Dashboard</p>
       </div>
 

@@ -1,5 +1,5 @@
 {
-  "name": "trueflio-bot",
+  "name": "trueflow-bot",
   "version": "1.0.0",
   "scripts": {
     "dev": "ts-node src/index.ts",

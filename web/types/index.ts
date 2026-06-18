@@ -1,5 +1,5 @@
 // types/index.ts
-// Shared TypeScript types for the TrueFlio web app
+// Shared TypeScript types for the TrueFlow web app
 
 export type Plan = 'free' | 'solo' | 'business' | 'pro' | 'enterprise'
 export type Role = 'owner' | 'admin' | 'staff' | 'accountant'

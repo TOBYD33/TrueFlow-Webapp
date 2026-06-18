@@ -11,7 +11,7 @@ import { getConversationHistory, saveMessage } from './conversation'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const SYSTEM_PROMPT = `
-You are TrueFlio, a friendly and honest WhatsApp financial assistant for small
+You are TrueFlow, a friendly and honest WhatsApp financial assistant for small
 business owners. You help them track expenses, manage budgets, set reminders,
 and understand their finances.
 
@@ -162,10 +162,10 @@ export async function getWelcomeMessage(userName: string): Promise<string> {
     messages: [
       {
         role: 'user',
-        content: `New user just joined TrueFlio. Their name/number is: ${userName}. Write a warm welcome message (3-4 lines max). Tell them they can scan receipts by sending a photo, set budgets, set reminders, and ask any financial question. Keep it WhatsApp-friendly with *bold* for key points.`
+        content: `New user just joined TrueFlow. Their name/number is: ${userName}. Write a warm welcome message (3-4 lines max). Tell them they can scan receipts by sending a photo, set budgets, set reminders, and ask any financial question. Keep it WhatsApp-friendly with *bold* for key points.`
       }
     ]
   })
 
-  return response.content[0].type === 'text' ? response.content[0].text : 'Welcome to TrueFlio! 👋'
+  return response.content[0].type === 'text' ? response.content[0].text : 'Welcome to TrueFlow! 👋'
 }

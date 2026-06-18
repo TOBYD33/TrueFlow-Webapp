@@ -7,7 +7,7 @@
 
 ## Goal
 
-A full web dashboard at app.trueflio.com for business owners and accountants.
+A full web dashboard at app.gettrueflow.com for business owners and accountants.
 Primary users: owners at a desk doing monthly reviews, accountants reviewing books,
 enterprise admins managing multiple staff.
 
@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
 cd web
 npx vercel
 # Follow prompts — connect to Vercel project
-# Add custom domain: app.trueflio.com in Vercel dashboard
+# Add custom domain: app.gettrueflow.com in Vercel dashboard
 # Set all env vars from CLAUDE.md in Vercel environment settings
 ```
 
@@ -277,3 +277,186 @@ npx vercel
 > Create the /web folder and scaffold a Next.js 14 project with TypeScript and Tailwind.
 > Install shadcn/ui. Set up supabase-browser.ts, supabase-server.ts, and middleware.ts.
 > Then build the auth pages and the root layout with sidebar navigation."
+
+---
+
+## Smart Transfer Recognition — Web App Implementation
+
+### Overview
+Payment screenshots forwarded to the WhatsApp bot appear instantly in the web app
+via Supabase Realtime. The web app is the PRIMARY place owners review, manage,
+and deep-dive into all recognised transfer payments.
+
+### New Pages and Components
+
+#### /income — Payments Received Dashboard
+This is the Money In hub. Shows all client_payments records.
+
+Layout:
+- Top stat cards:
+  - Total received this month
+  - Total received this year
+  - Total outstanding across all clients
+  - Number of transfers this month
+- Payments table (TanStack Table):
+  - Date · Client · Bank · Amount · Project · Reference · Channel · Actions
+  - Channel column shows "Transfer In" badge (teal #00D4AA)
+  - Click row → opens payment detail modal
+  - Receipt image thumbnail in table row — click to enlarge
+- Filter bar: date range · client · bank · payment type
+
+#### /income/[id] — Payment Detail
+- Full receipt/screenshot image viewer (large)
+- AI-extracted data panel beside image:
+  - Sender name (as read from screenshot)
+  - Bank name
+  - Amount
+  - Date and time
+  - Reference number
+  - Narration
+  - AI confidence badge
+- Linked client (clickable → /clients/[id])
+- Linked project (clickable → /projects/[id])
+- "Attach to project" button (if not yet linked)
+- "Create invoice" button
+- Delete payment record
+
+#### Transfer In Channel Badge Component
+```tsx
+// components/TransferBadge.tsx
+export function TransferBadge() {
+  return (
+    <span style={{
+      background: 'rgba(0,212,170,0.1)',
+      color: '#00D4AA',
+      fontSize: '11px',
+      fontWeight: 600,
+      padding: '2px 8px',
+      borderRadius: '4px',
+      letterSpacing: '0.5px'
+    }}>
+      Transfer In
+    </span>
+  )
+}
+```
+
+#### Payment Proof Image Viewer Component
+```tsx
+// components/PaymentProofViewer.tsx
+// Shows the original bank screenshot + AI extracted data side by side
+// Left: The actual screenshot image from Supabase Storage
+// Right: Structured data Claude extracted from it
+// Bottom: Link to client folder and project
+
+interface PaymentProofViewerProps {
+  imageUrl: string
+  transfer: {
+    sender_name: string
+    bank: string
+    amount: number
+    currency: string
+    payment_reference: string
+    date: string
+    narration: string
+    ai_confidence: string
+  }
+  client: { id: string; name: string }
+  project?: { id: string; name: string }
+}
+```
+
+#### Realtime Updates on /income and /dashboard
+```typescript
+// When a new client_payment arrives from WhatsApp bot
+const channel = supabase
+  .channel(`income:${orgId}`)
+  .on('postgres_changes', {
+    event: 'INSERT',
+    schema: 'public',
+    table: 'client_payments',
+    filter: `org_id=eq.${orgId}`
+  }, (payload) => {
+    const payment = payload.new
+    setPayments(prev => [payment, ...prev])
+    // Toast: "💰 ₦150,000 received from Marcus Adebayo · GTBank"
+    showToast(`💰 ${payment.currency} ${payment.amount.toLocaleString()} received from ${payment.notes}`)
+  })
+  .subscribe()
+```
+
+### Updated /clients/[id] — Client Folder with Payment History
+
+Add new "Payments" tab to client folder:
+- All client_payments for this client
+- Each row: date · amount · bank · reference · receipt thumbnail · project
+- Click receipt thumbnail → PaymentProofViewer modal
+- Total received from this client (lifetime)
+- Outstanding balance (total_fee of all projects - amount_received)
+- "Record payment manually" button (for cash payments or offline transfers)
+
+### /clients/[id] Balance Summary Card
+```
+┌─────────────────────────────────────┐
+│  Marcus Adebayo Ventures            │
+│                                     │
+│  Total earned:    ₦450,000  ✅      │
+│  Received:        ₦300,000          │
+│  Outstanding:     ₦150,000  ⚠️      │
+│                                     │
+│  Active projects: 2                 │
+│  Payments logged: 3                 │
+└─────────────────────────────────────┘
+```
+
+### New API Route — /api/income/manual
+
+For cash payments or offline transfers not captured via WhatsApp:
+```typescript
+// POST /api/income/manual
+// Allows web app users to manually record a client payment
+// with optional receipt image upload
+{
+  client_id: string
+  project_id?: string
+  amount: number
+  currency: string
+  payment_type: 'transfer' | 'cash' | 'pos' | 'cheque' | 'other'
+  payment_date: string
+  payment_reference?: string
+  image?: File  // optional manual upload of screenshot
+  notes?: string
+}
+```
+
+### Dashboard Widget — "Recent Transfers In"
+Add to /dashboard alongside existing spending widgets:
+
+```
+💰 RECENT TRANSFERS IN
+─────────────────────────────
+Marcus Adebayo     ₦150,000  Transfer In  2h ago
+Jennifer Okafor    ₦75,000   Transfer In  Yesterday
+Apex Solutions     ₦500,000  Transfer In  2 days ago
+
+Total this month: ₦725,000
+[View all income →]
+```
+
+### Settings — Smart Transfer Recognition Toggle
+Add to /settings/business:
+- "Smart Transfer Recognition" toggle (on by default)
+- "Confirm before logging" toggle (default: ON — always ask owner before saving)
+- "Auto-match clients" toggle (default: ON — suggest client matches)
+- "Supported banks" info section showing all 15+ Nigerian banks
+
+### Build Order for Smart Transfer Recognition in Web App
+
+1. Add `/income` page — payments received table + stat cards
+2. Add `TransferBadge` component
+3. Add `PaymentProofViewer` component
+4. Add Realtime subscription on `client_payments` to /dashboard and /income
+5. Update `/clients/[id]` — add Payments tab with receipt image thumbnails
+6. Add `/api/income/manual` route for manual payment entry
+7. Add "Recent Transfers In" widget to dashboard
+8. Add Smart Transfer Recognition toggle to /settings/business

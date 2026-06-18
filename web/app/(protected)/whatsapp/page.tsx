@@ -156,7 +156,7 @@ export default function WhatsAppPage() {
               </div>
               <div>
                 <p className="font-medium text-gray-900 text-sm">{selected}</p>
-                <p className="text-xs text-gray-400">WhatsApp · TrueFlio Bot</p>
+                <p className="text-xs text-gray-400">WhatsApp · TrueFlow Bot</p>
               </div>
             </div>
 
