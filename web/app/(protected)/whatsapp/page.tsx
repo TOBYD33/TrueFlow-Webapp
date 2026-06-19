@@ -43,39 +43,77 @@ export default function WhatsAppPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-      setOrgId(member.org_id)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data: member } = await supabase.from('org_members').select('org_id, whatsapp_number').eq('user_id', user.id).single()
+        if (!member) return
+        setOrgId(member.org_id)
 
-      const { data } = await supabase
-        .from('whatsapp_sessions')
-        .select('phone_number, last_active_at, is_new')
-        .eq('org_id', member.org_id)
-        .order('last_active_at', { ascending: false })
+        // Fetch sessions linked to this org
+        const { data: orgSessions } = await supabase
+          .from('whatsapp_sessions')
+          .select('phone_number, last_active_at, is_new')
+          .eq('org_id', member.org_id)
+          .order('last_active_at', { ascending: false })
 
-      const s = (data as Session[]) ?? []
-      setSessions(s)
-      if (s.length > 0) setSelected(s[0].phone_number)
-      setLoading(false)
+        // Also fetch all org member phone numbers and get their sessions (bot may not set org_id)
+        const { data: allMembers } = await supabase
+          .from('org_members')
+          .select('whatsapp_number')
+          .eq('org_id', member.org_id)
+          .not('whatsapp_number', 'is', null)
+
+        const memberPhones = (allMembers ?? []).map(m => m.whatsapp_number).filter(Boolean)
+
+        let extraSessions: Session[] = []
+        if (memberPhones.length > 0) {
+          const { data: phoneSessions } = await supabase
+            .from('whatsapp_sessions')
+            .select('phone_number, last_active_at, is_new')
+            .in('phone_number', memberPhones)
+            .order('last_active_at', { ascending: false })
+          extraSessions = (phoneSessions as Session[]) ?? []
+        }
+
+        // Merge, deduplicate by phone_number, sort by last_active_at
+        const merged = [...(orgSessions as Session[] ?? []), ...extraSessions]
+        const seen = new Set<string>()
+        const unique = merged.filter(s => {
+          if (seen.has(s.phone_number)) return false
+          seen.add(s.phone_number)
+          return true
+        }).sort((a, b) => new Date(b.last_active_at).getTime() - new Date(a.last_active_at).getTime())
+
+        setSessions(unique)
+        if (unique.length > 0) setSelected(unique[0].phone_number)
+      } catch (err) {
+        console.error('WhatsAppPage load failed:', err)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])
 
   useEffect(() => {
     if (!selected) return
-    setMsgLoading(true)
-    supabase
-      .from('whatsapp_conversations')
-      .select('*')
-      .eq('phone_number', selected)
-      .order('created_at', { ascending: true })
-      .limit(100)
-      .then(({ data }) => {
+    async function loadMessages() {
+      setMsgLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from('whatsapp_conversations')
+          .select('*')
+          .eq('phone_number', selected)
+          .order('created_at', { ascending: true })
+          .limit(100)
+        if (error) console.error('loadMessages failed:', error)
         setMessages((data as Message[]) ?? [])
+      } finally {
         setMsgLoading(false)
-      })
+      }
+    }
+    loadMessages()
   }, [selected])
 
   // Realtime: new messages appear live
