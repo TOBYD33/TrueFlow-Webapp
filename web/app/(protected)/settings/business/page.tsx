@@ -136,7 +136,7 @@ export default function BusinessSettingsPage() {
             <label className="text-sm font-medium text-gray-700">Business type</label>
             <Select
               value={org?.type ?? 'sme'}
-              onValueChange={v => setOrg(o => o ? { ...o, type: v } : o)}
+              onValueChange={v => { if (v) setOrg(o => o ? ({ ...o, type: v } as OrgWithLogo) : o) }}
             >
               <SelectTrigger className="mt-1">
                 <SelectValue />
@@ -152,7 +152,7 @@ export default function BusinessSettingsPage() {
             <label className="text-sm font-medium text-gray-700">Default currency</label>
             <Select
               value={org?.currency ?? 'NGN'}
-              onValueChange={v => setOrg(o => o ? { ...o, currency: v } : o)}
+              onValueChange={v => { if (v) setOrg(o => o ? { ...o, currency: v } : o) }}
             >
               <SelectTrigger className="mt-1">
                 <SelectValue />

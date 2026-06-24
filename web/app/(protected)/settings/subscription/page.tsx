@@ -120,14 +120,22 @@ export default function SubscriptionPage() {
                   <p className="text-xs text-gray-500">Staff: <span className="font-medium text-gray-700">{formatLimit(p.staff)}</span></p>
                 </div>
                 {!isCurrent && p.id !== 'enterprise' && (
-                  <Button size="sm" className="w-full bg-[#6C63FF] hover:bg-[#5A52E0] text-white text-xs h-8" asChild>
-                    <a href="https://gettrueflow.com/pricing" target="_blank" rel="noreferrer">Upgrade</a>
-                  </Button>
+                  <a
+                    href="https://gettrueflow.com/pricing"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors"
+                  >
+                    Upgrade
+                  </a>
                 )}
                 {!isCurrent && p.id === 'enterprise' && (
-                  <Button size="sm" variant="outline" className="w-full text-xs h-8" asChild>
-                    <a href="mailto:hello@gettrueflow.com">Contact us</a>
-                  </Button>
+                  <a
+                    href="mailto:hello@gettrueflow.com"
+                    className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Contact us
+                  </a>
                 )}
                 {isCurrent && (
                   <p className="text-xs text-emerald-600 font-medium text-center">Current plan</p>
