@@ -37,8 +37,17 @@ export default function ReceiptsPage() {
   const [channelFilter, setChannelFilter] = useState('all')
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }])
 
+  async function loadReceipts(id: string) {
+    const { data } = await supabase
+      .from('receipts')
+      .select('*')
+      .eq('org_id', id)
+      .order('date', { ascending: false })
+    setReceipts((data as Receipt[]) ?? [])
+  }
+
   useEffect(() => {
-    async function load() {
+    async function init() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
@@ -51,19 +60,12 @@ export default function ReceiptsPage() {
 
         if (!member) return
         setOrgId(member.org_id)
-
-        const { data } = await supabase
-          .from('receipts')
-          .select('*')
-          .eq('org_id', member.org_id)
-          .order('date', { ascending: false })
-
-        setReceipts((data as Receipt[]) ?? [])
+        await loadReceipts(member.org_id)
       } finally {
         setLoading(false)
       }
     }
-    load()
+    init()
   }, [])
 
   const filtered = useMemo(() => {
@@ -153,7 +155,7 @@ export default function ReceiptsPage() {
         <p className="text-sm text-gray-500 mt-0.5">{receipts.length} total receipts</p>
       </div>
 
-      {orgId && <ReceiptUpload orgId={orgId} />}
+      {orgId && <ReceiptUpload orgId={orgId} onSave={() => loadReceipts(orgId)} />}
 
       <Card>
         <CardHeader>

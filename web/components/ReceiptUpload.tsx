@@ -3,7 +3,6 @@
 // Drag-and-drop receipt upload → Claude Vision scan → confirm modal → save
 
 import { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { ScannedReceipt } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -16,10 +15,10 @@ import { toast } from 'sonner'
 
 interface ReceiptUploadProps {
   orgId: string
+  onSave?: () => void
 }
 
-export function ReceiptUpload({ orgId }: ReceiptUploadProps) {
-  const router = useRouter()
+export function ReceiptUpload({ orgId, onSave }: ReceiptUploadProps) {
   const supabase = createClient()
   const [dragging, setDragging] = useState(false)
   const [scanning, setScanning] = useState(false)
@@ -111,7 +110,7 @@ export function ReceiptUpload({ orgId }: ReceiptUploadProps) {
     toast.success('Receipt saved!')
     setScanned(null)
     setFile(null)
-    router.refresh()
+    onSave?.()
   }
 
   return (
