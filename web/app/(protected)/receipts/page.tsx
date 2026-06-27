@@ -26,10 +26,54 @@ import { ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 
+const FREE_LIMIT = 10
+
+function ReceiptLimitBanner({ used, limit, plan }: { used: number; limit: number; plan: string }) {
+  if (plan !== 'free') return null
+  const atLimit = used >= limit
+  const nearLimit = used >= limit - 2 && used < limit
+
+  if (!atLimit && !nearLimit) return null
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 flex items-start gap-3 ${
+      atLimit
+        ? 'bg-red-50 border-red-200 text-red-800'
+        : 'bg-amber-50 border-amber-200 text-amber-800'
+    }`}>
+      <span className="text-lg leading-none mt-0.5">{atLimit ? '🚫' : '⚠️'}</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm">
+          {atLimit
+            ? `You've reached your ${limit} receipt limit for this month on the Free plan.`
+            : `You've used ${used} of ${limit} receipts this month on the Free plan.`}
+        </p>
+        <p className="text-sm mt-0.5 opacity-80">
+          {atLimit
+            ? 'New receipts cannot be added until you upgrade or next month begins.'
+            : `${limit - used} receipt${limit - used === 1 ? '' : 's'} remaining this month.`}
+        </p>
+      </div>
+      <a
+        href="/pricing"
+        className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+          atLimit
+            ? 'bg-red-600 hover:bg-red-700 text-white'
+            : 'bg-amber-500 hover:bg-amber-600 text-white'
+        }`}
+      >
+        Upgrade →
+      </a>
+    </div>
+  )
+}
+
 export default function ReceiptsPage() {
   const supabase = createClient()
   const router = useRouter()
   const [orgId, setOrgId] = useState<string | null>(null)
+  const [orgPlan, setOrgPlan] = useState<string>('free')
+  const [monthlyCount, setMonthlyCount] = useState(0)
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
   const [globalFilter, setGlobalFilter] = useState('')
@@ -60,6 +104,19 @@ export default function ReceiptsPage() {
 
         if (!member) return
         setOrgId(member.org_id)
+
+        // Fetch org plan + monthly receipt count in parallel
+        const now = new Date()
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+        const [{ data: org }, { count }] = await Promise.all([
+          supabase.from('organizations').select('plan').eq('id', member.org_id).single(),
+          supabase.from('receipts').select('id', { count: 'exact', head: true })
+            .eq('org_id', member.org_id)
+            .gte('created_at', monthStart),
+        ])
+
+        setOrgPlan(org?.plan ?? 'free')
+        setMonthlyCount(count ?? 0)
         await loadReceipts(member.org_id)
       } finally {
         setLoading(false)
@@ -154,6 +211,8 @@ export default function ReceiptsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Receipts</h1>
         <p className="text-sm text-gray-500 mt-0.5">{receipts.length} total receipts</p>
       </div>
+
+      <ReceiptLimitBanner used={monthlyCount} limit={FREE_LIMIT} plan={orgPlan} />
 
       {orgId && <ReceiptUpload orgId={orgId} onSave={() => loadReceipts(orgId)} />}
 
