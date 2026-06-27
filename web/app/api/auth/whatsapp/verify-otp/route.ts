@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Load stored OTP
-    const { data: otp, error: otpError } = await supabaseAdmin
+    const { data: otp, error: otpError } = await getSupabaseAdmin()
       .from('whatsapp_otps')
       .select('*')
       .eq('phone', phone)
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Increment attempts before verifying
-    await supabaseAdmin
+    await getSupabaseAdmin()
       .from('whatsapp_otps')
       .update({ attempts: otp.attempts + 1 })
       .eq('phone', phone)
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     await getSupabaseAdmin().from('whatsapp_otps').delete().eq('phone', phone)
 
     // Find profile by phone number
-    const { data: profile } = await supabaseAdmin
+    const { data: profile } = await getSupabaseAdmin()
       .from('profiles')
       .select('id, full_name, phone')
       .eq('phone', phone)
@@ -102,12 +102,12 @@ export async function POST(req: NextRequest) {
 
       // If a new auth user was created, link them to the existing org
       if (newUser && profile) {
-        await supabaseAdmin
+        await getSupabaseAdmin()
           .from('org_members')
           .update({ user_id: newUser.id })
           .eq('user_id', profile.id)
 
-        await supabaseAdmin
+        await getSupabaseAdmin()
           .from('whatsapp_sessions')
           .update({ user_id: newUser.id })
           .eq('user_id', profile.id)
