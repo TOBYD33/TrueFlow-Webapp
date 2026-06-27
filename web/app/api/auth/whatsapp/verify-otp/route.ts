@@ -5,11 +5,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.gettrueflow.com'
 const CALLBACK_URL = `${APP_URL}/auth/callback`
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (new Date(otp.expires_at) < new Date()) {
-      await supabaseAdmin.from('whatsapp_otps').delete().eq('phone', phone)
+      await getSupabaseAdmin().from('whatsapp_otps').delete().eq('phone', phone)
       return NextResponse.json({ error: 'Code has expired. Please request a new one.' }, { status: 400 })
     }
 
@@ -53,7 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Code correct — consume it
-    await supabaseAdmin.from('whatsapp_otps').delete().eq('phone', phone)
+    await getSupabaseAdmin().from('whatsapp_otps').delete().eq('phone', phone)
 
     // Find profile by phone number
     const { data: profile } = await supabaseAdmin
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest) {
 
     if (profile) {
       // Check if profile.id exists in auth.users
-      const { data: { user: existingAuthUser } } = await supabaseAdmin.auth.admin.getUserById(profile.id)
+      const { data: { user: existingAuthUser } } = await getSupabaseAdmin().auth.admin.getUserById(profile.id)
 
       if (existingAuthUser?.email) {
         // User already has a full web account — use their real email
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
 
     if (isNewUser) {
       // Create Supabase auth account for this WhatsApp user
-      const { data: { user: newUser }, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      const { data: { user: newUser }, error: createError } = await getSupabaseAdmin().auth.admin.createUser({
         email: derivedEmail,
         email_confirm: true,
         user_metadata: {
@@ -113,7 +115,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate a one-time magic link for immediate sign-in
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    const { data: linkData, error: linkError } = await getSupabaseAdmin().auth.admin.generateLink({
       type: 'magiclink',
       email: authEmail,
       options: { redirectTo: CALLBACK_URL }
