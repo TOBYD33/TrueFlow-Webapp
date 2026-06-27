@@ -1,8 +1,10 @@
 // message-handler.ts
 // Orchestrates the full message handling flow for every incoming WhatsApp message.
-// Routes image vs text, checks limits, calls AI, executes actions, sends reply.
+// Routes image vs text, detects incoming payment vs expense, calls AI, executes actions.
 
 import { getOrCreateUser, isNewUser, markUserNotNew, getMonthlyReceiptCount } from './user-service'
+import { detectTransfer } from './transfer-detector'
+import { handleIncomingPayment } from './smart-transfer'
 import { scanReceipt } from './receipt-scanner'
 import { getAIResponse, getWelcomeMessage } from './ai-assistant'
 import { executeActions } from './action-executor'
@@ -32,27 +34,36 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     return buildTextResponse(welcome)
   }
 
-  // Step 3: Handle image (receipt scan)
+  // Step 3: Handle image — detect direction before anything else
   let scannedReceipt: any = null
+
   if (hasImage && imageUrl) {
-    // Check receipt limit for free tier
+    if (imageType && !imageType.startsWith('image/')) {
+      return buildTextResponse('Please send a photo of your receipt or payment proof. I can only scan images.')
+    }
+
+    // Detect whether this is an incoming client payment or an outgoing expense
+    const transfer = await detectTransfer(imageUrl)
+
+    if (transfer?.detection === 'incoming_payment') {
+      // Smart Transfer Recognition — save to client_payments and reply immediately
+      return buildTextResponse(await handleIncomingPayment(transfer, imageUrl, user))
+    }
+
+    // Outgoing expense or unrecognised image → standard receipt scan
     if (user.plan === 'free') {
       const count = await getMonthlyReceiptCount(user.org_id)
       if (count >= FREE_TIER_LIMIT) {
-        const msg = `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade to Solo (₦3,000/mo) for unlimited receipts.\n\n${process.env.PRICING_PAGE_URL || 'gettrueflow.com/pricing'}`
-        return buildTextResponse(msg)
+        return buildTextResponse(
+          `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade for unlimited receipts: ${process.env.PRICING_PAGE_URL || 'gettrueflow.com/pricing'}`
+        )
       }
-    }
-
-    // Check if it's actually an image
-    if (imageType && !imageType.startsWith('image/')) {
-      return buildTextResponse('Please send a photo of your receipt. I can only scan images.')
     }
 
     scannedReceipt = await scanReceipt(imageUrl, user.org_id, user.user_id, user.currency)
 
     if (!scannedReceipt) {
-      return buildTextResponse('I had trouble reading that receipt. Could you try sending a clearer photo?')
+      return buildTextResponse('I had trouble reading that image. Could you try sending a clearer photo?')
     }
   }
 
@@ -71,7 +82,6 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   // Step 5: Execute any actions Claude detected
   if (actions.length > 0) {
     const notifications = await executeActions(actions, user)
-    // If SHOW_BUDGETS produced output, append it to the reply
     if (notifications.length > 0) {
       const combined = [reply, ...notifications].filter(Boolean).join('\n\n')
       return buildTextResponse(combined)
