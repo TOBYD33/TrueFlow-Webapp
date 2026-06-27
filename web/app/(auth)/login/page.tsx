@@ -62,7 +62,14 @@ function WhatsAppSignIn() {
       return
     }
 
-    // Redirect to Supabase magic link — it will create the session and redirect to /dashboard
+    if (json.isNewUser) {
+      // No existing account — send them to sign up
+      setVerifying(false)
+      setError("No account found for this number. Please sign up first.")
+      return
+    }
+
+    // Existing user — sign them in via magic link
     setStep('loading')
     window.location.href = json.redirect
   }
