@@ -1,14 +1,38 @@
+'use client'
 // pricing/page.tsx
-// Public pricing page — no login required. Matches the app's visual theme.
+// Public pricing page with country/currency switcher.
+// Switching country updates all prices to that currency.
 
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { Check } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
+
+// ── Currency config ───────────────────────────────────────────────────────────
+
+type CountryKey = 'NG' | 'KE' | 'US'
+
+const COUNTRIES: { key: CountryKey; label: string; flag: string; currency: string; symbol: string }[] = [
+  { key: 'NG', label: 'Nigeria',  flag: '🇳🇬', currency: 'NGN', symbol: '₦' },
+  { key: 'KE', label: 'Kenya',    flag: '🇰🇪', currency: 'KES', symbol: 'KES ' },
+  { key: 'US', label: 'USA',      flag: '🇺🇸', currency: 'USD', symbol: '$' },
+]
+
+// Prices per plan per country
+const PRICES: Record<string, Record<CountryKey, string>> = {
+  free:        { NG: '₦0',       KE: 'KES 0',     US: '$0' },
+  freelancer:  { NG: '₦5,000',   KE: 'KES 1,300', US: '$9.99' },
+  sme_starter: { NG: '₦7,500',   KE: 'KES 2,500', US: '$19' },
+  agency:      { NG: '₦12,000',  KE: 'KES 3,200', US: '$24.99' },
+  sme_pro:     { NG: '₦15,000',  KE: 'KES 5,000', US: '$39' },
+  studio:      { NG: '₦25,000',  KE: 'KES 6,500', US: '$49.99' },
+}
+
+// ── Plans ─────────────────────────────────────────────────────────────────────
 
 const PLANS = [
   {
     id: 'free',
     label: 'Free',
-    ngn: '₦0',
     period: 'forever',
     description: 'For individuals just getting started',
     features: ['10 receipts/month', '1 user', 'WhatsApp bot access', 'Basic expense tracking'],
@@ -19,7 +43,6 @@ const PLANS = [
   {
     id: 'freelancer',
     label: 'Freelancer',
-    ngn: '₦5,000',
     period: '/month',
     description: 'For solo freelancers tracking clients and income',
     features: ['Unlimited receipts', '1 user', 'Up to 10 clients', 'Client CRM & invoices', 'WhatsApp bot + web app', 'Accountant share link'],
@@ -30,7 +53,6 @@ const PLANS = [
   {
     id: 'sme_starter',
     label: 'SME Starter',
-    ngn: '₦7,500',
     period: '/month',
     description: 'For small businesses with a team',
     features: ['Unlimited receipts', 'Up to 5 staff', 'Up to 10 clients', 'Client CRM & invoices', 'WhatsApp bot for all staff', 'Accountant portal', 'Expense reports & exports'],
@@ -41,7 +63,6 @@ const PLANS = [
   {
     id: 'agency',
     label: 'Agency',
-    ngn: '₦12,000',
     period: '/month',
     description: 'For agencies managing many clients',
     features: ['Unlimited receipts', 'Up to 3 staff', 'Up to 50 clients', 'Invoice generation & PDF', 'Client CRM with projects', 'WhatsApp bot', 'Advanced reports'],
@@ -52,7 +73,6 @@ const PLANS = [
   {
     id: 'sme_pro',
     label: 'SME Pro',
-    ngn: '₦15,000',
     period: '/month',
     description: 'For growing businesses needing more',
     features: ['Unlimited receipts', 'Up to 15 staff', 'Up to 50 clients', 'All SME Starter features', 'Advanced analytics', 'Priority support'],
@@ -63,7 +83,6 @@ const PLANS = [
   {
     id: 'studio',
     label: 'Studio',
-    ngn: '₦25,000',
     period: '/month',
     description: 'For large studios and enterprises',
     features: ['Unlimited receipts', 'Up to 10 staff', 'Unlimited clients', 'White-label invoices', 'All Pro features', 'Dedicated onboarding'],
@@ -100,20 +119,68 @@ const FAQS = [
   },
 ]
 
+// ── Country switcher dropdown ─────────────────────────────────────────────────
+
+function CountrySwitcher({ country, onChange }: { country: CountryKey; onChange: (c: CountryKey) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const current = COUNTRIES.find(c => c.key === country)!
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-sm font-medium text-gray-700"
+      >
+        <span className="text-xl leading-none">{current.flag}</span>
+        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+          {COUNTRIES.map(c => (
+            <button
+              key={c.key}
+              onClick={() => { onChange(c.key); setOpen(false) }}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+            >
+              <span className="text-2xl leading-none">{c.flag}</span>
+              <span className="text-sm font-medium text-gray-700 flex-1">{c.label}</span>
+              {c.key === country && (
+                <Check size={14} className="text-emerald-500" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 export default function PricingPage() {
+  const [country, setCountry] = useState<CountryKey>('NG')
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header — matches app top nav style */}
+      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-emerald-500">
-            TrueFlow
-          </Link>
+          <Link href="/" className="text-xl font-bold text-emerald-500">TrueFlow</Link>
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-            >
+            <CountrySwitcher country={country} onChange={setCountry} />
+            <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
               Sign in
             </Link>
             <Link
@@ -133,7 +200,9 @@ export default function PricingPage() {
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
             Start free. Upgrade when you grow. Cancel anytime.
           </p>
-          <p className="text-sm text-gray-400 mt-2">All prices in Nigerian Naira.</p>
+          <p className="text-sm text-gray-400 mt-2">
+            Showing prices in {COUNTRIES.find(c => c.key === country)?.currency}.
+          </p>
         </div>
 
         {/* Plan grid */}
@@ -160,7 +229,7 @@ export default function PricingPage() {
               </p>
               <div className="mb-6">
                 <span className={`text-3xl font-bold ${plan.highlight ? 'text-white' : 'text-gray-900'}`}>
-                  {plan.ngn}
+                  {PRICES[plan.id][country]}
                 </span>
                 <span className={`text-sm ml-1 ${plan.highlight ? 'text-gray-400' : 'text-gray-400'}`}>
                   {plan.period}
@@ -208,7 +277,7 @@ export default function PricingPage() {
         {/* FAQ */}
         <div className="max-w-2xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-10">Frequently asked questions</h2>
-          <div className="space-y-0 divide-y divide-gray-200 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="divide-y divide-gray-200 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
             {FAQS.map(faq => (
               <div key={faq.q} className="px-6 py-5">
                 <h3 className="font-semibold text-gray-900 mb-1 text-sm">{faq.q}</h3>
