@@ -26,6 +26,19 @@ export function buildEmptyResponse(): string {
 <Response></Response>`
 }
 
+// Extracts plain text from a TwiML string — used when sending async replies via REST API
+export function extractTextFromTwiml(twiml: string): string {
+  const match = twiml.match(/<Message[^>]*>(?:<Body>)?([\s\S]*?)(?:<\/Body>)?<\/Message>/)
+  if (!match) return ''
+  return match[1]
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .trim()
+}
+
 function escapeXml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
