@@ -63,9 +63,8 @@ function WhatsAppSignIn() {
     }
 
     if (json.isNewUser) {
-      // No existing account — send them to sign up
       setVerifying(false)
-      setError("No account found for this number. Please sign up first.")
+      setError("This WhatsApp number isn't linked to an account yet. Sign in with your email below, or sign up to create a new account.")
       return
     }
 

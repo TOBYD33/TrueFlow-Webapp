@@ -64,6 +64,13 @@ export async function POST(req: NextRequest) {
       .eq('phone', phone)
       .single()
 
+    // Also check whatsapp_sessions — covers users who used the bot but signed up via email
+    const { data: waSession } = await getSupabaseAdmin()
+      .from('whatsapp_sessions')
+      .select('user_id')
+      .eq('phone_number', phone)
+      .single()
+
     // Derive a stable email from phone (used for WhatsApp-only users)
     const sanitizedPhone = phone.replace(/[^0-9]/g, '')
     const derivedEmail = `wa_${sanitizedPhone}@trueflow.app`
@@ -71,12 +78,13 @@ export async function POST(req: NextRequest) {
     let authEmail = derivedEmail
     let isNewUser = true
 
-    if (profile) {
-      // Check if profile.id exists in auth.users
-      const { data: { user: existingAuthUser } } = await getSupabaseAdmin().auth.admin.getUserById(profile.id)
+    // Check profile match first
+    const matchedUserId = profile?.id ?? waSession?.user_id ?? null
+
+    if (matchedUserId) {
+      const { data: { user: existingAuthUser } } = await getSupabaseAdmin().auth.admin.getUserById(matchedUserId)
 
       if (existingAuthUser?.email) {
-        // User already has a full web account — use their real email
         authEmail = existingAuthUser.email
         isNewUser = false
       }
@@ -101,16 +109,16 @@ export async function POST(req: NextRequest) {
       }
 
       // If a new auth user was created, link them to the existing org
-      if (newUser && profile) {
+      if (newUser && matchedUserId) {
         await getSupabaseAdmin()
           .from('org_members')
           .update({ user_id: newUser.id })
-          .eq('user_id', profile.id)
+          .eq('user_id', matchedUserId)
 
         await getSupabaseAdmin()
           .from('whatsapp_sessions')
           .update({ user_id: newUser.id })
-          .eq('user_id', profile.id)
+          .eq('user_id', matchedUserId)
       }
     }
 
