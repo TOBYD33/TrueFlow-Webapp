@@ -114,3 +114,58 @@ Rules:
     return null
   }
 }
+
+// Saves an expense from a pre-analyzed ImageAnalysis object — no second Claude call or image download.
+export async function saveFromAnalysis(
+  analysis: import('./image-analyzer').ImageAnalysis,
+  orgId: string,
+  userId: string,
+  currency: string
+): Promise<ScannedReceipt | null> {
+  try {
+    const timestamp = Date.now()
+    const storagePath = `receipts/${orgId}/${timestamp}.jpg`
+
+    const { error: uploadError } = await supabase.storage
+      .from('receipts')
+      .upload(storagePath, analysis.buffer, { contentType: analysis.contentType })
+
+    const imageStorageUrl = uploadError
+      ? null
+      : supabase.storage.from('receipts').getPublicUrl(storagePath).data.publicUrl
+
+    const date = analysis.date || new Date().toISOString().split('T')[0]
+
+    const { error: insertError } = await supabase.from('receipts').insert({
+      org_id: orgId,
+      uploaded_by: userId,
+      uploaded_via: 'whatsapp',
+      vendor_name: analysis.vendor_name,
+      amount: analysis.amount,
+      currency,
+      tax_amount: analysis.tax_amount,
+      date,
+      category: analysis.category || 'Other',
+      notes: analysis.narration,
+      image_url: imageStorageUrl,
+      ai_confidence: analysis.confidence,
+      is_verified: false
+    })
+
+    if (insertError) console.error('saveFromAnalysis: insert failed:', insertError)
+
+    return {
+      vendor_name: analysis.vendor_name,
+      amount: analysis.amount,
+      currency,
+      tax_amount: analysis.tax_amount,
+      date,
+      category: analysis.category || 'Other',
+      notes: analysis.narration,
+      ai_confidence: analysis.confidence
+    }
+  } catch (err) {
+    console.error('saveFromAnalysis failed:', err)
+    return null
+  }
+}
