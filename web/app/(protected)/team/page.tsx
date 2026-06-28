@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { UserPlus, Trash2, Link2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 const ROLE_COLORS: Record<string, string> = {
@@ -86,7 +87,7 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Team</h1>
           <p className="text-sm text-gray-500 mt-0.5">{members.length} members</p>
@@ -121,17 +122,17 @@ export default function TeamPage() {
                 const name = member.profiles?.full_name ?? member.whatsapp_number ?? 'Unknown'
                 const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
                 return (
-                  <div key={member.id} className="flex items-center gap-4 px-5 py-4">
-                    <Avatar className="h-10 w-10">
+                  <div key={member.id} className="flex items-center gap-3 px-4 py-4 flex-wrap sm:flex-nowrap">
+                    <Avatar className="h-9 w-9 shrink-0">
                       <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-semibold">{initials}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 truncate">{name}</p>
                       <p className="text-xs text-gray-400">{member.whatsapp_number ?? member.profiles?.phone ?? '—'}</p>
                     </div>
-                    <Badge variant="outline" className={ROLE_COLORS[member.role] ?? ''}>{member.role}</Badge>
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+                    <Badge variant="outline" className={cn('shrink-0', ROLE_COLORS[member.role] ?? '')}>{member.role}</Badge>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={member.whatsapp_active}
@@ -139,7 +140,7 @@ export default function TeamPage() {
                           disabled={!canManage}
                           className="accent-emerald-600"
                         />
-                        WhatsApp
+                        <span className="hidden sm:inline">WhatsApp</span>
                       </label>
                       {canManage && member.role !== 'owner' && (
                         <button onClick={() => removeMember(member)} className="text-gray-300 hover:text-red-500 transition-colors">

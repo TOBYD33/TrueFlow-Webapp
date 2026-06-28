@@ -64,18 +64,18 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
           <p className="text-sm text-gray-500 mt-0.5">{invoices.length} total · {totalDraft} draft · {totalSent} sent</p>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={() => router.push('/invoices/new')}>
+        <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2 shrink-0" onClick={() => router.push('/invoices/new')}>
           <Plus size={16} /> New Invoice
         </Button>
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Draft', value: String(totalDraft), color: 'text-gray-700' },
           { label: 'Sent / Awaiting', value: String(totalSent), color: 'text-blue-600' },
@@ -119,8 +119,8 @@ export default function InvoicesPage() {
                     <th className="px-4 py-3 text-left">Invoice #</th>
                     <th className="px-4 py-3 text-left">Client</th>
                     <th className="px-4 py-3 text-left">Status</th>
-                    <th className="px-4 py-3 text-left">Issue Date</th>
-                    <th className="px-4 py-3 text-left">Due Date</th>
+                    <th className="px-4 py-3 text-left hidden sm:table-cell">Issue Date</th>
+                    <th className="px-4 py-3 text-left hidden md:table-cell">Due Date</th>
                     <th className="px-4 py-3 text-right">Amount</th>
                   </tr>
                 </thead>
@@ -142,8 +142,8 @@ export default function InvoicesPage() {
                           {inv.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-gray-500">{formatDate(inv.issue_date)}</td>
-                      <td className="px-4 py-3 text-gray-500">
+                      <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{formatDate(inv.issue_date)}</td>
+                      <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
                         {inv.due_date ? formatDate(inv.due_date) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold">{formatCurrency(inv.total_amount, inv.currency)}</td>

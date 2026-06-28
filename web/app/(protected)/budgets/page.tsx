@@ -131,7 +131,7 @@ export default function BudgetsPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Budgets</h1>
           <p className="text-sm text-gray-500 mt-0.5">{monthLabel}</p>

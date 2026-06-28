@@ -127,23 +127,26 @@ export default function RemindersPage() {
     const overdue = isOverdue(r.due_date)
     const today = isDueToday(r.due_date)
     return (
-      <div className={cn('flex items-center gap-4 px-5 py-4', overdue && 'bg-red-50')}>
-        <Bell size={16} className={overdue ? 'text-red-400' : today ? 'text-amber-400' : 'text-gray-300'} />
-        <div className="flex-1">
+      <div className={cn('flex items-start gap-3 px-4 py-4', overdue && 'bg-red-50')}>
+        <Bell size={16} className={cn('mt-0.5 shrink-0', overdue ? 'text-red-400' : today ? 'text-amber-400' : 'text-gray-300')} />
+        <div className="flex-1 min-w-0">
           <p className={cn('font-medium', overdue ? 'text-red-700' : 'text-gray-900')}>{r.title}</p>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
             <span className={cn('text-xs', overdue ? 'text-red-500 font-semibold' : today ? 'text-amber-600 font-semibold' : 'text-gray-400')}>
               {today ? 'Due today' : overdue ? `Overdue · ${formatDate(r.due_date)}` : formatDate(r.due_date)}
             </span>
             {r.recurrence !== 'once' && (
               <span className="text-xs text-gray-400">· {r.recurrence}</span>
             )}
+            <Badge variant="outline" className={cn('text-xs sm:hidden', CATEGORY_COLORS[r.category] ?? 'bg-gray-100 text-gray-500')}>
+              {CATEGORIES.find(c => c.value === r.category)?.label ?? r.category}
+            </Badge>
           </div>
         </div>
-        <Badge variant="outline" className={CATEGORY_COLORS[r.category] ?? 'bg-gray-100 text-gray-500'}>
+        <Badge variant="outline" className={cn('hidden sm:inline-flex shrink-0', CATEGORY_COLORS[r.category] ?? 'bg-gray-100 text-gray-500')}>
           {CATEGORIES.find(c => c.value === r.category)?.label ?? r.category}
         </Badge>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => dismiss(r.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-emerald-600" title="Dismiss">
             <CheckCircle size={15} />
           </button>
@@ -157,7 +160,7 @@ export default function RemindersPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reminders</h1>
           <p className="text-sm text-gray-500 mt-0.5">{reminders.length} active</p>

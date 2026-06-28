@@ -81,8 +81,8 @@ export default function ProfileSettingsPage() {
       {/* Avatar */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-center gap-5">
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="relative shrink-0">
               <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border-2 border-gray-200">
                 {profile?.avatar_url
                   ? <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />

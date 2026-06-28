@@ -105,7 +105,7 @@ export default function ProjectsPage() {
               />
             </div>
             <Select value={status} onValueChange={v => v && setStatus(v as StatusFilter)}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="in_progress">In progress</SelectItem>
@@ -131,11 +131,11 @@ export default function ProjectsPage() {
                 <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                   <tr>
                     <th className="px-4 py-3 text-left">Project</th>
-                    <th className="px-4 py-3 text-left">Client</th>
+                    <th className="px-4 py-3 text-left hidden sm:table-cell">Client</th>
                     <th className="px-4 py-3 text-left">Status</th>
-                    <th className="px-4 py-3 text-left">Deadline</th>
-                    <th className="px-4 py-3 text-right">Total Fee</th>
-                    <th className="px-4 py-3 text-right">Received</th>
+                    <th className="px-4 py-3 text-left hidden md:table-cell">Deadline</th>
+                    <th className="px-4 py-3 text-right hidden lg:table-cell">Total Fee</th>
+                    <th className="px-4 py-3 text-right hidden lg:table-cell">Received</th>
                     <th className="px-4 py-3 text-right">Balance</th>
                   </tr>
                 </thead>
@@ -148,18 +148,21 @@ export default function ProjectsPage() {
                         className="hover:bg-gray-50 cursor-pointer"
                         onClick={() => router.push(`/projects/${p.id}`)}
                       >
-                        <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
-                        <td className="px-4 py-3 text-gray-500">{p.clients?.name ?? '—'}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          <p>{p.name}</p>
+                          <p className="text-xs text-gray-400 sm:hidden">{p.clients?.name ?? '—'}</p>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{p.clients?.name ?? '—'}</td>
                         <td className="px-4 py-3">
                           <Badge variant="outline" className={STATUS_COLORS[p.status] ?? ''}>
                             {p.status.replace('_', ' ')}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3 text-gray-500">
+                        <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
                           {p.deadline ? formatDate(p.deadline) : '—'}
                         </td>
-                        <td className="px-4 py-3 text-right">{p.total_fee ? formatCurrency(p.total_fee) : '—'}</td>
-                        <td className="px-4 py-3 text-right text-emerald-600">{formatCurrency(p.amount_received)}</td>
+                        <td className="px-4 py-3 text-right hidden lg:table-cell">{p.total_fee ? formatCurrency(p.total_fee) : '—'}</td>
+                        <td className="px-4 py-3 text-right text-emerald-600 hidden lg:table-cell">{formatCurrency(p.amount_received)}</td>
                         <td className={`px-4 py-3 text-right font-semibold ${balance > 0 ? 'text-orange-500' : 'text-gray-400'}`}>
                           {formatCurrency(balance)}
                         </td>

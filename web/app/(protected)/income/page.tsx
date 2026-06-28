@@ -115,7 +115,7 @@ export default function IncomePage() {
               />
             </div>
             <Select value={typeFilter} onValueChange={v => v && setTypeFilter(v)}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
                 <SelectItem value="deposit">Deposit</SelectItem>
@@ -138,26 +138,29 @@ export default function IncomePage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                   <tr>
-                    <th className="px-4 py-3 text-left">Date</th>
+                    <th className="px-4 py-3 text-left hidden sm:table-cell">Date</th>
                     <th className="px-4 py-3 text-left">Client</th>
-                    <th className="px-4 py-3 text-left">Project</th>
+                    <th className="px-4 py-3 text-left hidden md:table-cell">Project</th>
                     <th className="px-4 py-3 text-left">Type</th>
-                    <th className="px-4 py-3 text-left">Reference</th>
+                    <th className="px-4 py-3 text-left hidden lg:table-cell">Reference</th>
                     <th className="px-4 py-3 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filtered.map(p => (
                     <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500">{formatDate(p.payment_date)}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{p.clients?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-500">{p.projects?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{formatDate(p.payment_date)}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        <p>{p.clients?.name ?? '—'}</p>
+                        <p className="text-xs text-gray-400 sm:hidden">{formatDate(p.payment_date)}</p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{p.projects?.name ?? '—'}</td>
                       <td className="px-4 py-3">
                         <Badge variant="outline" className={TYPE_COLORS[p.payment_type] ?? ''}>
                           {p.payment_type.replace('_', ' ')}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-gray-400 font-mono text-xs">{p.payment_reference ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-400 font-mono text-xs hidden lg:table-cell">{p.payment_reference ?? '—'}</td>
                       <td className="px-4 py-3 text-right font-semibold text-emerald-600">{formatCurrency(p.amount, p.currency)}</td>
                     </tr>
                   ))}

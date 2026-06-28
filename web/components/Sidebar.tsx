@@ -1,6 +1,6 @@
 'use client'
 // Sidebar.tsx
-// Main navigation sidebar with active state and logout
+// Navigation sidebar — static on desktop, slide-in drawer on mobile.
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -20,6 +20,7 @@ import {
   Bell,
   PiggyBank,
   MessageSquare,
+  X,
 } from 'lucide-react'
 
 const navItems = [
@@ -37,7 +38,12 @@ const navItems = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean
+  onClose?: () => void
+}
+
+export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -48,18 +54,44 @@ export function Sidebar() {
     router.refresh()
   }
 
+  function handleNavClick() {
+    onClose?.()
+  }
+
   return (
-    <aside className="w-60 min-h-screen bg-gray-900 text-white flex flex-col">
-      <div className="px-6 py-5 border-b border-gray-800">
-        <span className="text-xl font-bold text-emerald-400">TrueFlow</span>
-        <p className="text-xs text-gray-500 mt-0.5">Financial Dashboard</p>
+    <aside
+      className={cn(
+        'w-60 bg-gray-900 text-white flex flex-col z-40 shrink-0',
+        // Desktop: always visible as part of layout flow
+        'hidden md:flex',
+        // Mobile: fixed overlay, toggled by isOpen
+        isOpen && 'flex fixed inset-y-0 left-0'
+      )}
+    >
+      {/* Header */}
+      <div className="px-6 py-5 border-b border-gray-800 flex items-center justify-between">
+        <div>
+          <span className="text-xl font-bold text-emerald-400">TrueFlow</span>
+          <p className="text-xs text-gray-500 mt-0.5">Financial Dashboard</p>
+        </div>
+        {/* Close button — mobile only */}
+        {isOpen && (
+          <button
+            onClick={onClose}
+            className="md:hidden p-1.5 rounded-lg hover:bg-gray-800 transition-colors text-gray-400 hover:text-white"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
+            onClick={handleNavClick}
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
               pathname.startsWith(href)

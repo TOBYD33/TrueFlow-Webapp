@@ -130,7 +130,7 @@ export default function NewInvoicePage() {
       <Card>
         <CardHeader><CardTitle className="text-base">Bill To</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-700">Client</label>
               <Select value={clientId} onValueChange={v => { if (v) { setClientId(v); setProjectId('') } }}>
@@ -154,7 +154,7 @@ export default function NewInvoicePage() {
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700">Due date</label>
-            <Input type="date" className="mt-1 w-48" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+            <Input type="date" className="mt-1 w-full sm:w-48" value={dueDate} onChange={e => setDueDate(e.target.value)} />
           </div>
         </CardContent>
       </Card>
@@ -168,7 +168,8 @@ export default function NewInvoicePage() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 uppercase px-1">
+          {/* Desktop header — hidden on mobile */}
+          <div className="hidden sm:grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 uppercase px-1">
             <span className="col-span-6">Description</span>
             <span className="col-span-2 text-right">Qty</span>
             <span className="col-span-2 text-right">Unit Price</span>
@@ -176,32 +177,40 @@ export default function NewInvoicePage() {
             <span className="col-span-1" />
           </div>
           {lineItems.map((item, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-center">
+            <div key={i} className="flex flex-col sm:grid sm:grid-cols-12 gap-2 sm:items-center bg-gray-50 sm:bg-transparent rounded-lg sm:rounded-none p-3 sm:p-0">
               <Input
-                className="col-span-6 text-sm"
+                className="sm:col-span-6 text-sm"
                 placeholder="Description of service"
                 value={item.description}
                 onChange={e => updateItem(i, 'description', e.target.value)}
               />
-              <Input
-                type="number"
-                className="col-span-2 text-sm text-right"
-                value={item.quantity}
-                min={1}
-                onChange={e => updateItem(i, 'quantity', Number(e.target.value))}
-              />
-              <Input
-                type="number"
-                className="col-span-2 text-sm text-right"
-                placeholder="0"
-                value={item.unit_price || ''}
-                onChange={e => updateItem(i, 'unit_price', Number(e.target.value))}
-              />
-              <span className="col-span-1 text-right text-sm font-medium text-gray-700">
+              <div className="flex gap-2 sm:contents">
+                <div className="flex-1 sm:contents">
+                  <label className="text-xs text-gray-400 sm:hidden mb-0.5 block">Qty</label>
+                  <Input
+                    type="number"
+                    className="sm:col-span-2 text-sm text-right"
+                    value={item.quantity}
+                    min={1}
+                    onChange={e => updateItem(i, 'quantity', Number(e.target.value))}
+                  />
+                </div>
+                <div className="flex-1 sm:contents">
+                  <label className="text-xs text-gray-400 sm:hidden mb-0.5 block">Unit Price</label>
+                  <Input
+                    type="number"
+                    className="sm:col-span-2 text-sm text-right"
+                    placeholder="0"
+                    value={item.unit_price || ''}
+                    onChange={e => updateItem(i, 'unit_price', Number(e.target.value))}
+                  />
+                </div>
+              </div>
+              <span className="sm:col-span-1 text-right text-sm font-medium text-gray-700 text-right">
                 {item.total > 0 ? formatCurrency(item.total) : '—'}
               </span>
               <button
-                className="col-span-1 flex justify-end text-gray-300 hover:text-red-400"
+                className="sm:col-span-1 flex justify-end text-gray-300 hover:text-red-400"
                 onClick={() => setLineItems(p => p.filter((_, idx) => idx !== i))}
                 disabled={lineItems.length === 1}
               >

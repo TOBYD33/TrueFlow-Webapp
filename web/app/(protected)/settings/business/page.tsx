@@ -95,8 +95,8 @@ export default function BusinessSettingsPage() {
       {/* Logo */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-center gap-5">
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="relative shrink-0">
               <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden border-2 border-gray-200">
                 {org?.logo_url
                   ? <img src={org.logo_url} alt="Business logo" className="w-full h-full object-cover" />

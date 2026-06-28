@@ -218,15 +218,15 @@ export default function ReceiptsPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3">
             <Input
               placeholder="Search vendor or category…"
               value={globalFilter}
               onChange={e => setGlobalFilter(e.target.value)}
-              className="max-w-xs"
+              className="sm:max-w-xs"
             />
             <Select value={categoryFilter} onValueChange={v => v && setCategoryFilter(v)}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
@@ -235,7 +235,7 @@ export default function ReceiptsPage() {
               </SelectContent>
             </Select>
             <Select value={channelFilter} onValueChange={v => v && setChannelFilter(v)}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-full sm:w-36">
                 <SelectValue placeholder="All channels" />
               </SelectTrigger>
               <SelectContent>
@@ -291,7 +291,7 @@ export default function ReceiptsPage() {
               </div>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t border-gray-100">
                 <p className="text-xs text-gray-400">
                   {filtered.length} receipts · Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
                 </p>
