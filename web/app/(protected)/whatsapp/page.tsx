@@ -67,14 +67,20 @@ function MessageBubble({ msg, accent }: { msg: Message; accent: 'purple' | 'gree
   )
 }
 
-function TypingIndicator() {
+function TypingIndicator({ label }: { label?: string }) {
   return (
-    <div className="flex justify-start">
+    <div className="flex justify-start items-end gap-2">
+      <div className="w-7 h-7 rounded-full bg-[#6C63FF] flex items-center justify-center shrink-0 mb-0.5">
+        <Bot size={13} className="text-white" />
+      </div>
       <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-        <div className="flex gap-1 items-center h-3">
-          {[0, 150, 300].map(delay => (
-            <span key={delay} className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
-          ))}
+        <div className="flex gap-1 items-center">
+          <div className="flex gap-1">
+            {[0, 150, 300].map(delay => (
+              <span key={delay} className="w-1.5 h-1.5 bg-[#6C63FF]/50 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+            ))}
+          </div>
+          {label && <span className="text-xs text-gray-400 ml-1">{label}</span>}
         </div>
       </div>
     </div>
@@ -209,16 +215,23 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
     load()
   }, [userId])
 
+  // Real-time as backup only — primary updates come directly from API response below
   useEffect(() => {
     const channel = supabase
       .channel(`truechat:${userId}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'whatsapp_conversations',
-        filter: `phone_number=eq.${chatId}`,
+        filter: `phone_number=eq.web%3A${userId}`,
       }, payload => {
+        const incoming = payload.new as Message
         setMessages(prev => {
-          const exists = prev.some(m => m.id === (payload.new as Message).id)
-          return exists ? prev : [...prev, payload.new as Message]
+          // Deduplicate: skip if same content+role arrived within 10 seconds
+          const isDup = prev.some(m =>
+            m.role === incoming.role &&
+            m.content === incoming.content &&
+            Math.abs(new Date(m.created_at).getTime() - new Date(incoming.created_at).getTime()) < 10000
+          )
+          return isDup ? prev : [...prev, incoming]
         })
       })
       .subscribe()
@@ -233,8 +246,11 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
     const text = input.trim()
     setInput('')
     setSending(true)
-    const tempId = `temp-${Date.now()}`
-    setMessages(prev => [...prev, { id: tempId, phone_number: chatId, role: 'user', content: text, created_at: new Date().toISOString() }])
+
+    const now = new Date().toISOString()
+    const tempUserId = `local-user-${Date.now()}`
+    // Add user message immediately
+    setMessages(prev => [...prev, { id: tempUserId, phone_number: chatId, role: 'user', content: text, created_at: now }])
 
     const res = await fetch('/api/chat/message', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -242,9 +258,24 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
     })
     const json = await res.json()
     setSending(false)
-    setMessages(prev => prev.filter(m => m.id !== tempId))
-    if (!res.ok) {
-      setMessages(prev => [...prev, { id: `err-${Date.now()}`, phone_number: chatId, role: 'assistant', content: `⚠️ ${json.error ?? 'Something went wrong.'}`, created_at: new Date().toISOString() }])
+
+    if (res.ok && json.reply) {
+      // Add bot reply directly — no waiting for real-time
+      setMessages(prev => [...prev, {
+        id: `local-bot-${Date.now()}`,
+        phone_number: chatId,
+        role: 'assistant',
+        content: json.reply,
+        created_at: new Date().toISOString(),
+      }])
+    } else {
+      setMessages(prev => [...prev, {
+        id: `err-${Date.now()}`,
+        phone_number: chatId,
+        role: 'assistant',
+        content: `⚠️ ${json.error ?? 'Something went wrong. Please try again.'}`,
+        created_at: new Date().toISOString(),
+      }])
     }
   }
 
@@ -261,16 +292,34 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
     setScanning(true)
     setPreviewImg(null)
     const tempId = `img-${Date.now()}`
-    setMessages(prev => [...prev, { id: tempId, phone_number: chatId, role: 'user', content: '📎 [Image uploaded]', created_at: new Date().toISOString() }])
+    setMessages(prev => [...prev, { id: tempId, phone_number: chatId, role: 'user', content: '📎 [Image uploaded — scanning…]', created_at: new Date().toISOString() }])
     const form = new FormData()
     form.append('image', pendingFile)
     setPendingFile(null)
     const res = await fetch('/api/chat/scan', { method: 'POST', body: form })
     const json = await res.json()
     setScanning(false)
-    setMessages(prev => prev.filter(m => m.id !== tempId))
-    if (!res.ok) {
-      setMessages(prev => [...prev, { id: `err-${Date.now()}`, phone_number: chatId, role: 'assistant', content: `⚠️ ${json.error ?? 'Could not process image.'}`, created_at: new Date().toISOString() }])
+    // Replace temp with the real image message
+    setMessages(prev => prev.map(m => m.id === tempId
+      ? { ...m, content: '📎 [Image uploaded]' }
+      : m
+    ))
+    if (res.ok && json.reply) {
+      setMessages(prev => [...prev, {
+        id: `scan-bot-${Date.now()}`,
+        phone_number: chatId,
+        role: 'assistant',
+        content: json.reply,
+        created_at: new Date().toISOString(),
+      }])
+    } else {
+      setMessages(prev => [...prev, {
+        id: `err-${Date.now()}`,
+        phone_number: chatId,
+        role: 'assistant',
+        content: `⚠️ ${json.error ?? 'Could not process that image. Please try a clearer photo.'}`,
+        created_at: new Date().toISOString(),
+      }])
     }
   }
 
@@ -316,7 +365,8 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
         ) : messages.map(msg => (
           <MessageBubble key={msg.id} msg={msg} accent="purple" />
         ))}
-        {(sending || scanning) && <TypingIndicator />}
+        {sending && <TypingIndicator label="TrueFlow is thinking…" />}
+        {scanning && <TypingIndicator label="Scanning your image…" />}
         <div ref={bottomRef} />
       </div>
 
@@ -467,7 +517,7 @@ function WhatsAppBotPanel({
                   <p className="text-sm text-gray-400">{canChat ? 'Send a message to chat with TrueFlow via WhatsApp' : 'No messages yet'}</p>
                 </div>
               ) : messages.map(msg => <MessageBubble key={msg.id} msg={msg} accent="green" />)}
-              {sending && <TypingIndicator />}
+              {sending && <TypingIndicator label="Sending…" />}
               <div ref={bottomRef} />
             </div>
 
