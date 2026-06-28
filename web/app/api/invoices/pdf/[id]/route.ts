@@ -11,8 +11,9 @@ type LineItem = { description: string; quantity: number; unit_price: number; tot
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -32,7 +33,7 @@ export async function GET(
     const { data: invoice, error } = await supabase
       .from('invoices')
       .select('*, clients(name, email, address, phone)')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('org_id', member.org_id)
       .single()
 
@@ -201,7 +202,7 @@ ${inv.notes ? `<div class="notes-box">
     return new NextResponse(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `inline; filename="invoice-${inv.invoice_number ?? params.id}.html"`,
+        'Content-Disposition': `inline; filename="invoice-${inv.invoice_number ?? id}.html"`,
       },
     })
   } catch (err) {
