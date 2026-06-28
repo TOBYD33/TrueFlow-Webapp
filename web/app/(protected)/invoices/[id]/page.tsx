@@ -65,8 +65,8 @@ export default function InvoiceDetailPage() {
     toast.success(`Invoice marked as ${status}`)
   }
 
-  function printInvoice() {
-    window.print()
+  function downloadPDF() {
+    window.open(`/api/invoices/pdf/${invoiceId}`, '_blank')
   }
 
   if (loading) return <div className="p-8 text-center text-gray-400">Loading…</div>
@@ -95,8 +95,8 @@ export default function InvoiceDetailPage() {
             <CheckCircle size={15} /> Mark as Paid
           </Button>
         )}
-        <Button variant="outline" className="gap-2" onClick={printInvoice}>
-          <Download size={15} /> Print / PDF
+        <Button variant="outline" className="gap-2" onClick={downloadPDF}>
+          <Download size={15} /> Download PDF
         </Button>
       </div>
 

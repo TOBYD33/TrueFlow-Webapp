@@ -126,8 +126,9 @@ export async function POST(req: NextRequest) {
     const amountStr = analysis.amount ? `${symbol}${Number(analysis.amount).toLocaleString()}` : 'unknown amount'
 
     if (analysis.direction === 'outgoing' || analysis.direction === 'unknown' && analysis.image_type === 'vendor_receipt') {
-      // Create expense receipt
-      const { error: receiptError } = await admin.from('receipts').insert({
+      // NOTE: ai_transcript, ai_confidence, is_verified columns are added via SQL migration.
+      // Until then, insert without them — core receipt data still saves correctly.
+      const receiptPayload: Record<string, unknown> = {
         org_id: member.org_id,
         uploaded_by: user.id,
         uploaded_via: 'web',
@@ -138,13 +139,23 @@ export async function POST(req: NextRequest) {
         date: analysis.date ?? new Date().toISOString().split('T')[0],
         category: analysis.category ?? 'Other',
         image_url: imageUrl,
+      }
+
+      // Try with extended columns first; fall back if they don't exist yet in schema
+      let { error: saveError } = await admin.from('receipts').insert({
+        ...receiptPayload,
         ai_transcript: rawText,
         ai_confidence: analysis.confidence,
         is_verified: false,
       })
 
-      if (receiptError) {
-        reply = `⚠️ I read the receipt but couldn't save it: ${receiptError.message}`
+      if (saveError?.message?.includes('schema cache') || saveError?.message?.includes('ai_transcript') || saveError?.message?.includes('column')) {
+        const fallback = await admin.from('receipts').insert(receiptPayload)
+        saveError = fallback.error
+      }
+
+      if (saveError) {
+        reply = `⚠️ I read the receipt but couldn't save it: ${saveError.message}`
       } else {
         reply = `✅ Receipt saved!\n\n• **Vendor**: ${analysis.vendor_name ?? 'Unknown'}\n• **Amount**: ${amountStr}\n• **Category**: ${analysis.category ?? 'Other'}\n• **Date**: ${analysis.date ?? 'Today'}\n• **Confidence**: ${analysis.confidence}`
         if (analysis.confidence === 'low') {

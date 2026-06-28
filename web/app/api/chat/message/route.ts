@@ -100,11 +100,33 @@ async function executeActions(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
+const WIDGET_SYSTEM = `You are TrueFlow, a proactive AI financial assistant.
+Give a SHORT check-in (2-3 sentences max).
+Mention 1-2 urgent things (overdue reminders, outstanding balances, budget alerts).
+End with ONE clear action the user should take right now.
+Be warm and direct. Use ₦ for amounts. No bullet lists — just flowing text.`
+
 export async function POST(req: NextRequest) {
   try {
-    const { message } = await req.json() as { message: string }
+    const { message, widget } = await req.json() as { message: string; widget?: boolean }
     if (!message?.trim()) {
       return NextResponse.json({ error: 'Message is required.' }, { status: 400 })
+    }
+
+    // Widget greeting — uses a simpler prompt, skips history saving
+    if (widget && message.startsWith('[WIDGET_GREETING]')) {
+      const supabase = await createServerClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
+
+      const response = await claude.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        system: WIDGET_SYSTEM,
+        messages: [{ role: 'user', content: message.replace('[WIDGET_GREETING] ', '') }],
+      })
+      const reply = response.content[0].type === 'text' ? response.content[0].text.trim() : "Hi! What would you like to know about your finances today?"
+      return NextResponse.json({ success: true, reply })
     }
 
     const supabase = await createServerClient()

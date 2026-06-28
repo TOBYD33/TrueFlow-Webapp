@@ -5,6 +5,7 @@
 
 import { useState } from 'react'
 import { Sidebar } from './Sidebar'
+import { FloatingAssistant } from './FloatingAssistant'
 import { Menu } from 'lucide-react'
 
 interface AppShellProps {
@@ -50,6 +51,8 @@ export function AppShell({ children, orgName, plan }: AppShellProps) {
           {children}
         </main>
       </div>
+
+      <FloatingAssistant />
     </div>
   )
 }

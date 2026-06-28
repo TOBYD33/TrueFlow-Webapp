@@ -92,23 +92,22 @@ export default function ReportsPage() {
   const currentMonth = new Date().toISOString().slice(0, 7)
 
   function downloadReport(type: 'pdf' | 'excel') {
-    const month = range === 'this-month' ? currentMonth :
-      range === 'last-month' ? new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 7) :
-        ''
-    const url = `/api/export/${type === 'pdf' ? 'pdf' : 'excel'}${month ? `?month=${month}` : ''}`
-    window.open(url)
+    const { start, end } = getDateRange(range)
+    const startStr = start.toISOString().split('T')[0]
+    const endStr = end.toISOString().split('T')[0]
+    window.open(`/api/export/${type === 'pdf' ? 'pdf' : 'excel'}?start=${startStr}&end=${endStr}`)
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
           <p className="text-sm text-gray-500 mt-0.5">Analyse your spending</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={range} onValueChange={v => setRange(v as Range)}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
