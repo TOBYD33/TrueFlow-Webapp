@@ -68,17 +68,17 @@ export default function SubscriptionPage() {
   async function handleUpgrade(planId: string) {
     setUpgrading(planId)
     try {
-      const res = await fetch('/api/paystack/initialize', {
+      const res = await fetch('/api/flutterwave/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan_id: planId }),
       })
       const json = await res.json()
-      if (!res.ok || !json.authorization_url) {
+      if (!res.ok || !json.link) {
         alert(json.error ?? 'Could not start checkout. Please try again.')
         return
       }
-      window.location.href = json.authorization_url
+      window.location.href = json.link
     } catch {
       alert('Could not connect to payment provider. Please try again.')
     } finally {
@@ -86,14 +86,19 @@ export default function SubscriptionPage() {
     }
   }
 
-  // Show success banner after returning from Paystack
+  // Show success banner after returning from Flutterwave
+  // Flutterwave redirects back with ?status=successful&transaction_id=xxx&tx_ref=xxx
   const [showSuccess, setShowSuccess] = useState(false)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
-      if (params.get('upgraded') === '1') {
+      const upgraded = params.get('upgraded') === '1'
+      const flwStatus = params.get('status')
+      if (upgraded && flwStatus !== 'cancelled') {
         setShowSuccess(true)
         window.history.replaceState({}, '', '/settings/subscription')
+        // Reload plan after a short delay to pick up webhook update
+        setTimeout(() => window.location.reload(), 4000)
       }
     }
   }, [])
