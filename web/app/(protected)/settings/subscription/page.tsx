@@ -63,9 +63,50 @@ export default function SubscriptionPage() {
   }, [])
 
   const currentPlan = PLANS.find(p => p.id === plan) ?? PLANS[0]
+  const [upgrading, setUpgrading] = useState<string | null>(null)
+
+  async function handleUpgrade(planId: string) {
+    setUpgrading(planId)
+    try {
+      const res = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_id: planId }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.authorization_url) {
+        alert(json.error ?? 'Could not start checkout. Please try again.')
+        return
+      }
+      window.location.href = json.authorization_url
+    } catch {
+      alert('Could not connect to payment provider. Please try again.')
+    } finally {
+      setUpgrading(null)
+    }
+  }
+
+  // Show success banner after returning from Paystack
+  const [showSuccess, setShowSuccess] = useState(false)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('upgraded') === '1') {
+        setShowSuccess(true)
+        window.history.replaceState({}, '', '/settings/subscription')
+      }
+    }
+  }, [])
 
   return (
     <div className="space-y-6">
+      {showSuccess && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-3">
+          <Check size={16} className="text-emerald-600 shrink-0" />
+          <p className="text-sm text-emerald-700 font-medium">Payment received! Your plan will activate within a few minutes.</p>
+        </div>
+      )}
+
       {/* Current plan card */}
       <Card>
         <CardContent className="pt-6">
@@ -119,15 +160,14 @@ export default function SubscriptionPage() {
                   <p className="text-xs text-gray-500">Clients: <span className="font-medium text-gray-700">{formatLimit(p.clients)}</span></p>
                   <p className="text-xs text-gray-500">Staff: <span className="font-medium text-gray-700">{formatLimit(p.staff)}</span></p>
                 </div>
-                {!isCurrent && p.id !== 'enterprise' && (
-                  <a
-                    href="https://gettrueflow.com/pricing"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors"
+                {!isCurrent && p.id !== 'free' && p.id !== 'enterprise' && (
+                  <button
+                    onClick={() => handleUpgrade(p.id)}
+                    disabled={upgrading === p.id}
+                    className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60"
                   >
-                    Upgrade
-                  </a>
+                    {upgrading === p.id ? 'Redirecting…' : 'Upgrade'}
+                  </button>
                 )}
                 {!isCurrent && p.id === 'enterprise' && (
                   <a
@@ -138,14 +178,14 @@ export default function SubscriptionPage() {
                   </a>
                 )}
                 {isCurrent && (
-                  <p className="text-xs text-emerald-600 font-medium text-center">Current plan</p>
+                  <p className="text-xs text-emerald-600 font-medium text-center">✓ Current plan</p>
                 )}
               </div>
             )
           })}
         </div>
         <p className="text-xs text-gray-400 mt-3">
-          Payments are processed via Paystack. To upgrade, contact <a href="mailto:hello@gettrueflow.com" className="text-emerald-600 hover:underline">hello@gettrueflow.com</a> or visit <a href="https://gettrueflow.com/pricing" target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">gettrueflow.com/pricing</a>.
+          Payments processed securely via Paystack. Cancel any time from your Paystack account.
         </p>
       </div>
     </div>

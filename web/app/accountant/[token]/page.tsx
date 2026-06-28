@@ -1,9 +1,18 @@
 // accountant/[token]/page.tsx
-// Read-only accountant portal — no login required, accessed via share link
+// Read-only accountant portal — no login required, accessed via share link.
+// Uses admin client to bypass RLS after validating the token.
 
-import { createClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 import { formatCurrency, formatDate, CATEGORY_COLORS } from '@/lib/utils'
 import { Receipt } from '@/types'
+
+function getAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 interface ShareLink {
   id: string
@@ -15,9 +24,9 @@ interface ShareLink {
 
 export default async function AccountantPortalPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  const supabase = await createClient()
+  const supabase = getAdmin()
 
-  // Validate token
+  // Validate token — admin client bypasses RLS (no user session on this route)
   const { data: link } = await supabase
     .from('share_links')
     .select('*, organizations(name, currency)')

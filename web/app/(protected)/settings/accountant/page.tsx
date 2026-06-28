@@ -33,29 +33,20 @@ export default function AccountantAccessPage() {
         .from('org_members').select('org_id').eq('user_id', user.id).single()
       if (!member) return
       setOrgId(member.org_id)
-      const { data } = await supabase
-        .from('share_links')
-        .select('*')
-        .eq('org_id', member.org_id)
-        .order('created_at', { ascending: false })
-      setLinks((data as ShareLink[]) ?? [])
+      const res = await fetch('/api/share-link')
+      const json = await res.json()
+      setLinks((json.links as ShareLink[]) ?? [])
     }
     load()
   }, [])
 
   async function generateLink() {
-    if (!orgId) return
     setGenerating(true)
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 30)
-    const { data, error } = await supabase
-      .from('share_links')
-      .insert({ org_id: orgId, permission: 'read', expires_at: expiresAt.toISOString() })
-      .select()
-      .single()
+    const res = await fetch('/api/share-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ permission: 'read' }) })
+    const json = await res.json()
     setGenerating(false)
-    if (error || !data) { toast.error('Could not generate link'); return }
-    setLinks(prev => [data as ShareLink, ...prev])
+    if (!res.ok || !json.link) { toast.error(json.error ?? 'Could not generate link'); return }
+    setLinks(prev => [json.link as ShareLink, ...prev])
     toast.success('Share link generated — expires in 30 days')
   }
 
@@ -66,9 +57,9 @@ export default function AccountantAccessPage() {
 
   async function revokeLink(id: string) {
     setRevoking(id)
-    const { error } = await supabase.from('share_links').delete().eq('id', id)
+    const res = await fetch(`/api/share-link?id=${id}`, { method: 'DELETE' })
     setRevoking(null)
-    if (error) { toast.error(error.message); return }
+    if (!res.ok) { toast.error('Could not revoke link'); return }
     setLinks(prev => prev.filter(l => l.id !== id))
     toast.success('Link revoked')
   }
