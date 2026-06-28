@@ -244,33 +244,21 @@ function SignupForm() {
     e.preventDefault()
     setLoading(true); setError(null)
 
-    const { data, error: signupError } = await supabase.auth.signUp({ email, password })
-    if (signupError || !data.user) {
-      setError(signupError?.message ?? 'Signup failed')
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, fullName, businessName, inviteOrgId, inviteRole }),
+    })
+    const json = await res.json()
+
+    if (!res.ok || json.error) {
+      setError(json.error || 'Signup failed.')
       setLoading(false)
       return
     }
 
-    const userId = data.user.id
-    const { error: profileError } = await supabase.from('profiles').insert({ id: userId, full_name: fullName })
-    if (profileError) { setError(profileError.message); setLoading(false); return }
-
-    if (inviteOrgId) {
-      const { error: memberError } = await supabase.from('org_members').insert({
-        org_id: inviteOrgId, user_id: userId, role: inviteRole, joined_at: new Date().toISOString(),
-      })
-      if (memberError) { setError(memberError.message); setLoading(false); return }
-    } else {
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .insert({ name: businessName || `${fullName}'s Business`, owner_id: userId })
-        .select().single()
-      if (orgError || !org) { setError(orgError?.message ?? 'Could not create organisation'); setLoading(false); return }
-      await supabase.from('org_members').insert({ org_id: org.id, user_id: userId, role: 'owner' })
-    }
-
-    router.push('/dashboard')
-    router.refresh()
+    // Sign in via magic link generated server-side
+    window.location.href = json.redirect
   }
 
   return (
