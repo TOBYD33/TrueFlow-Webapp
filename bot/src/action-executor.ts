@@ -6,6 +6,8 @@ import { setBudget } from './budget-service'
 import { setReminder } from './reminder-service'
 import { generateAndSendPDF } from './pdf-generator'
 import { getBudgetStatus } from './report-service'
+import { getInventoryItems, addInventoryItem, updateStock } from './inventory-service'
+import { startGuidedClientSetup } from './client-setup-service'
 
 export async function executeActions(actions: string[], user: any): Promise<string[]> {
   const notifications: string[] = []
@@ -46,6 +48,50 @@ export async function executeActions(actions: string[], user: any): Promise<stri
           }
           break
         }
+        case 'UPDATE_INVENTORY': {
+          // UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
+          const [, itemName, quantityChangeStr, changeType] = parts
+          const items = await getInventoryItems(user.org_id)
+          const item = items.find(
+            (i: any) => i.name.toLowerCase() === itemName.toLowerCase()
+          )
+          const qty = parseFloat(quantityChangeStr)
+          if (item) {
+            await updateStock({
+              orgId: user.org_id,
+              itemId: item.id,
+              quantityChange: qty,
+              changeType: changeType as 'restock' | 'sale' | 'adjustment',
+              createdBy: user.user_id
+            })
+          } else if (qty > 0) {
+            await addInventoryItem({
+              orgId: user.org_id,
+              name: itemName,
+              quantity: qty
+            })
+          }
+          break
+        }
+
+        case 'GENERATE_INVOICE': {
+          // GENERATE_INVOICE:{clientId}:{projectId}
+          // Invoice generation is handled in the web app — acknowledge only
+          notifications.push(
+            'Invoice generation is available on your web dashboard: app.trueflio.com/invoices'
+          )
+          break
+        }
+
+        case 'START_CLIENT_SETUP': {
+          // START_CLIENT_SETUP:{clientName}
+          const clientName = parts.slice(1).join(':').trim()
+          if (clientName) {
+            await startGuidedClientSetup(user.org_id, user.whatsapp_number, clientName)
+          }
+          break
+        }
+
         default:
           break
       }

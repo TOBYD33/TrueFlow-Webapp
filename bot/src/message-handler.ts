@@ -11,6 +11,7 @@ import { saveFromAnalysis } from './receipt-scanner'
 import { getAIResponse, getWelcomeMessage } from './ai-assistant'
 import { executeActions } from './action-executor'
 import { buildTextResponse } from './twiml-builder'
+import { getSetupState, continueGuidedSetup } from './client-setup-service'
 import { TwilioWebhookBody } from '../types'
 
 const FREE_TIER_LIMIT = 10
@@ -98,6 +99,22 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
       return buildTextResponse(
         `I had trouble saving that receipt. Please try again or add it at *${APP_URL}/receipts*`
       )
+    }
+  }
+
+  // Step 4a: If the user is mid-guided-setup, route there instead of AI
+  if (!hasImage) {
+    const setupState = await getSetupState(phoneNumber)
+    if (setupState) {
+      const { reply: setupReply, done } = await continueGuidedSetup(
+        phoneNumber,
+        messageText,
+        setupState
+      )
+      if (setupReply) return buildTextResponse(setupReply)
+      if (done) {
+        // Flow complete, fall through to normal AI so user gets a normal response
+      }
     }
   }
 
