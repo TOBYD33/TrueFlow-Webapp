@@ -20,6 +20,7 @@ import {
   Bell,
   PiggyBank,
   MessageSquare,
+  Package,
   X,
 } from 'lucide-react'
 
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/whatsapp', label: 'True Assistant', icon: MessageSquare },
   { href: '/receipts', label: 'Receipts', icon: Receipt },
+  { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/budgets', label: 'Budgets', icon: PiggyBank },
   { href: '/reminders', label: 'Reminders', icon: Bell },
   { href: '/clients', label: 'Clients', icon: UserCircle2 },
