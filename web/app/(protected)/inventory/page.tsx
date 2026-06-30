@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils'
-import { Plus, Package, AlertTriangle, TrendingDown, TrendingUp, Archive } from 'lucide-react'
+import { Plus, Package, AlertTriangle, TrendingDown, TrendingUp, Archive, ArchiveRestore } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -33,6 +33,8 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
 
   // Quick action modal state
   const [actionModal, setActionModal] = useState<{ item: InventoryItem; type: 'restock' | 'sale' } | null>(null)
@@ -41,26 +43,42 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    async function load() {
+    async function init() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
       if (!member) { setLoading(false); return }
       setOrgId(member.org_id)
+    }
+    init()
+  }, [])
 
-      const { data, error } = await supabase
-        .from('inventory_items')
-        .select('*')
-        .eq('org_id', member.org_id)
-        .eq('status', 'active')
-        .order('name', { ascending: true })
+  useEffect(() => {
+    if (!orgId) return
+
+    async function load() {
+      setLoading(true)
+      const [{ data, error }, { count }] = await Promise.all([
+        supabase
+          .from('inventory_items')
+          .select('*')
+          .eq('org_id', orgId)
+          .eq('status', showArchived ? 'archived' : 'active')
+          .order('name', { ascending: true }),
+        supabase
+          .from('inventory_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('org_id', orgId)
+          .eq('status', 'archived'),
+      ])
 
       if (error) toast.error(error.message)
       setItems((data as InventoryItem[]) ?? [])
+      setArchivedCount(count ?? 0)
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId, showArchived])
 
   async function handleQuickAction() {
     if (!actionModal || !actionQty) return
@@ -100,7 +118,16 @@ export default function InventoryPage() {
     const { error } = await supabase.from('inventory_items').update({ status: 'archived' }).eq('id', item.id)
     if (error) { toast.error(error.message); return }
     setItems(prev => prev.filter(i => i.id !== item.id))
+    setArchivedCount(prev => prev + 1)
     toast.success(`${item.name} archived`)
+  }
+
+  async function handleRestore(item: InventoryItem) {
+    const { error } = await supabase.from('inventory_items').update({ status: 'active' }).eq('id', item.id)
+    if (error) { toast.error(error.message); return }
+    setItems(prev => prev.filter(i => i.id !== item.id))
+    setArchivedCount(prev => Math.max(0, prev - 1))
+    toast.success(`${item.name} restored`)
   }
 
   const totalValue = items.reduce((s, i) => s + (i.quantity_on_hand * (i.unit_cost ?? 0)), 0)
@@ -120,11 +147,19 @@ export default function InventoryPage() {
           <h1 className="text-2xl font-bold text-gray-900">Inventory</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track your stock levels</p>
         </div>
-        <Link href="/inventory/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-            <Plus size={16} /> Add Item
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowArchived(v => !v)}
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors underline-offset-2 hover:underline"
+          >
+            {showArchived ? 'Back to active items' : `View archived${archivedCount > 0 ? ` (${archivedCount})` : ''}`}
+          </button>
+          <Link href="/inventory/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+              <Plus size={16} /> Add Item
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -173,12 +208,18 @@ export default function InventoryPage() {
         <Card>
           <CardContent className="p-12 text-center">
             <Package size={36} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-sm text-gray-500">No inventory items yet.</p>
-            <Link href="/inventory/new">
-              <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 gap-2">
-                <Plus size={15} /> Add your first item
-              </Button>
-            </Link>
+            {showArchived ? (
+              <p className="text-sm text-gray-500">No archived items.</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500">No inventory items yet.</p>
+                <Link href="/inventory/new">
+                  <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 gap-2">
+                    <Plus size={15} /> Add your first item
+                  </Button>
+                </Link>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -221,27 +262,39 @@ export default function InventoryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => { setActionModal({ item, type: 'restock' }); setActionQty(''); setActionNotes('') }}
-                          className="px-2 py-1 rounded text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                          title="Restock"
-                        >
-                          <TrendingUp size={13} />
-                        </button>
-                        <button
-                          onClick={() => { setActionModal({ item, type: 'sale' }); setActionQty(''); setActionNotes('') }}
-                          className="px-2 py-1 rounded text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
-                          title="Record sale"
-                        >
-                          <TrendingDown size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleArchive(item)}
-                          className="px-2 py-1 rounded text-xs font-medium bg-gray-50 text-gray-500 hover:bg-gray-100 transition-colors"
-                          title="Archive"
-                        >
-                          <Archive size={13} />
-                        </button>
+                        {showArchived ? (
+                          <button
+                            onClick={() => handleRestore(item)}
+                            className="px-2 py-1 rounded text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                            title="Restore"
+                          >
+                            <ArchiveRestore size={13} /> Restore
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => { setActionModal({ item, type: 'restock' }); setActionQty(''); setActionNotes('') }}
+                              className="px-2 py-1 rounded text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                              title="Restock"
+                            >
+                              <TrendingUp size={13} />
+                            </button>
+                            <button
+                              onClick={() => { setActionModal({ item, type: 'sale' }); setActionQty(''); setActionNotes('') }}
+                              className="px-2 py-1 rounded text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                              title="Record sale"
+                            >
+                              <TrendingDown size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleArchive(item)}
+                              className="px-2 py-1 rounded text-xs font-medium bg-gray-50 text-gray-500 hover:bg-gray-100 transition-colors"
+                              title="Archive"
+                            >
+                              <Archive size={13} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

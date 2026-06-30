@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency } from '@/lib/utils'
-import { ArrowLeft, TrendingUp, TrendingDown, Archive } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, Archive, ArchiveRestore } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -130,6 +130,13 @@ export default function InventoryItemPage() {
     router.push('/inventory')
   }
 
+  async function handleRestore() {
+    const { error } = await supabase.from('inventory_items').update({ status: 'active' }).eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Item restored')
+    setItem((prev: any) => ({ ...prev, status: 'active' }))
+  }
+
   function movementLabel(type: string) {
     if (type === 'restock') return { label: 'Restock', cls: 'bg-emerald-100 text-emerald-700' }
     if (type === 'sale') return { label: 'Sale', cls: 'bg-blue-100 text-blue-700' }
@@ -155,10 +162,17 @@ export default function InventoryItemPage() {
           </div>
           {isOut && <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-600 font-semibold">OUT OF STOCK</span>}
           {isLow && <span className="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-semibold">LOW STOCK</span>}
+          {item.status === 'archived' && <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500 font-semibold">ARCHIVED</span>}
         </div>
-        <button onClick={handleArchive} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-          <Archive size={14} /> Archive
-        </button>
+        {item.status === 'archived' ? (
+          <button onClick={handleRestore} className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 transition-colors">
+            <ArchiveRestore size={14} /> Restore
+          </button>
+        ) : (
+          <button onClick={handleArchive} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            <Archive size={14} /> Archive
+          </button>
+        )}
       </div>
 
       {/* Quantity hero + action buttons */}
