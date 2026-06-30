@@ -4,7 +4,8 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { Receipt } from '@/types'
+import { Receipt, TaxCountry } from '@/types'
+import { DEFAULT_INCOME_TAX_TYPE, COUNTRY_TO_CURRENCY, parseRateEstimate } from '@/lib/tax'
 import { StatCard } from '@/components/StatCard'
 import { CategoryChart } from '@/components/CategoryChart'
 import { SpendTrendChart } from '@/components/SpendTrendChart'
@@ -19,6 +20,7 @@ import {
   TrendingUp,
   Upload,
   TrendingDown,
+  Calculator,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -29,6 +31,7 @@ export default function DashboardPage() {
   const [orgId, setOrgId] = useState<string | null>(null)
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [incomeThisMonth, setIncomeThisMonth] = useState(0)
+  const [taxEstimate, setTaxEstimate] = useState<{ value: number; currency: string; approximate: boolean } | null>(null)
   const [recentChats, setRecentChats] = useState<{ id: string; phone_number: string; role: string; content: string; created_at: string }[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -90,14 +93,33 @@ export default function DashboardPage() {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
-      const [{ data: receiptData }, { data: paymentData }] = await Promise.all([
+      const [{ data: receiptData }, { data: paymentData }, { data: org }] = await Promise.all([
         supabase.from('receipts').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false }),
         supabase.from('client_payments').select('amount').eq('org_id', member.org_id).gte('payment_date', monthStart).lte('payment_date', monthEnd),
+        supabase.from('organizations').select('default_tax_country').eq('id', member.org_id).single(),
       ])
 
       setReceipts((receiptData as Receipt[]) ?? [])
       const income = ((paymentData ?? []) as { amount: number }[]).reduce((s, p) => s + Number(p.amount), 0)
       setIncomeThisMonth(income)
+
+      // Tax estimate — same bounded Layer 3 calculation as Tax Hub, for the
+      // org's default country, surfaced here as a quick read-only preview.
+      const taxCountry = (org?.default_tax_country as TaxCountry) || 'Nigeria'
+      const taxType = DEFAULT_INCOME_TAX_TYPE[taxCountry]
+      const { data: rateRow } = await supabase
+        .from('tax_rate_reference')
+        .select('rate')
+        .eq('country', taxCountry)
+        .eq('tax_type', taxType)
+        .maybeSingle()
+
+      if (rateRow) {
+        const parsed = parseRateEstimate(rateRow.rate)
+        if (parsed) {
+          setTaxEstimate({ value: income * parsed.pct, currency: COUNTRY_TO_CURRENCY[taxCountry], approximate: parsed.approximate })
+        }
+      }
 
       // Load recent WhatsApp conversations for this org
       const { data: sessions } = await supabase
@@ -163,7 +185,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           label="Money Out (this month)"
           value={formatCurrency(totalSpent)}
@@ -186,12 +208,21 @@ export default function DashboardPage() {
           color="purple"
         />
         <StatCard
-          label="Tax Tracked"
+          label="Tax on Expenses"
           value={formatCurrency(taxTracked)}
-          sub="this month"
+          sub="itemized on receipts"
           icon={DollarSign}
           color="blue"
         />
+        <Link href="/tax">
+          <StatCard
+            label="Tax Estimate (this month)"
+            value={taxEstimate ? formatCurrency(taxEstimate.value, taxEstimate.currency) : '—'}
+            sub={taxEstimate ? (taxEstimate.approximate ? 'Approx. — view in Tax Hub' : 'View in Tax Hub') : 'Set up in Tax Hub'}
+            icon={Calculator}
+            color="indigo"
+          />
+        </Link>
       </div>
 
       {/* Charts */}

@@ -19,6 +19,7 @@ export function StatCard({ label, value, sub, icon: Icon, color = 'emerald' }: S
     blue: 'bg-blue-50 text-blue-600',
     purple: 'bg-purple-50 text-purple-600',
     orange: 'bg-orange-50 text-orange-600',
+    indigo: 'bg-indigo-50 text-indigo-600',
   }
 
   return (
