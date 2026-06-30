@@ -40,6 +40,7 @@ WHAT YOU CAN DO:
 • Tax Hub — look up reference tax rates for Nigeria, Kenya, Ghana, USA, or UK,
   give a bounded estimate of tax liability from recorded income, switch which
   country's rates the user is checking, and set tax deadline reminders
+• Inventory — track stock levels, log restocks and sales, warn about low stock
 
 ACTIONS — append at the very end of your reply when the user requests one.
 The user never sees ACTION tags — they are stripped automatically.
@@ -52,11 +53,26 @@ ACTION:EXPORT_PDF
 ACTION:GET_TAX_ESTIMATE:{country}:{period}
 ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
 ACTION:SWITCH_TAX_COUNTRY:{country}
+ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
 
 recurrence values: once | daily | weekly | monthly | yearly
 Valid categories: Food & Drink | Transport | Utilities | Office Supplies | Marketing | Rent | Salaries | Other
 period values for GET_TAX_ESTIMATE: this_month | last_month | this_quarter | this_year
 country values: Nigeria | Kenya | Ghana | USA | UK
+
+INVENTORY RULES:
+- changeType is one of: restock | sale | adjustment
+- quantityChange must be POSITIVE for a restock, NEGATIVE for a sale or a downward
+  adjustment (e.g. selling 12 units → -12, restocking 50 units → 50)
+- Inventory language ("I sold X units of", "we restocked", "how many do I have
+  left", "running low on", "add X to inventory") is different from expense
+  language ("I bought", "I paid for", "I spent on" — these are receipts, not
+  stock movements). If a purchase is ambiguous between a stock purchase to
+  resell and a personal/business expense, ask: "Was this a stock purchase to
+  resell, or a business expense for your own use?" Never guess.
+- If the user explicitly says to add something to inventory (not just log an
+  expense), use ACTION:UPDATE_INVENTORY even if you've also logged it as a
+  receipt — the two are independent records.
 
 TAX HUB RULES — IMPORTANT, this is a tracking and estimating tool, NOT a tax
 filing or guaranteed-accurate calculator:
@@ -200,6 +216,47 @@ async function executeActions(
         }
       } else {
         notes.push(`I don't have a reference rate for ${taxType} in ${country} yet.`)
+      }
+    }
+
+    if (type === 'UPDATE_INVENTORY' && parts.length >= 4) {
+      const itemName = parts[1]
+      const quantityChange = parseFloat(parts[2])
+      const changeType = parts[3] as 'restock' | 'sale' | 'adjustment'
+
+      if (!isNaN(quantityChange) && ['restock', 'sale', 'adjustment'].includes(changeType)) {
+        const { data: existing } = await admin
+          .from('inventory_items')
+          .select('id, name, quantity_on_hand')
+          .eq('org_id', orgId)
+          .eq('status', 'active')
+          .ilike('name', itemName)
+          .maybeSingle()
+
+        if (existing) {
+          const { error } = await admin.rpc('update_inventory_stock', {
+            p_item_id: existing.id,
+            p_quantity_change: quantityChange,
+            p_change_type: changeType,
+            p_reference_type: 'web_chat',
+            p_reference_id: null,
+            p_notes: null,
+            p_created_by: null,
+          })
+          if (!error) {
+            const newQty = Number(existing.quantity_on_hand) + quantityChange
+            notes.push(`✅ ${changeType === 'restock' ? 'Restocked' : changeType === 'sale' ? 'Sold' : 'Adjusted'} **${existing.name}** — ${newQty} units now on hand`)
+          }
+        } else if (quantityChange > 0) {
+          const { error } = await admin.from('inventory_items').insert({
+            org_id: orgId,
+            name: itemName,
+            quantity_on_hand: quantityChange,
+          })
+          if (!error) notes.push(`✅ Added **${itemName}** to inventory — ${quantityChange} units`)
+        } else {
+          notes.push(`I don't have **${itemName}** in your inventory yet — say "add X units of ${itemName}" to create it.`)
+        }
       }
     }
   }
