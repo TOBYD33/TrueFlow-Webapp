@@ -1,10 +1,12 @@
 // (protected)/layout.tsx
 // Fetches org data server-side, passes to AppShell client component
 // which manages the mobile sidebar drawer and sticky header.
+// Also mounts TelloBubble (Tello AI persona) on every protected page.
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
 import { AppShell } from '@/components/AppShell'
+import { TelloBubble } from '@/components/TelloBubble'
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -33,9 +35,28 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     }
   }
 
+  // Determine first-time status: zero receipts in the org = first-time user
+  let isFirstTime = true
+  if (member?.org_id) {
+    const { count } = await supabase
+      .from('receipts')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', member.org_id)
+    isFirstTime = (count ?? 0) === 0
+  }
+
   return (
-    <AppShell orgName={orgName} plan={plan}>
-      {children}
-    </AppShell>
+    <>
+      <AppShell orgName={orgName} plan={plan}>
+        {children}
+      </AppShell>
+      {member?.org_id && (
+        <TelloBubble
+          userId={user.id}
+          orgId={member.org_id}
+          isFirstTime={isFirstTime}
+        />
+      )}
+    </>
   )
 }
