@@ -214,6 +214,9 @@ export default function TaxHubPage() {
         <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
           <ScrollText size={16} className="text-gray-400" /> Transaction Tax Log
         </h2>
+        <p className="text-xs text-gray-400 -mt-2">
+          A record of tax already itemized on past transactions — not what you owe. For an estimate of your tax liability, see Estimated Liability below.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Card>
             <CardContent className="p-5">
@@ -221,7 +224,7 @@ export default function TaxHubPage() {
                 <div>
                   <p className="text-sm text-gray-500 font-medium">Tax paid out</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(taxPaidOut, currency)}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">From recorded receipts</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Tax itemized on your business expense receipts</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-red-50 text-red-500"><TrendingDown size={20} /></div>
               </div>
@@ -231,9 +234,9 @@ export default function TaxHubPage() {
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 font-medium">Tax collected on income</p>
+                  <p className="text-sm text-gray-500 font-medium">Tax itemized on invoices</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(taxCollected, currency)}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">From paid invoices</p>
+                  <p className="text-xs text-gray-400 mt-0.5">e.g. VAT charged to clients on paid invoices — separate from income tax</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600"><TrendingUp size={20} /></div>
               </div>
