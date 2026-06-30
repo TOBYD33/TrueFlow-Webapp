@@ -127,6 +127,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     userMessage: messageText,
     currency: user.currency,
     plan: user.plan,
+    defaultTaxCountry: user.default_tax_country,
     scannedReceipt
   })
 

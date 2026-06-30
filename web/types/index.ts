@@ -30,6 +30,7 @@ export interface Organization {
   plan: Plan
   receipt_limit: number
   currency: string
+  default_tax_country: string
   created_at: string
 }
 
@@ -182,4 +183,27 @@ export interface ScannedReceipt {
   date: string
   category: ReceiptCategory
   confidence: 'high' | 'medium' | 'low'
+}
+
+export type TaxCountry = 'Nigeria' | 'Kenya' | 'Ghana' | 'USA' | 'UK'
+
+export interface TaxRateReference {
+  id: string
+  country: TaxCountry
+  tax_type: string
+  rate: string
+  notes: string | null
+  last_verified_date: string
+}
+
+export interface TaxEstimate {
+  id: string
+  org_id: string
+  period_start: string
+  period_end: string
+  country: TaxCountry
+  estimated_taxable_income: number
+  estimated_liability: number | null
+  tax_type: string
+  calculated_at: string
 }

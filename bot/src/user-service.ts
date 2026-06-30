@@ -11,7 +11,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     .from('whatsapp_sessions')
     .select(`
       *,
-      organizations(id, name, plan, currency, receipt_limit),
+      organizations(id, name, plan, currency, receipt_limit, default_tax_country),
       profiles(id, full_name)
     `)
     .eq('phone_number', phoneNumber)
@@ -44,7 +44,8 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
       currency: org?.currency || 'NGN',
       receipt_limit: org?.receipt_limit || 10,
       whatsapp_number: phoneNumber,
-      role: member?.role || 'staff'
+      role: member?.role || 'staff',
+      default_tax_country: org?.default_tax_country || 'Nigeria'
     }
   }
 
@@ -53,7 +54,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     .from('org_members')
     .select(`
       *,
-      organizations(id, name, plan, currency, receipt_limit),
+      organizations(id, name, plan, currency, receipt_limit, default_tax_country),
       profiles(id, full_name)
     `)
     .eq('whatsapp_number', phoneNumber)
@@ -81,7 +82,8 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
       currency: org?.currency || 'NGN',
       receipt_limit: org?.receipt_limit || 10,
       whatsapp_number: phoneNumber,
-      role: orgMember.role
+      role: orgMember.role,
+      default_tax_country: org?.default_tax_country || 'Nigeria'
     }
   }
 
@@ -141,7 +143,8 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     currency: 'NGN',
     receipt_limit: 10,
     whatsapp_number: phoneNumber,
-    role: 'owner'
+    role: 'owner',
+    default_tax_country: 'Nigeria'
   }
 }
 

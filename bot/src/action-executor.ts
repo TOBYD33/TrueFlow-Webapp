@@ -8,6 +8,7 @@ import { generateAndSendPDF } from './pdf-generator'
 import { getBudgetStatus } from './report-service'
 import { getInventoryItems, addInventoryItem, updateStock } from './inventory-service'
 import { startGuidedClientSetup } from './client-setup-service'
+import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
 
 export async function executeActions(actions: string[], user: any): Promise<string[]> {
   const notifications: string[] = []
@@ -88,6 +89,40 @@ export async function executeActions(actions: string[], user: any): Promise<stri
           const clientName = parts.slice(1).join(':').trim()
           if (clientName) {
             await startGuidedClientSetup(user.org_id, user.whatsapp_number, clientName)
+          }
+          break
+        }
+
+        case 'GET_TAX_ESTIMATE': {
+          // GET_TAX_ESTIMATE:{country}:{period}
+          const [, countryRaw, periodRaw] = parts
+          const country = (TAX_COUNTRIES.includes(countryRaw as TaxCountry) ? countryRaw : user.default_tax_country) as TaxCountry
+          const period = (periodRaw || 'this_month') as TaxPeriodKey
+          const taxType = DEFAULT_INCOME_TAX_TYPE[country]
+
+          const estimateResult = await calculateTaxEstimate({ orgId: user.org_id, country, taxType, period, persist: true })
+            .catch(() => null)
+
+          if (estimateResult) {
+            notifications.push(formatEstimateReply(taxType, country, estimateResult as any))
+          } else {
+            notifications.push(`I don't have a reference rate for ${taxType} in ${country} yet.`)
+          }
+          break
+        }
+
+        case 'SET_TAX_REMINDER': {
+          // SET_TAX_REMINDER:{title}:{date}:{recurrence}
+          const [, title, date, recurrence] = parts
+          await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', category: 'tax' })
+          break
+        }
+
+        case 'SWITCH_TAX_COUNTRY': {
+          // SWITCH_TAX_COUNTRY:{country}
+          const [, country] = parts
+          if (TAX_COUNTRIES.includes(country as TaxCountry)) {
+            await setTaxCountry(user.org_id, country as TaxCountry)
           }
           break
         }

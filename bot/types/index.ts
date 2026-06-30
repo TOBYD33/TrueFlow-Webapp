@@ -18,6 +18,7 @@ export interface Organization {
   plan: 'free' | 'solo' | 'business' | 'pro' | 'enterprise'
   receipt_limit: number
   currency: string
+  default_tax_country: string
   paystack_customer_id: string | null
   paystack_subscription_id: string | null
   created_at: string
@@ -125,6 +126,7 @@ export interface UserContext {
   receipt_limit: number
   whatsapp_number: string
   role: string
+  default_tax_country: string
 }
 
 export interface TwilioWebhookBody {

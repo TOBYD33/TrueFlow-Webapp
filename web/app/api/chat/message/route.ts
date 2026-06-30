@@ -7,6 +7,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import {
+  TAX_COUNTRIES,
+  COUNTRY_TO_CURRENCY,
+  DEFAULT_INCOME_TAX_TYPE,
+  ESTIMATE_DISCLAIMER,
+  getPeriodRange,
+  parseRateEstimate,
+  TaxPeriodKey,
+} from '@/lib/tax'
+import { TaxCountry } from '@/types'
 
 function getAdmin() {
   return createClient(
@@ -27,6 +37,9 @@ WHAT YOU CAN DO:
 • Set reminders — "Remind me to pay salaries on the 25th every month"
 • Answer financial questions — "How much did I spend on transport this month?"
 • Summarise spending patterns and give smart advice
+• Tax Hub — look up reference tax rates for Nigeria, Kenya, Ghana, USA, or UK,
+  give a bounded estimate of tax liability from recorded income, switch which
+  country's rates the user is checking, and set tax deadline reminders
 
 ACTIONS — append at the very end of your reply when the user requests one.
 The user never sees ACTION tags — they are stripped automatically.
@@ -36,9 +49,33 @@ ACTION:SET_BUDGET:{category}:{amount}
 ACTION:SET_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
 ACTION:SHOW_BUDGETS
 ACTION:EXPORT_PDF
+ACTION:GET_TAX_ESTIMATE:{country}:{period}
+ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
+ACTION:SWITCH_TAX_COUNTRY:{country}
 
 recurrence values: once | daily | weekly | monthly | yearly
 Valid categories: Food & Drink | Transport | Utilities | Office Supplies | Marketing | Rent | Salaries | Other
+period values for GET_TAX_ESTIMATE: this_month | last_month | this_quarter | this_year
+country values: Nigeria | Kenya | Ghana | USA | UK
+
+TAX HUB RULES — IMPORTANT, this is a tracking and estimating tool, NOT a tax
+filing or guaranteed-accurate calculator:
+- Rate questions ("what's the VAT rate in Kenya") → answer directly from the
+  TAX RATE REFERENCE in your context below, and ALWAYS include the "as of
+  [date]" verification date, never state a rate without it.
+- "What's my estimated tax this month/quarter/year" → use
+  ACTION:GET_TAX_ESTIMATE:{country}:{period} so the real calculation runs,
+  never estimate the number yourself in the reply text. Default country to
+  the user's current default tax country (shown in context) and default
+  period to this_month unless they say otherwise.
+- ALWAYS pair any estimate you state with: "This is an estimate for planning
+  purposes only. Confirm with a qualified accountant before filing."
+- If the user mentions a different country mid-conversation, use
+  ACTION:SWITCH_TAX_COUNTRY:{country} and answer using that country going
+  forward.
+- "Remind me to pay VAT on the 21st" or similar → use
+  ACTION:SET_TAX_REMINDER:{title}:{date}:{recurrence}.
+- Never invent a tax rate that is not in the TAX RATE REFERENCE context below.
 
 STYLE:
 - Warm and direct — like a smart accountant friend
@@ -54,7 +91,8 @@ STYLE:
 async function executeActions(
   actions: string[],
   orgId: string,
-  admin: ReturnType<typeof getAdmin>
+  admin: ReturnType<typeof getAdmin>,
+  defaultTaxCountry: string
 ): Promise<string[]> {
   const notes: string[] = []
 
@@ -92,6 +130,77 @@ async function executeActions(
         status: 'active',
       })
       if (!error) notes.push(`✅ Reminder set: **${title}** on ${dueDate} (${recurrence})`)
+    }
+
+    if (type === 'SET_TAX_REMINDER' && parts.length >= 3) {
+      const title = parts[1]
+      const dueDate = parts[2]
+      const recurrence = parts[3] ?? 'once'
+      const { error } = await admin.from('reminders').insert({
+        org_id: orgId,
+        title,
+        due_date: dueDate,
+        recurrence,
+        category: 'tax',
+        status: 'active',
+      })
+      if (!error) notes.push(`✅ Tax reminder set: **${title}** on ${dueDate} (${recurrence})`)
+    }
+
+    if (type === 'SWITCH_TAX_COUNTRY' && parts.length >= 2) {
+      const country = parts[1]
+      if (TAX_COUNTRIES.includes(country as TaxCountry)) {
+        const { error } = await admin.from('organizations').update({ default_tax_country: country }).eq('id', orgId)
+        if (!error) notes.push(`✅ Switched Tax Hub to **${country}**`)
+      }
+    }
+
+    if (type === 'GET_TAX_ESTIMATE' && parts.length >= 2) {
+      const countryRaw = parts[1]
+      const periodRaw = parts[2] as TaxPeriodKey | undefined
+      const country = (TAX_COUNTRIES.includes(countryRaw as TaxCountry) ? countryRaw : defaultTaxCountry) as TaxCountry
+      const period = periodRaw ?? 'this_month'
+      const taxType = DEFAULT_INCOME_TAX_TYPE[country]
+
+      const { data: rateRow } = await admin
+        .from('tax_rate_reference')
+        .select('*')
+        .eq('country', country)
+        .eq('tax_type', taxType)
+        .maybeSingle()
+
+      if (rateRow) {
+        const range = getPeriodRange(period)
+        const { data: payments } = await admin
+          .from('client_payments')
+          .select('amount')
+          .eq('org_id', orgId)
+          .gte('payment_date', range.start)
+          .lte('payment_date', range.end)
+
+        const taxableIncome = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0)
+        const currency = COUNTRY_TO_CURRENCY[country]
+        const parsed = parseRateEstimate(rateRow.rate)
+
+        if (parsed) {
+          const liability = taxableIncome * parsed.pct
+          await admin.from('tax_estimates').insert({
+            org_id: orgId,
+            period_start: range.start,
+            period_end: range.end,
+            country,
+            estimated_taxable_income: taxableIncome,
+            estimated_liability: liability,
+            tax_type: taxType,
+          })
+          const approxNote = parsed.approximate ? ` (${taxType} is a progressive/multi-tier rate — this uses the top rate as a rough upper bound)` : ''
+          notes.push(`📊 Based on ${currency} ${taxableIncome.toLocaleString()} recorded income this ${range.label}, your estimated **${taxType}** liability is approximately **${currency} ${Math.round(liability).toLocaleString()}**${approxNote}.\n\n${ESTIMATE_DISCLAIMER}`)
+        } else {
+          notes.push(`${taxType} in ${country} is set at **${rateRow.rate}** — that can't be reduced to a single number to estimate from. Check with a local tax authority or accountant.`)
+        }
+      } else {
+        notes.push(`I don't have a reference rate for ${taxType} in ${country} yet.`)
+      }
     }
   }
 
@@ -139,27 +248,38 @@ export async function POST(req: NextRequest) {
     // Load org context
     const { data: member } = await admin
       .from('org_members')
-      .select('org_id')
+      .select('org_id, organizations(default_tax_country)')
       .eq('user_id', user.id)
       .single()
 
     const orgId = member?.org_id ?? null
+    const defaultTaxCountry = ((member?.organizations as any)?.default_tax_country as string) || 'Nigeria'
 
     // Load financial context in parallel
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
 
-    const [receiptsRes, budgetsRes, remindersRes, historyRes] = await Promise.all([
+    const [receiptsRes, budgetsRes, remindersRes, historyRes, taxRatesRes] = await Promise.all([
       orgId ? admin.from('receipts').select('amount, category, vendor_name, date').eq('org_id', orgId).gte('date', monthStart) : Promise.resolve({ data: [] }),
       orgId ? admin.from('budgets').select('category, amount').eq('org_id', orgId).eq('month', now.getMonth() + 1).eq('year', now.getFullYear()) : Promise.resolve({ data: [] }),
       orgId ? admin.from('reminders').select('title, due_date, category').eq('org_id', orgId).eq('status', 'active').gte('due_date', monthStart).order('due_date').limit(5) : Promise.resolve({ data: [] }),
       admin.from('whatsapp_conversations').select('role, content').eq('phone_number', chatId).order('created_at', { ascending: false }).limit(20),
+      admin.from('tax_rate_reference').select('*').order('country').order('tax_type'),
     ])
 
     const receipts = receiptsRes.data ?? []
     const budgets = budgetsRes.data ?? []
     const reminders = remindersRes.data ?? []
     const history = (historyRes.data ?? []).reverse()
+    const allTaxRates = taxRatesRes.data ?? []
+
+    const ratesForDefaultCountry = allTaxRates.filter((r: any) => r.country === defaultTaxCountry)
+    const defaultCountryRange = getPeriodRange('this_month')
+    const { data: monthPayments } = orgId
+      ? await admin.from('client_payments').select('amount').eq('org_id', orgId).gte('payment_date', defaultCountryRange.start).lte('payment_date', defaultCountryRange.end)
+      : { data: [] as any[] }
+    const monthlyIncome = (monthPayments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0)
+    const defaultCountryCurrency = COUNTRY_TO_CURRENCY[defaultTaxCountry as TaxCountry] ?? 'NGN'
 
     const totalSpent = receipts.reduce((s: number, r: any) => s + Number(r.amount), 0)
     const categoryBreakdown = receipts.reduce<Record<string, number>>((acc, r: any) => {
@@ -188,6 +308,22 @@ UPCOMING REMINDERS:
 ${reminders.length > 0
   ? (reminders as any[]).map(r => `• ${r.title} — ${r.due_date}`).join('\n')
   : '• No upcoming reminders'}
+
+TAX HUB CONTEXT — this is a tracking and estimating tool, not a tax filing or
+guaranteed-accurate calculator. Always include the verification date when
+quoting a rate, and always pair any estimate with the planning-purposes-only
+disclaimer.
+Current default tax country: ${defaultTaxCountry}
+
+TAX RATE REFERENCE (all countries, for ad-hoc rate questions):
+${allTaxRates.length > 0
+  ? allTaxRates.map((r: any) => `• ${r.country} — ${r.tax_type}: ${r.rate} (as of ${r.last_verified_date})`).join('\n')
+  : '• No reference rates loaded.'}
+
+RECORDED INCOME THIS MONTH for ${defaultTaxCountry}: ${defaultCountryCurrency} ${monthlyIncome.toLocaleString()}
+${ratesForDefaultCountry.length > 0
+  ? `Tax types available for ${defaultTaxCountry}: ${ratesForDefaultCountry.map((r: any) => r.tax_type).join(', ')}`
+  : ''}
 [END CONTEXT]`
 
     const messages: { role: 'user' | 'assistant'; content: string }[] = [
@@ -216,7 +352,7 @@ ${reminders.length > 0
     // Execute actions
     let actionNotes: string[] = []
     if (orgId && actions.length > 0) {
-      actionNotes = await executeActions(actions, orgId, admin)
+      actionNotes = await executeActions(actions, orgId, admin, defaultTaxCountry)
     }
 
     const finalReply = actionNotes.length > 0

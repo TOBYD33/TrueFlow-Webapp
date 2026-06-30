@@ -21,6 +21,7 @@ import {
   PiggyBank,
   MessageSquare,
   Package,
+  Landmark,
   X,
 } from 'lucide-react'
 
@@ -35,6 +36,7 @@ const navItems = [
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/income', label: 'Income', icon: TrendingUp },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/tax', label: 'Tax Hub', icon: Landmark },
   { href: '/invoices', label: 'Invoices', icon: FileText },
   { href: '/team', label: 'Team', icon: Users },
   { href: '/settings', label: 'Settings', icon: Settings },

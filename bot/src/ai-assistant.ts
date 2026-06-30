@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getMonthlySpending, getBudgetStatus } from './report-service'
 import { getUpcomingReminders } from './reminder-service'
 import { getConversationHistory, saveMessage } from './conversation'
+import { getAllTaxRates, calculateTaxEstimate, TAX_COUNTRIES } from './tax-service'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -24,6 +25,9 @@ WHAT YOU CAN DO:
 • New clients and projects — start a guided setup that walks the owner through
   creating the client, the project, recording any deposit, and offering an invoice
 • Generate invoices for an existing client/project
+• Tax Hub — look up reference tax rates for Nigeria, Kenya, Ghana, USA, or UK,
+  give a bounded estimate of tax liability from recorded income, switch which
+  country's rates the user is checking, and set tax deadline reminders
 
 YOUR PERSONALITY:
 - Warm and conversational — like a smart friend who happens to be an accountant
@@ -50,8 +54,13 @@ ACTION:SHOW_BUDGETS
 ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
 ACTION:START_CLIENT_SETUP:{clientName}
 ACTION:GENERATE_INVOICE
+ACTION:GET_TAX_ESTIMATE:{country}:{period}
+ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
+ACTION:SWITCH_TAX_COUNTRY:{country}
 
 recurrence values: once | daily | weekly | monthly | yearly
+period values for GET_TAX_ESTIMATE: this_month | last_month | this_quarter | this_year
+country values: Nigeria | Kenya | Ghana | USA | UK
 
 INVENTORY RULES:
 - changeType is one of: restock | sale | adjustment
@@ -74,6 +83,31 @@ CLIENT SETUP RULES:
   START_CLIENT_SETUP is the only way to create a client.
 - For an invoice on an existing client/project, use ACTION:GENERATE_INVOICE.
 
+TAX HUB RULES — IMPORTANT, this is a tracking and estimating tool, NOT a tax
+filing or guaranteed-accurate calculator:
+- Rate questions ("what's the VAT rate in Kenya", "what's the income tax rate
+  here") → answer directly from the TAX RATE REFERENCE in your context below,
+  and ALWAYS include the "as of [date]" verification date, never state a rate
+  without it.
+- "What's my estimated tax this month/quarter/year" → use
+  ACTION:GET_TAX_ESTIMATE:{country}:{period} so the real calculation runs,
+  never estimate the number yourself in the reply text. Default country to
+  the user's current default_tax_country (shown in context) and default
+  period to this_month unless they say otherwise. Wait for the result before
+  stating a figure — don't guess one in the same turn you emit the action.
+- ALWAYS pair any estimate you state with: "This is an estimate for planning
+  purposes only. Confirm with a qualified accountant before filing." Never
+  present an estimate as something you have finalized for them.
+- If the user mentions a different country mid-conversation ("what about for
+  Kenya", "switch to Ghana"), use ACTION:SWITCH_TAX_COUNTRY:{country} and
+  answer using that country going forward, without requiring the web app.
+- "Remind me to pay VAT on the 21st" or similar → use
+  ACTION:SET_TAX_REMINDER:{title}:{date}:{recurrence}, same as a normal
+  reminder but always tax-related.
+- Never invent a tax rate or rule that is not in the TAX RATE REFERENCE
+  context below — if a country/tax type isn't listed, say you don't have a
+  verified reference rate for it rather than guessing.
+
 EXAMPLES:
 User sets transport budget → end reply with: ACTION:SET_BUDGET:Transport:120000
 User sets salary reminder → end reply with: ACTION:SET_REMINDER:Pay staff salaries:2025-06-25:monthly
@@ -82,6 +116,9 @@ User says "I sold 12 yards of Ankara today" → end reply with: ACTION:UPDATE_IN
 User says "Add 50 units of Ankara fabric at 2000 each" → end reply with: ACTION:UPDATE_INVENTORY:Ankara:50:restock
 User says "New client Marcus Adebayo" → end reply with: ACTION:START_CLIENT_SETUP:Marcus Adebayo
 User says "Generate an invoice for Marcus" → end reply with: ACTION:GENERATE_INVOICE
+User asks "What's my estimated tax this month" → end reply with: ACTION:GET_TAX_ESTIMATE:Nigeria:this_month
+User says "Remind me to pay VAT on the 21st, monthly" → end reply with: ACTION:SET_TAX_REMINDER:Pay VAT:2025-06-21:monthly
+User says "Switch to Kenya" (in a tax context) → end reply with: ACTION:SWITCH_TAX_COUNTRY:Kenya
 `
 
 interface AIParams {
@@ -92,6 +129,7 @@ interface AIParams {
   userMessage: string
   currency: string
   plan: string
+  defaultTaxCountry: string
   scannedReceipt?: any
 }
 
@@ -99,17 +137,26 @@ export async function getAIResponse(params: AIParams): Promise<{
   reply: string
   actions: string[]
 }> {
-  const { phoneNumber, orgId, orgName, userName, userMessage, currency, plan, scannedReceipt } = params
+  const { phoneNumber, orgId, orgName, userName, userMessage, currency, plan, defaultTaxCountry, scannedReceipt } = params
 
   // Load conversation history (last 10 exchanges = 20 messages)
   const history = await getConversationHistory(phoneNumber, 20)
 
   // Load financial context in parallel
-  const [spending, budgets, reminders] = await Promise.all([
+  const [spending, budgets, reminders, allTaxRates] = await Promise.all([
     getMonthlySpending(orgId),
     getBudgetStatus(orgId),
-    getUpcomingReminders(orgId, 7)
+    getUpcomingReminders(orgId, 7),
+    getAllTaxRates().catch(() => [] as any[])
   ])
+
+  const taxCountry = TAX_COUNTRIES.includes(defaultTaxCountry as any) ? defaultTaxCountry : 'Nigeria'
+  const ratesForDefaultCountry = allTaxRates.filter((r: any) => r.country === taxCountry)
+  const defaultCountryEstimates = await Promise.all(
+    ratesForDefaultCountry.map((r: any) =>
+      calculateTaxEstimate({ orgId, country: taxCountry as any, taxType: r.tax_type, period: 'this_month', persist: false }).catch(() => null)
+    )
+  )
 
   const now = new Date()
   const monthName = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
@@ -155,6 +202,28 @@ ${scannedReceipt.tax_amount ? `• Tax: ${currency} ${Number(scannedReceipt.tax_
 • AI confidence: ${scannedReceipt.ai_confidence}
 Acknowledge the receipt and give smart commentary based on their budget and spending history.
 ` : ''}
+
+TAX HUB CONTEXT — this is a tracking and estimating tool, not a tax filing or
+guaranteed-accurate calculator. Always include the verification date when
+quoting a rate, and always pair any estimate with the planning-purposes-only
+disclaimer.
+Current default tax country: ${taxCountry}
+
+TAX RATE REFERENCE (all countries, for ad-hoc rate questions):
+${allTaxRates.length > 0
+    ? allTaxRates.map((r: any) => `• ${r.country} — ${r.tax_type}: ${r.rate} (as of ${r.last_verified_date})`).join('\n')
+    : '• No reference rates loaded.'
+  }
+
+ESTIMATED LIABILITY THIS MONTH for ${taxCountry} (read-only, not yet saved — only save via ACTION:GET_TAX_ESTIMATE):
+${defaultCountryEstimates.filter(Boolean).length > 0
+    ? defaultCountryEstimates.filter(Boolean).map((e: any, i: number) => {
+      const taxType = ratesForDefaultCountry[i].tax_type
+      if (!e.computable) return `• ${taxType}: rate (${e.rateLabel}) can't be reduced to a single estimate`
+      return `• ${taxType}: ~${e.currency} ${Math.round(e.liability).toLocaleString()} on ${e.currency} ${e.taxableIncome.toLocaleString()} recorded income`
+    }).join('\n')
+    : '• No estimate available.'
+  }
 [END CONTEXT]
 `
 
