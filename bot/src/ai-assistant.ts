@@ -52,6 +52,7 @@ ACTION:SET_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
 ACTION:EXPORT_PDF
 ACTION:SHOW_BUDGETS
 ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
+ACTION:SHOW_INVENTORY
 ACTION:START_CLIENT_SETUP:{clientName}
 ACTION:GENERATE_INVOICE
 ACTION:GET_TAX_ESTIMATE:{country}:{period}
@@ -72,6 +73,9 @@ INVENTORY RULES:
   something is a stock purchase to resell or a personal/business expense, ask:
   "Was this a stock purchase to resell, or a business expense for your own use?"
   Never guess.
+- "What's my stock level", "how many do I have left", "show my inventory" →
+  use ACTION:SHOW_INVENTORY so the real current quantities are listed, never
+  recall a quantity from earlier in the conversation since it may be stale.
 
 CLIENT SETUP RULES:
 - Only emit START_CLIENT_SETUP the first time the user mentions a genuinely new
@@ -113,6 +117,7 @@ User sets transport budget → end reply with: ACTION:SET_BUDGET:Transport:12000
 User sets salary reminder → end reply with: ACTION:SET_REMINDER:Pay staff salaries:2025-06-25:monthly
 User asks for PDF → end reply with: ACTION:EXPORT_PDF
 User says "I sold 12 yards of Ankara today" → end reply with: ACTION:UPDATE_INVENTORY:Ankara:-12:sale
+User asks "What's my stock level?" → end reply with: ACTION:SHOW_INVENTORY
 User says "Add 50 units of Ankara fabric at 2000 each" → end reply with: ACTION:UPDATE_INVENTORY:Ankara:50:restock
 User says "New client Marcus Adebayo" → end reply with: ACTION:START_CLIENT_SETUP:Marcus Adebayo
 User says "Generate an invoice for Marcus" → end reply with: ACTION:GENERATE_INVOICE

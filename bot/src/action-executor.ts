@@ -6,7 +6,7 @@ import { setBudget } from './budget-service'
 import { setReminder } from './reminder-service'
 import { generateAndSendPDF } from './pdf-generator'
 import { getBudgetStatus } from './report-service'
-import { getInventoryItems, addInventoryItem, updateStock } from './inventory-service'
+import { getInventoryItems, addInventoryItem, updateStock, getLowStockItems } from './inventory-service'
 import { startGuidedClientSetup } from './client-setup-service'
 import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
 
@@ -71,6 +71,22 @@ export async function executeActions(actions: string[], user: any): Promise<stri
               name: itemName,
               quantity: qty
             })
+          }
+          break
+        }
+
+        case 'SHOW_INVENTORY': {
+          const items = await getInventoryItems(user.org_id)
+          if (items.length === 0) {
+            notifications.push('No inventory items yet. Say "Add 50 units of [item] at [cost] each" to create one.')
+          } else {
+            const lowStock = await getLowStockItems(user.org_id)
+            const lowStockIds = new Set(lowStock.map((i: any) => i.id))
+            const lines = items.map((i: any) => {
+              const icon = lowStockIds.has(i.id) ? '🔴' : '✅'
+              return `• ${i.name}: ${i.quantity_on_hand} units ${icon}`
+            })
+            notifications.push(`📦 *Your Inventory:*\n${lines.join('\n')}`)
           }
           break
         }

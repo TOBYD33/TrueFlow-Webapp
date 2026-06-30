@@ -54,6 +54,7 @@ ACTION:GET_TAX_ESTIMATE:{country}:{period}
 ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
 ACTION:SWITCH_TAX_COUNTRY:{country}
 ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
+ACTION:SHOW_INVENTORY
 
 recurrence values: once | daily | weekly | monthly | yearly
 Valid categories: Food & Drink | Transport | Utilities | Office Supplies | Marketing | Rent | Salaries | Other
@@ -73,6 +74,9 @@ INVENTORY RULES:
 - If the user explicitly says to add something to inventory (not just log an
   expense), use ACTION:UPDATE_INVENTORY even if you've also logged it as a
   receipt — the two are independent records.
+- "What's my stock level", "how many do I have left", "show my inventory" →
+  use ACTION:SHOW_INVENTORY so real current quantities are listed, never
+  recall a quantity from earlier in the conversation since it may be stale.
 
 TAX HUB RULES — IMPORTANT, this is a tracking and estimating tool, NOT a tax
 filing or guaranteed-accurate calculator:
@@ -257,6 +261,25 @@ async function executeActions(
         } else {
           notes.push(`I don't have **${itemName}** in your inventory yet — say "add X units of ${itemName}" to create it.`)
         }
+      }
+    }
+
+    if (type === 'SHOW_INVENTORY') {
+      const { data: items } = await admin
+        .from('inventory_items')
+        .select('id, name, quantity_on_hand, low_stock_threshold')
+        .eq('org_id', orgId)
+        .eq('status', 'active')
+        .order('name', { ascending: true })
+
+      if (!items || items.length === 0) {
+        notes.push('No inventory items yet. Say "add 50 units of [item]" to create one.')
+      } else {
+        const lines = (items as any[]).map(i => {
+          const icon = Number(i.quantity_on_hand) <= Number(i.low_stock_threshold) ? '🔴' : '✅'
+          return `• ${i.name}: ${i.quantity_on_hand} units ${icon}`
+        })
+        notes.push(`📦 **Your Inventory:**\n${lines.join('\n')}`)
       }
     }
   }
