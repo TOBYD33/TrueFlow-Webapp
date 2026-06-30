@@ -1,15 +1,17 @@
 'use client'
 // settings/profile/page.tsx
-// Update full name, phone, avatar, and send password reset email
+// Update full name, phone, avatar, and send password reset email.
+// Avatar upload resizes to max 400×400px on the client before uploading
+// so phone camera photos (3-8MB) stay well under 200KB in Supabase Storage.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { Profile } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ImageUpload } from '@/components/ImageUpload'
 import { toast } from 'sonner'
-import { Camera, Loader2 } from 'lucide-react'
 
 export default function ProfileSettingsPage() {
   const supabase = createClient()
@@ -18,7 +20,6 @@ export default function ProfileSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [sendingReset, setSendingReset] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function load() {
@@ -31,20 +32,20 @@ export default function ProfileSettingsPage() {
     load()
   }, [])
 
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !profile) return
+  async function handleAvatarUpload(resizedFile: File) {
+    if (!profile) return
     setUploading(true)
-    const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `avatars/${profile.id}/avatar.${ext}`
+    const path = `avatars/${profile.id}/avatar.jpg`
     const { error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(path, file, { upsert: true, contentType: file.type })
+      .upload(path, resizedFile, { upsert: true, contentType: 'image/jpeg' })
+
     if (uploadError) {
       toast.error('Avatar upload failed: ' + uploadError.message)
       setUploading(false)
       return
     }
+
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
     const { error } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', profile.id)
     setUploading(false)
@@ -62,7 +63,7 @@ export default function ProfileSettingsPage() {
     }).eq('id', profile.id)
     setSaving(false)
     if (error) toast.error(error.message)
-    else toast.success('Profile saved')
+    else toast.success('Profile updated')
   }
 
   async function sendPasswordReset() {
@@ -73,7 +74,7 @@ export default function ProfileSettingsPage() {
     })
     setSendingReset(false)
     if (error) toast.error(error.message)
-    else toast.success('Password reset email sent — check your inbox')
+    else toast.success('Password reset email sent')
   }
 
   return (
@@ -82,26 +83,19 @@ export default function ProfileSettingsPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="relative shrink-0">
-              <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border-2 border-gray-200">
-                {profile?.avatar_url
-                  ? <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                  : <span className="text-2xl font-bold text-emerald-600">{profile?.full_name?.[0]?.toUpperCase() ?? '?'}</span>
-                }
-              </div>
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md hover:bg-emerald-700 transition-colors"
-              >
-                {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
-              </button>
-            </div>
+            <ImageUpload
+              currentUrl={profile?.avatar_url}
+              fallbackText={profile?.full_name ?? email ?? '?'}
+              shape="circle"
+              maxSizePx={400}
+              uploading={uploading}
+              onUpload={(resizedFile) => handleAvatarUpload(resizedFile)}
+            />
             <div>
               <p className="font-semibold text-gray-900">{profile?.full_name ?? 'Your name'}</p>
               <p className="text-sm text-gray-500">{email}</p>
               <p className="text-xs text-gray-400 mt-1">Click the camera icon to change your photo</p>
             </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
           </div>
         </CardContent>
       </Card>
@@ -130,7 +124,7 @@ export default function ProfileSettingsPage() {
           <div>
             <label className="text-sm font-medium text-gray-700">Email address</label>
             <Input className="mt-1 bg-gray-50" value={email} disabled />
-            <p className="text-xs text-gray-400 mt-1">Email cannot be changed here. Contact support if needed.</p>
+            <p className="text-xs text-gray-400 mt-1">To change your email, contact support.</p>
           </div>
           <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={saveProfile} disabled={saving}>
             {saving ? 'Saving…' : 'Save Profile'}
@@ -142,7 +136,9 @@ export default function ProfileSettingsPage() {
       <Card>
         <CardContent className="pt-6">
           <h3 className="font-medium text-gray-900 mb-1">Change password</h3>
-          <p className="text-sm text-gray-500 mb-4">We&apos;ll send a password reset link to <strong>{email}</strong></p>
+          <p className="text-sm text-gray-500 mb-4">
+            We&apos;ll send a password reset link to <strong>{email}</strong>
+          </p>
           <Button variant="outline" onClick={sendPasswordReset} disabled={sendingReset}>
             {sendingReset ? 'Sending…' : 'Send Password Reset Email'}
           </Button>

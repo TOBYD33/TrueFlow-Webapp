@@ -1,16 +1,18 @@
 'use client'
 // settings/business/page.tsx
-// Update business name, type, currency, and logo
+// Update business name, type, currency, address, and logo.
+// Logo upload resizes to max 600×600px client-side before uploading.
+// Business name appears on all invoices and outbound emails.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { Organization } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ImageUpload } from '@/components/ImageUpload'
 import { toast } from 'sonner'
-import { Building2, Camera, Loader2 } from 'lucide-react'
 
 const BUSINESS_TYPES = [
   { value: 'sme', label: 'Small / Medium Business (SME)' },
@@ -30,15 +32,12 @@ const CURRENCIES = [
   { value: 'ZAR', label: 'R South African Rand (ZAR)' },
 ]
 
-type OrgWithLogo = Organization & { logo_url?: string | null }
-
 export default function BusinessSettingsPage() {
   const supabase = createClient()
-  const [org, setOrg] = useState<OrgWithLogo | null>(null)
+  const [org, setOrg] = useState<Organization | null>(null)
   const [orgId, setOrgId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function load() {
@@ -50,25 +49,25 @@ export default function BusinessSettingsPage() {
       setOrgId(member.org_id)
       const { data } = await supabase
         .from('organizations').select('*').eq('id', member.org_id).single()
-      if (data) setOrg(data as OrgWithLogo)
+      if (data) setOrg(data as Organization)
     }
     load()
   }, [])
 
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !orgId) return
+  async function handleLogoUpload(resizedFile: File) {
+    if (!orgId) return
     setUploading(true)
-    const ext = file.name.split('.').pop() ?? 'png'
-    const path = `logos/${orgId}/logo.${ext}`
+    const path = `logos/${orgId}/logo.jpg`
     const { error: uploadError } = await supabase.storage
       .from('logos')
-      .upload(path, file, { upsert: true, contentType: file.type })
+      .upload(path, resizedFile, { upsert: true, contentType: 'image/jpeg' })
+
     if (uploadError) {
       toast.error('Logo upload failed: ' + uploadError.message)
       setUploading(false)
       return
     }
+
     const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path)
     const { error } = await supabase.from('organizations').update({ logo_url: publicUrl }).eq('id', orgId)
     setUploading(false)
@@ -84,10 +83,11 @@ export default function BusinessSettingsPage() {
       name: org.name,
       type: org.type,
       currency: org.currency,
+      address: org.address ?? null,
     }).eq('id', orgId)
     setSaving(false)
     if (error) toast.error(error.message)
-    else toast.success('Business settings saved')
+    else toast.success('Business profile updated')
   }
 
   return (
@@ -96,26 +96,19 @@ export default function BusinessSettingsPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="relative shrink-0">
-              <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden border-2 border-gray-200">
-                {org?.logo_url
-                  ? <img src={org.logo_url} alt="Business logo" className="w-full h-full object-cover" />
-                  : <Building2 size={32} className="text-gray-400" />
-                }
-              </div>
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md hover:bg-emerald-700 transition-colors"
-              >
-                {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
-              </button>
-            </div>
+            <ImageUpload
+              currentUrl={org?.logo_url}
+              fallbackText={org?.name ?? 'B'}
+              shape="square"
+              maxSizePx={600}
+              uploading={uploading}
+              onUpload={(resizedFile) => handleLogoUpload(resizedFile)}
+            />
             <div>
               <p className="font-semibold text-gray-900">{org?.name ?? 'Your Business'}</p>
               <p className="text-sm text-gray-500">Business logo · shown on invoices and reports</p>
-              <p className="text-xs text-gray-400 mt-1">PNG or JPG · Recommended 400×400px</p>
+              <p className="text-xs text-gray-400 mt-1">PNG or JPG · Max 600×600px (resized automatically)</p>
             </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
           </div>
         </CardContent>
       </Card>
@@ -131,16 +124,15 @@ export default function BusinessSettingsPage() {
               value={org?.name ?? ''}
               onChange={e => setOrg(o => o ? { ...o, name: e.target.value } : o)}
             />
+            <p className="text-xs text-gray-400 mt-1">This name appears on your invoices and outbound emails.</p>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700">Business type</label>
             <Select
               value={org?.type ?? 'sme'}
-              onValueChange={v => { if (v) setOrg(o => o ? ({ ...o, type: v } as OrgWithLogo) : o) }}
+              onValueChange={v => { if (v) setOrg(o => o ? { ...o, type: v } : o) }}
             >
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {BUSINESS_TYPES.map(t => (
                   <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -154,15 +146,26 @@ export default function BusinessSettingsPage() {
               value={org?.currency ?? 'NGN'}
               onValueChange={v => { if (v) setOrg(o => o ? { ...o, currency: v } : o) }}
             >
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CURRENCIES.map(c => (
                   <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Business address <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <textarea
+              className="mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              rows={3}
+              placeholder="123 Lagos Island, Lagos, Nigeria"
+              value={org?.address ?? ''}
+              onChange={e => setOrg(o => o ? { ...o, address: e.target.value } : o)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Shown below your business name on invoice headers.</p>
           </div>
           <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={saveOrg} disabled={saving}>
             {saving ? 'Saving…' : 'Save Business Settings'}

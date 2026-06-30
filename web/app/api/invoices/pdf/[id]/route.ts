@@ -21,14 +21,22 @@ export async function GET(
 
     const { data: member } = await supabase
       .from('org_members')
-      .select('org_id, organizations(name, logo_url, currency)')
+      .select('org_id, organizations(name, logo_url, currency, address)')
       .eq('user_id', user.id)
       .single()
 
     if (!member) return NextResponse.json({ error: 'No org found' }, { status: 404 })
 
-    const org = member.organizations as unknown as { name: string; logo_url?: string | null; currency?: string } | null
+    const org = member.organizations as unknown as { name: string; logo_url?: string | null; currency?: string; address?: string | null } | null
     const orgName = org?.name ?? 'Your Business'
+
+    // Fetch profile phone for invoice header contact line
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('phone')
+      .eq('id', user.id)
+      .single()
+    const orgPhone = profileData?.phone ?? null
 
     const { data: invoice, error } = await supabase
       .from('invoices')
@@ -67,8 +75,11 @@ export async function GET(
   .print-bar { background: #6C63FF; color: #fff; padding: 10px 20px; margin: -48px -48px 40px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
   .print-bar button { background: #fff; color: #6C63FF; border: none; padding: 6px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
-  .org-name { font-size: 22px; font-weight: 700; color: #111827; }
-  .org-contact { font-size: 12px; color: #6b7280; margin-top: 4px; line-height: 1.6; }
+  .org-block { display: flex; align-items: flex-start; gap: 14px; }
+  .org-logo { width: 80px; height: 80px; object-fit: contain; border-radius: 8px; flex-shrink: 0; }
+  .org-name { font-size: 20px; font-weight: 700; color: #111827; line-height: 1.2; }
+  .org-name-large { font-size: 22px; font-weight: 700; color: #111827; }
+  .org-contact { font-size: 12px; color: #6b7280; margin-top: 5px; line-height: 1.7; }
   .invoice-badge { text-align: right; }
   .invoice-word { font-size: 32px; font-weight: 700; color: #6C63FF; letter-spacing: 2px; }
   .invoice-number { font-size: 13px; color: #6b7280; font-family: monospace; margin-top: 4px; }
@@ -114,10 +125,19 @@ export async function GET(
 
 <div class="header">
   <div>
-    ${org?.logo_url ? `<img src="${org.logo_url}" alt="${orgName}" style="height:48px;width:auto;object-fit:contain;margin-bottom:8px;display:block;" />` : ''}
-    <div class="org-name">${orgName}</div>
-    <div class="org-contact">hello@gettrueflow.com</div>
-  </div>
+    ${org?.logo_url
+      ? `<div class="org-block">
+           <img src="${org.logo_url}" alt="${orgName}" class="org-logo" />
+           <div>
+             <div class="org-name">${orgName}</div>
+             <div class="org-contact">${[org?.address, orgPhone].filter(Boolean).join('<br>')}</div>
+           </div>
+         </div>`
+      : `<div>
+           <div class="org-name-large">${orgName}</div>
+           <div class="org-contact">${[org?.address, orgPhone].filter(Boolean).join('<br>')}</div>
+         </div>`
+    }</div>
   <div class="invoice-badge">
     <div class="invoice-word">INVOICE</div>
     <div class="invoice-number">${inv.invoice_number ?? '—'}</div>

@@ -45,9 +45,10 @@ const navItems = [
 interface SidebarProps {
   isOpen?: boolean
   onClose?: () => void
+  orgName?: string
 }
 
-export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ isOpen = false, onClose, orgName }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -76,7 +77,10 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       <div className="px-6 py-5 border-b border-gray-800 flex items-center justify-between">
         <div>
           <span className="text-xl font-bold text-emerald-400">TrueFlow</span>
-          <p className="text-xs text-gray-500 mt-0.5">Financial Dashboard</p>
+          {orgName && orgName !== 'TrueFlow' && orgName !== 'My Business'
+            ? <p className="text-xs text-gray-300 mt-0.5 font-medium truncate max-w-[160px]">{orgName}</p>
+            : <p className="text-xs text-gray-500 mt-0.5">Financial Dashboard</p>
+          }
         </div>
         {/* Close button — mobile only */}
         {isOpen && (

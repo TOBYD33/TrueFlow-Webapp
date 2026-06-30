@@ -20,6 +20,7 @@ export interface Profile {
   phone: string | null
   avatar_url: string | null
   created_at: string
+  updated_at?: string
 }
 
 export interface Organization {
@@ -31,7 +32,10 @@ export interface Organization {
   receipt_limit: number
   currency: string
   default_tax_country: string
+  logo_url?: string | null
+  address?: string | null
   created_at: string
+  updated_at?: string
 }
 
 export interface OrgMember {
