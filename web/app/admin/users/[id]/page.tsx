@@ -166,7 +166,7 @@ export default async function AdminUserDetailPage({
       )}
 
       {/* Impersonate — visible to Super + Support Admin only */}
-      {canImpersonate && org && (
+      {canImpersonate && (
         <div className="bg-gray-900 border border-amber-900/30 rounded-xl px-5 py-4 flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-amber-300">Impersonate User</p>
@@ -174,7 +174,7 @@ export default async function AdminUserDetailPage({
           </div>
           <ImpersonateButton
             targetUserId={id}
-            targetOrgId={org.id}
+            targetOrgId={org?.id ?? null}
             targetName={profile.full_name ?? profile.phone ?? id}
           />
         </div>
