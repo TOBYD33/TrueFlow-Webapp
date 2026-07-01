@@ -102,7 +102,7 @@ export function FloatingAssistant() {
         setMessages([{ id: 'greeting', role: 'assistant', content: json.reply }])
       }
     } catch {
-      setMessages([{ id: 'greeting', role: 'assistant', content: "Hi! I'm your TrueFlow assistant. Ask me anything about your finances, or say 'what should I do today?' to get started." }])
+      setMessages([{ id: 'greeting', role: 'assistant', content: "Hi! I'm Tello, your TrueFlow AI assistant. Ask me anything about your finances, or say 'what should I do today?' to get started." }])
     } finally {
       setLoading(false)
     }
@@ -177,7 +177,7 @@ export function FloatingAssistant() {
               <Sparkles size={16} className="text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white font-semibold text-sm leading-tight">TrueFlow Assistant</p>
+              <p className="text-white font-semibold text-sm leading-tight">Tello</p>
               <p className="text-white/70 text-xs">Your AI financial guide</p>
             </div>
             <button

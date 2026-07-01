@@ -39,10 +39,17 @@ WHAT YOU CAN DO:
 • Set reminders — "Remind me to pay salaries on the 25th every month"
 • Answer financial questions — "How much did I spend on transport this month?"
 • Summarise spending patterns and give smart advice
+• Client management — create client folders, view clients and their outstanding balances
+• Project tracking — create projects with fees and deadlines, track what's been paid and what's owed
+• Log income — record when a client pays you, link it to a project
 • Tax Hub — look up reference tax rates for Nigeria, Kenya, Ghana, USA, or UK,
   give a bounded estimate of tax liability from recorded income, switch which
   country's rates the user is checking, and set tax deadline reminders
 • Inventory — track stock levels, log restocks and sales, warn about low stock
+
+IMPORTANT — Client management IS available in TrueFlow. Never say "I don't have a Client Management feature built in yet." It is fully built. Use the actions below to create clients, projects, and log payments immediately when the user asks.
+
+GUIDED CLIENT SETUP — when a user mentions a new client, guide them through setup in one flow. Confirm each step explicitly before writing to the database. Create the client first, then the project, then ask about any initial payment.
 
 ACTIONS — append at the very end of your reply when the user requests one.
 The user never sees ACTION tags — they are stripped automatically.
@@ -57,6 +64,10 @@ ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
 ACTION:SWITCH_TAX_COUNTRY:{country}
 ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
 ACTION:SHOW_INVENTORY
+ACTION:CREATE_CLIENT:{name}:{phone}:{email}
+ACTION:CREATE_PROJECT:{clientName}:{projectName}:{totalFee}:{deadline}
+ACTION:LOG_PAYMENT:{clientName}:{amount}:{projectName}
+ACTION:SHOW_CLIENTS
 
 recurrence values: once | daily | weekly | monthly | yearly
 Valid categories: Food & Drink | Transport | Utilities | Office Supplies | Marketing | Rent | Salaries | Other
@@ -266,6 +277,107 @@ async function executeActions(
       }
     }
 
+    if (type === 'CREATE_CLIENT' && parts.length >= 2) {
+      const name = parts[1]
+      const phone = parts[2] && parts[2] !== 'null' ? parts[2] : null
+      const email = parts[3] && parts[3] !== 'null' ? parts[3] : null
+      const { data: existing } = await admin.from('clients').select('id, name').eq('org_id', orgId).ilike('name', name).maybeSingle()
+      if (existing) {
+        notes.push(`ℹ️ **${existing.name}** already exists as a client.`)
+      } else {
+        const { data: client, error } = await admin.from('clients').insert({
+          org_id: orgId, name, phone, email, created_via: 'web', status: 'active',
+        }).select().single()
+        if (!error && client) notes.push(`✅ Client created: **${name}**${phone ? ` · ${phone}` : ''}`)
+        else if (error) notes.push(`❌ Could not create client: ${error.message}`)
+      }
+    }
+
+    if (type === 'CREATE_PROJECT' && parts.length >= 4) {
+      const clientName = parts[1]
+      const projectName = parts[2]
+      const totalFee = parseFloat(parts[3])
+      const deadline = parts[4] && parts[4] !== 'null' ? parts[4] : null
+      if (!isNaN(totalFee)) {
+        const { data: client } = await admin.from('clients').select('id, name').eq('org_id', orgId).ilike('name', clientName).maybeSingle()
+        if (!client) {
+          notes.push(`❌ No client named **${clientName}** found. Create the client first.`)
+        } else {
+          const { data: project, error } = await admin.from('projects').insert({
+            org_id: orgId, client_id: client.id, name: projectName,
+            total_fee: totalFee, deadline, status: 'in_progress',
+          }).select().single()
+          if (!error && project) {
+            // Auto-create deadline reminders if deadline set
+            if (deadline) {
+              const d = new Date(deadline)
+              const r7 = new Date(d); r7.setDate(r7.getDate() - 7)
+              const r3 = new Date(d); r3.setDate(r3.getDate() - 3)
+              await admin.from('reminders').insert([
+                { org_id: orgId, project_id: project.id, title: `${projectName} due in 7 days`, due_date: r7.toISOString().split('T')[0], category: 'project_deadline', status: 'active' },
+                { org_id: orgId, project_id: project.id, title: `${projectName} due in 3 days`, due_date: r3.toISOString().split('T')[0], category: 'project_deadline', status: 'active' },
+                { org_id: orgId, project_id: project.id, title: `${projectName} delivery due TODAY`, due_date: deadline, category: 'project_deadline', status: 'active' },
+              ])
+            }
+            notes.push(`✅ Project created: **${projectName}** for ${client.name} — ₦${totalFee.toLocaleString()}${deadline ? ` · due ${deadline}` : ''}.${deadline ? '\n3 deadline reminders set.' : ''}`)
+          } else if (error) {
+            notes.push(`❌ Could not create project: ${error.message}`)
+          }
+        }
+      }
+    }
+
+    if (type === 'LOG_PAYMENT' && parts.length >= 3) {
+      const clientName = parts[1]
+      const amount = parseFloat(parts[2])
+      const projectName = parts[3] && parts[3] !== 'null' ? parts[3] : null
+      if (!isNaN(amount)) {
+        const { data: client } = await admin.from('clients').select('id, name, outstanding_balance, total_earned').eq('org_id', orgId).ilike('name', clientName).maybeSingle()
+        if (!client) {
+          notes.push(`❌ No client named **${clientName}** found.`)
+        } else {
+          let projectId: string | null = null
+          if (projectName) {
+            const { data: proj } = await admin.from('projects').select('id').eq('org_id', orgId).eq('client_id', client.id).ilike('name', projectName).maybeSingle()
+            projectId = proj?.id ?? null
+          }
+          const { error: payErr } = await admin.from('client_payments').insert({
+            org_id: orgId, client_id: client.id, project_id: projectId,
+            amount, payment_date: new Date().toISOString().split('T')[0], payment_type: 'part_payment',
+          })
+          if (!payErr) {
+            // Update client totals
+            await admin.from('clients').update({
+              total_earned: Number(client.total_earned) + amount,
+              outstanding_balance: Math.max(0, Number(client.outstanding_balance) - amount),
+            }).eq('id', client.id)
+            if (projectId) {
+              const { data: proj } = await admin.from('projects').select('amount_received, total_fee').eq('id', projectId).single()
+              if (proj) {
+                await admin.from('projects').update({ amount_received: Number(proj.amount_received) + amount }).eq('id', projectId)
+              }
+            }
+            const newBalance = Math.max(0, Number(client.outstanding_balance) - amount)
+            notes.push(`✅ **₦${amount.toLocaleString()}** recorded from **${client.name}**${projectName ? ` for ${projectName}` : ''}.\nNew outstanding balance: ₦${newBalance.toLocaleString()}`)
+          } else {
+            notes.push(`❌ Could not log payment: ${payErr.message}`)
+          }
+        }
+      }
+    }
+
+    if (type === 'SHOW_CLIENTS') {
+      const { data: allClients } = await admin.from('clients').select('name, outstanding_balance, total_earned').eq('org_id', orgId).eq('status', 'active').order('outstanding_balance', { ascending: false })
+      if (!allClients || allClients.length === 0) {
+        notes.push('No clients yet. Say "New client [name]" to create one.')
+      } else {
+        const lines = (allClients as any[]).map(c =>
+          `• **${c.name}** — ₦${Number(c.outstanding_balance).toLocaleString()} outstanding · ₦${Number(c.total_earned).toLocaleString()} total earned`
+        )
+        notes.push(`👥 **Your Clients:**\n${lines.join('\n')}`)
+      }
+    }
+
     if (type === 'SHOW_INVENTORY') {
       const { data: items } = await admin
         .from('inventory_items')
@@ -341,17 +453,19 @@ export async function POST(req: NextRequest) {
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
 
-    const [receiptsRes, budgetsRes, remindersRes, historyRes, taxRatesRes] = await Promise.all([
+    const [receiptsRes, budgetsRes, remindersRes, historyRes, taxRatesRes, clientsRes] = await Promise.all([
       orgId ? admin.from('receipts').select('amount, category, vendor_name, date').eq('org_id', orgId).gte('date', monthStart) : Promise.resolve({ data: [] }),
       orgId ? admin.from('budgets').select('category, amount').eq('org_id', orgId).eq('month', now.getMonth() + 1).eq('year', now.getFullYear()) : Promise.resolve({ data: [] }),
       orgId ? admin.from('reminders').select('title, due_date, category').eq('org_id', orgId).eq('status', 'active').gte('due_date', monthStart).order('due_date').limit(5) : Promise.resolve({ data: [] }),
       admin.from('whatsapp_conversations').select('role, content').eq('phone_number', chatId).order('created_at', { ascending: false }).limit(20),
       admin.from('tax_rate_reference').select('*').order('country').order('tax_type'),
+      orgId ? admin.from('clients').select('id, name, outstanding_balance, total_earned, status').eq('org_id', orgId).eq('status', 'active').order('outstanding_balance', { ascending: false }).limit(10) : Promise.resolve({ data: [] }),
     ])
 
     const receipts = receiptsRes.data ?? []
     const budgets = budgetsRes.data ?? []
     const reminders = remindersRes.data ?? []
+    const clients = clientsRes.data ?? []
     const history = (historyRes.data ?? []).reverse()
     const allTaxRates = taxRatesRes.data ?? []
 
@@ -390,6 +504,11 @@ UPCOMING REMINDERS:
 ${reminders.length > 0
   ? (reminders as any[]).map(r => `• ${r.title} — ${r.due_date}`).join('\n')
   : '• No upcoming reminders'}
+
+CLIENTS (active, sorted by outstanding balance):
+${clients.length > 0
+  ? (clients as any[]).map(c => `• ${c.name}: ₦${Number(c.outstanding_balance).toLocaleString()} outstanding, ₦${Number(c.total_earned).toLocaleString()} total earned`).join('\n')
+  : '• No clients yet'}
 
 TAX HUB CONTEXT — this is a tracking and estimating tool, not a tax filing or
 guaranteed-accurate calculator. Always include the verification date when

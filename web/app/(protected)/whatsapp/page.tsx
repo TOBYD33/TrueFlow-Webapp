@@ -136,7 +136,7 @@ function LinkPhoneCard({ onLinked }: { onLinked: (phone: string) => void }) {
         <button onClick={() => setStep('phone')} className="w-full h-10 rounded-lg bg-[#25D366] hover:bg-[#1ebe5d] text-white text-sm font-semibold transition-colors">
           Link WhatsApp number
         </button>
-        <p className="text-xs text-gray-400 mt-3">Don't use WhatsApp? Use <strong>TrueFlow Chat</strong> instead — no phone needed.</p>
+        <p className="text-xs text-gray-400 mt-3">Don't use WhatsApp? Use <strong>Tello</strong> instead — no phone needed.</p>
       </div>
     </div>
   )
@@ -338,7 +338,7 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
           <Bot size={16} className="text-white" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-gray-900">TrueFlow AI Assistant</p>
+          <p className="text-sm font-semibold text-gray-900">Tello AI Assistant</p>
           <p className="text-xs text-gray-400">Track expenses · Set budgets · Log income · Upload receipts</p>
         </div>
         <span className="ml-auto text-xs bg-[#6C63FF]/10 text-[#6C63FF] font-semibold px-2 py-1 rounded-full">Live</span>
@@ -350,7 +350,7 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
         ) : messages.length === 0 ? (
           <div className="text-center py-10">
             <Bot size={40} className="text-gray-200 mx-auto mb-4" />
-            <p className="font-semibold text-gray-700 mb-2">Hello! I'm your TrueFlow assistant.</p>
+            <p className="font-semibold text-gray-700 mb-2">Hello! I'm Tello, your TrueFlow AI assistant.</p>
             <p className="text-sm text-gray-400 max-w-xs mx-auto mb-6">
               Track expenses, set budgets, manage reminders, and scan receipts — all without WhatsApp.
             </p>
@@ -366,7 +366,7 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
         ) : messages.map(msg => (
           <MessageBubble key={msg.id} msg={msg} accent="purple" />
         ))}
-        {sending && <TypingIndicator label="TrueFlow is thinking…" />}
+        {sending && <TypingIndicator label="Tello is thinking…" />}
         {scanning && <TypingIndicator label="Scanning your image…" />}
         <div ref={bottomRef} />
       </div>
@@ -402,7 +402,7 @@ function TrueFlowChatPanel({ userId }: { userId: string }) {
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileSelect} />
           <input
             className="flex-1 text-sm bg-gray-100 rounded-full px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#6C63FF]/30 placeholder:text-gray-400"
-            placeholder="Ask TrueFlow anything — or describe an expense…"
+            placeholder="Ask Tello anything — expenses, clients, projects, budgets…"
             value={input} onChange={e => setInput(e.target.value)} disabled={sending}
           />
           <button type="submit" disabled={!input.trim() || sending}
@@ -649,7 +649,7 @@ export default function WhatsAppPage() {
           )}
         >
           <Bot size={15} />
-          TrueFlow Chat
+          Tello
           <span className="text-[10px] font-bold text-white bg-[#6C63FF] px-1.5 py-0.5 rounded-full">AI</span>
         </button>
         <button
