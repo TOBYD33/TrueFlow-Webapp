@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Invoice } from '@/types'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,28 +28,25 @@ export default function InvoicesPage() {
   const supabase = createClient()
   const router = useRouter()
 
+  const { orgId } = useViewingContext()
   const [invoices, setInvoices] = useState<InvoiceWithClient[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-
       const { data } = await supabase
         .from('invoices')
         .select('*, clients(name)')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .order('created_at', { ascending: false })
 
       setInvoices((data as unknown as InvoiceWithClient[]) ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId])
 
   const filtered = invoices.filter(inv => {
     const q = search.toLowerCase()

@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { OrgMember } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,8 +26,8 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function TeamPage() {
   const supabase = createClient()
+  const { orgId, userId } = useViewingContext()
   const [members, setMembers] = useState<OrgMember[]>([])
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [myRole, setMyRole] = useState<string>('staff')
   const [loading, setLoading] = useState(true)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -35,23 +36,21 @@ export default function TeamPage() {
   const [inviting, setInviting] = useState(false)
 
   useEffect(() => {
+    if (!orgId || !userId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: me } = await supabase.from('org_members').select('org_id, role').eq('user_id', user.id).single()
-      if (!me) return
-      setOrgId(me.org_id)
-      setMyRole(me.role)
-      const { data } = await supabase
-        .from('org_members')
-        .select('*, profiles(full_name, phone, avatar_url)')
-        .eq('org_id', me.org_id)
-        .order('joined_at', { ascending: true })
+      const [{ data: me }, { data }] = await Promise.all([
+        supabase.from('org_members').select('role').eq('org_id', orgId).eq('user_id', userId).single(),
+        supabase.from('org_members')
+          .select('*, profiles(full_name, phone, avatar_url)')
+          .eq('org_id', orgId)
+          .order('joined_at', { ascending: true }),
+      ])
+      if (me) setMyRole(me.role)
       setMembers((data as OrgMember[]) ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId, userId])
 
   async function handleInvite() {
     if (!orgId || !invitePhone.trim()) return

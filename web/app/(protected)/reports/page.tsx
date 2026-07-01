@@ -4,6 +4,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Receipt } from '@/types'
 import { CategoryChart } from '@/components/CategoryChart'
 import { SpendTrendChart } from '@/components/SpendTrendChart'
@@ -38,27 +39,23 @@ function getDateRange(range: Range): { start: Date; end: Date } {
 
 export default function ReportsPage() {
   const supabase = createClient()
+  const { orgId } = useViewingContext()
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [range, setRange] = useState<Range>('this-month')
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-        const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-        if (!member) return
-        setOrgId(member.org_id)
-        const { data } = await supabase.from('receipts').select('*').eq('org_id', member.org_id).order('date', { ascending: false })
+        const { data } = await supabase.from('receipts').select('*').eq('org_id', orgId).order('date', { ascending: false })
         setReceipts((data as Receipt[]) ?? [])
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [])
+  }, [orgId])
 
   const { start, end } = getDateRange(range)
   const filtered = useMemo(() =>

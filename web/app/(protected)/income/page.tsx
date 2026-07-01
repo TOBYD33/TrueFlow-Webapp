@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { ClientPayment } from '@/types'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -27,29 +28,26 @@ const TYPE_COLORS: Record<string, string> = {
 export default function IncomePage() {
   const supabase = createClient()
 
+  const { orgId } = useViewingContext()
   const [payments, setPayments] = useState<PaymentWithClient[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-
       const { data } = await supabase
         .from('client_payments')
         .select('*, clients(name), projects(name)')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .order('payment_date', { ascending: false })
 
       setPayments((data as unknown as PaymentWithClient[]) ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId])
 
   const filtered = payments.filter(p => {
     const matchesType = typeFilter === 'all' || p.payment_type === typeFilter

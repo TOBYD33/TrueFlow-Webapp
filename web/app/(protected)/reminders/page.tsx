@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Reminder } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -55,8 +56,8 @@ function isDueToday(due: string) {
 export default function RemindersPage() {
   const supabase = createClient()
 
+  const { orgId } = useViewingContext()
   const [reminders, setReminders] = useState<Reminder[]>([])
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -68,23 +69,19 @@ export default function RemindersPage() {
   })
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-      setOrgId(member.org_id)
       const { data } = await supabase
         .from('reminders')
         .select('*')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .eq('status', 'active')
         .order('due_date', { ascending: true })
       setReminders((data as Reminder[]) ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId])
 
   async function handleAdd() {
     if (!orgId || !form.title.trim() || !form.due_date) return

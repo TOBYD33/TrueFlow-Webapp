@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import {
   MessageSquare, Send, CheckCircle,
   Paperclip, X, Bot, Smartphone,
@@ -549,8 +550,8 @@ function WhatsAppBotPanel({
 
 export default function WhatsAppPage() {
   const supabase = createClient()
+  const { orgId, userId, phone: contextPhone } = useViewingContext()
   const [activeTab, setActiveTab] = useState<'chat' | 'whatsapp'>('chat')
-  const [userId, setUserId] = useState<string | null>(null)
   const [linkedPhone, setLinkedPhone] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
   const [selected, setSelected] = useState<string | null>(null)
@@ -559,40 +560,30 @@ export default function WhatsAppPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!orgId || !userId) return
     async function init() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-        setUserId(user.id)
-
-        const [{ data: profile }, { data: member }] = await Promise.all([
-          supabase.from('profiles').select('phone').eq('id', user.id).single(),
-          supabase.from('org_members').select('org_id').eq('user_id', user.id).single(),
-        ])
-
-        const phone = profile?.phone ?? null
+        const phone = contextPhone ?? null
         setLinkedPhone(phone)
 
-        if (member?.org_id) {
-          const { data: orgSessions } = await supabase
-            .from('whatsapp_sessions')
-            .select('phone_number, last_active_at')
-            .eq('org_id', member.org_id)
-            .order('last_active_at', { ascending: false })
+        const { data: orgSessions } = await supabase
+          .from('whatsapp_sessions')
+          .select('phone_number, last_active_at')
+          .eq('org_id', orgId)
+          .order('last_active_at', { ascending: false })
 
-          let list = (orgSessions as Session[]) ?? []
-          if (phone && !list.find(s => s.phone_number === phone)) {
-            list = [{ phone_number: phone, last_active_at: new Date().toISOString() }, ...list]
-          }
-          setSessions(list)
-          setSelected(phone ?? list[0]?.phone_number ?? null)
+        let list = (orgSessions as Session[]) ?? []
+        if (phone && !list.find(s => s.phone_number === phone)) {
+          list = [{ phone_number: phone, last_active_at: new Date().toISOString() }, ...list]
         }
+        setSessions(list)
+        setSelected(phone ?? list[0]?.phone_number ?? null)
       } finally {
         setLoading(false)
       }
     }
     init()
-  }, [])
+  }, [orgId, userId, contextPhone])
 
   // Load WhatsApp messages when session selected
   useEffect(() => {

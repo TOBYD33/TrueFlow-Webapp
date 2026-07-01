@@ -4,6 +4,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Receipt } from '@/types'
 import { ReceiptUpload } from '@/components/ReceiptUpload'
 import { ChannelBadge } from '@/components/ChannelBadge'
@@ -71,7 +72,7 @@ function ReceiptLimitBanner({ used, limit, plan }: { used: number; limit: number
 export default function ReceiptsPage() {
   const supabase = createClient()
   const router = useRouter()
-  const [orgId, setOrgId] = useState<string | null>(null)
+  const { orgId } = useViewingContext()
   const [orgPlan, setOrgPlan] = useState<string>('free')
   const [monthlyCount, setMonthlyCount] = useState(0)
   const [receipts, setReceipts] = useState<Receipt[]>([])
@@ -91,39 +92,27 @@ export default function ReceiptsPage() {
   }
 
   useEffect(() => {
+    if (!orgId) return
     async function init() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-
-        const { data: member } = await supabase
-          .from('org_members')
-          .select('org_id')
-          .eq('user_id', user.id)
-          .single()
-
-        if (!member) return
-        setOrgId(member.org_id)
-
-        // Fetch org plan + monthly receipt count in parallel
         const now = new Date()
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
         const [{ data: org }, { count }] = await Promise.all([
-          supabase.from('organizations').select('plan').eq('id', member.org_id).single(),
+          supabase.from('organizations').select('plan').eq('id', orgId).single(),
           supabase.from('receipts').select('id', { count: 'exact', head: true })
-            .eq('org_id', member.org_id)
+            .eq('org_id', orgId)
             .gte('created_at', monthStart),
         ])
 
         setOrgPlan(org?.plan ?? 'free')
         setMonthlyCount(count ?? 0)
-        await loadReceipts(member.org_id)
+        await loadReceipts(orgId!)
       } finally {
         setLoading(false)
       }
     }
     init()
-  }, [])
+  }, [orgId])
 
   const filtered = useMemo(() => {
     return receipts.filter(r => {

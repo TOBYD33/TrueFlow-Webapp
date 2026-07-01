@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Project } from '@/types'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,29 +31,26 @@ export default function ProjectsPage() {
   const supabase = createClient()
   const router = useRouter()
 
+  const { orgId } = useViewingContext()
   const [projects, setProjects] = useState<ProjectWithClient[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-
       const { data } = await supabase
         .from('projects')
         .select('*, clients(name)')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .order('created_at', { ascending: false })
 
       setProjects((data as unknown as ProjectWithClient[]) ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId])
 
   const filtered = projects.filter(p => {
     const matchesStatus = status === 'all' || p.status === status

@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,8 +31,8 @@ interface InventoryItem {
 
 export default function InventoryPage() {
   const supabase = createClient()
+  const { orgId } = useViewingContext()
   const [items, setItems] = useState<InventoryItem[]>([])
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
@@ -41,17 +42,6 @@ export default function InventoryPage() {
   const [actionQty, setActionQty] = useState('')
   const [actionNotes, setActionNotes] = useState('')
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-      setOrgId(member.org_id)
-    }
-    init()
-  }, [])
 
   useEffect(() => {
     if (!orgId) return

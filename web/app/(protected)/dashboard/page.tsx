@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Receipt, TaxCountry } from '@/types'
 import { DEFAULT_INCOME_TAX_TYPE, COUNTRY_TO_CURRENCY, parseRateEstimate } from '@/lib/tax'
 import { StatCard } from '@/components/StatCard'
@@ -28,7 +29,7 @@ import Link from 'next/link'
 export default function DashboardPage() {
   const supabase = createClient()
 
-  const [orgId, setOrgId] = useState<string | null>(null)
+  const { orgId } = useViewingContext()
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [incomeThisMonth, setIncomeThisMonth] = useState(0)
   const [taxEstimate, setTaxEstimate] = useState<{ value: number; currency: string; approximate: boolean } | null>(null)
@@ -76,27 +77,16 @@ export default function DashboardPage() {
   })
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: member } = await supabase
-        .from('org_members')
-        .select('org_id')
-        .eq('user_id', user.id)
-        .single()
-
-      if (!member) { setLoading(false); return }
-      setOrgId(member.org_id)
-
       const now = new Date()
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
       const [{ data: receiptData }, { data: paymentData }, { data: org }] = await Promise.all([
-        supabase.from('receipts').select('*').eq('org_id', member.org_id).order('created_at', { ascending: false }),
-        supabase.from('client_payments').select('amount').eq('org_id', member.org_id).gte('payment_date', monthStart).lte('payment_date', monthEnd),
-        supabase.from('organizations').select('default_tax_country').eq('id', member.org_id).single(),
+        supabase.from('receipts').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('client_payments').select('amount').eq('org_id', orgId).gte('payment_date', monthStart).lte('payment_date', monthEnd),
+        supabase.from('organizations').select('default_tax_country').eq('id', orgId).single(),
       ])
 
       setReceipts((receiptData as Receipt[]) ?? [])
@@ -125,7 +115,7 @@ export default function DashboardPage() {
       const { data: sessions } = await supabase
         .from('whatsapp_sessions')
         .select('phone_number')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .order('last_active_at', { ascending: false })
         .limit(10)
 
@@ -144,7 +134,7 @@ export default function DashboardPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId])
 
   // Real-time: new receipt scanned via WhatsApp appears instantly
   useEffect(() => {

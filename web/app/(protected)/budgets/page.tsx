@@ -4,6 +4,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Budget, Receipt } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,9 +31,9 @@ function progressTextColor(pct: number) {
 export default function BudgetsPage() {
   const supabase = createClient()
 
+  const { orgId } = useViewingContext()
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [receipts, setReceipts] = useState<Receipt[]>([])
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -45,17 +46,12 @@ export default function BudgetsPage() {
   const currentYear = now.getFullYear()
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-      setOrgId(member.org_id)
-
       const [{ data: b }, { data: r }] = await Promise.all([
-        supabase.from('budgets').select('*').eq('org_id', member.org_id)
+        supabase.from('budgets').select('*').eq('org_id', orgId)
           .eq('month', currentMonth).eq('year', currentYear),
-        supabase.from('receipts').select('category, amount').eq('org_id', member.org_id)
+        supabase.from('receipts').select('category, amount').eq('org_id', orgId)
           .gte('date', `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`)
           .lte('date', `${currentYear}-${String(currentMonth).padStart(2, '0')}-31`),
       ])
@@ -65,7 +61,7 @@ export default function BudgetsPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId])
 
   const spentByCategory = useMemo(() =>
     receipts.reduce<Record<string, number>>((acc, r) => {

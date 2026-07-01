@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Organization } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,25 +35,20 @@ const CURRENCIES = [
 
 export default function BusinessSettingsPage() {
   const supabase = createClient()
+  const { orgId } = useViewingContext()
   const [org, setOrg] = useState<Organization | null>(null)
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase
-        .from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) return
-      setOrgId(member.org_id)
       const { data } = await supabase
-        .from('organizations').select('*').eq('id', member.org_id).single()
+        .from('organizations').select('*').eq('id', orgId).single()
       if (data) setOrg(data as Organization)
     }
     load()
-  }, [])
+  }, [orgId])
 
   async function handleLogoUpload(resizedFile: File) {
     if (!orgId) return

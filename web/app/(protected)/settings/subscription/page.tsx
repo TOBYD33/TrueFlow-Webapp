@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ function formatLimit(n: number) {
 
 export default function SubscriptionPage() {
   const supabase = createClient()
+  const { orgId } = useViewingContext()
   const [plan, setPlan] = useState('free')
   const [receiptCount, setReceiptCount] = useState(0)
   const [clientCount, setClientCount] = useState(0)
@@ -36,19 +38,14 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-        const { data: member } = await supabase
-          .from('org_members').select('org_id').eq('user_id', user.id).single()
-        if (!member) return
-
         const [{ data: org }, { count: rc }, { count: cc }, { count: sc }] = await Promise.all([
-          supabase.from('organizations').select('plan').eq('id', member.org_id).single(),
-          supabase.from('receipts').select('*', { count: 'exact', head: true }).eq('org_id', member.org_id),
-          supabase.from('clients').select('*', { count: 'exact', head: true }).eq('org_id', member.org_id),
-          supabase.from('org_members').select('*', { count: 'exact', head: true }).eq('org_id', member.org_id),
+          supabase.from('organizations').select('plan').eq('id', orgId).single(),
+          supabase.from('receipts').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
+          supabase.from('clients').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
+          supabase.from('org_members').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
         ])
 
         if (org?.plan) setPlan(org.plan)
@@ -60,7 +57,7 @@ export default function SubscriptionPage() {
       }
     }
     load()
-  }, [])
+  }, [orgId])
 
   const currentPlan = PLANS.find(p => p.id === plan) ?? PLANS[0]
   const [upgrading, setUpgrading] = useState<string | null>(null)

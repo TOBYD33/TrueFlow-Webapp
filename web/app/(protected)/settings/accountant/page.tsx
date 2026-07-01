@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -20,25 +21,20 @@ interface ShareLink {
 
 export default function AccountantAccessPage() {
   const supabase = createClient()
-  const [orgId, setOrgId] = useState<string | null>(null)
+  const { orgId } = useViewingContext()
   const [links, setLinks] = useState<ShareLink[]>([])
   const [generating, setGenerating] = useState(false)
   const [revoking, setRevoking] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase
-        .from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) return
-      setOrgId(member.org_id)
       const res = await fetch('/api/share-link')
       const json = await res.json()
       setLinks((json.links as ShareLink[]) ?? [])
     }
     load()
-  }, [])
+  }, [orgId])
 
   async function generateLink() {
     setGenerating(true)

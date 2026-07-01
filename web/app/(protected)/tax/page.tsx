@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,7 +50,7 @@ interface EstimateResult {
 export default function TaxHubPage() {
   const supabase = createClient()
 
-  const [orgId, setOrgId] = useState<string | null>(null)
+  const { orgId } = useViewingContext()
   const [loading, setLoading] = useState(true)
   const [country, setCountry] = useState<TaxCountry>('Nigeria')
   const [rates, setRates] = useState<TaxRateReference[]>([])
@@ -68,19 +69,14 @@ export default function TaxHubPage() {
   const [calculating, setCalculating] = useState(false)
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-      setOrgId(member.org_id)
-
       const [{ data: org }, { data: rateRows }, { data: receiptRows }, { data: invoiceRows }, { data: reminderRows }] = await Promise.all([
-        supabase.from('organizations').select('default_tax_country, currency').eq('id', member.org_id).single(),
+        supabase.from('organizations').select('default_tax_country, currency').eq('id', orgId).single(),
         supabase.from('tax_rate_reference').select('*').order('country').order('tax_type'),
-        supabase.from('receipts').select('*').eq('org_id', member.org_id),
-        supabase.from('invoices').select('*').eq('org_id', member.org_id),
-        supabase.from('reminders').select('*').eq('org_id', member.org_id).eq('category', 'tax').eq('status', 'active').order('due_date', { ascending: true }),
+        supabase.from('receipts').select('*').eq('org_id', orgId),
+        supabase.from('invoices').select('*').eq('org_id', orgId),
+        supabase.from('reminders').select('*').eq('org_id', orgId).eq('category', 'tax').eq('status', 'active').order('due_date', { ascending: true }),
       ])
 
       if (org?.default_tax_country) setCountry(org.default_tax_country as TaxCountry)
@@ -91,7 +87,7 @@ export default function TaxHubPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId])
 
   const currency = COUNTRY_TO_CURRENCY[country]
   const countryRates = useMemo(() => rates.filter(r => r.country === country), [rates, country])

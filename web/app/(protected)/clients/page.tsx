@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Client } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -19,8 +20,8 @@ export default function ClientsPage() {
   const supabase = createClient()
   const router = useRouter()
 
+  const { orgId } = useViewingContext()
   const [clients, setClients] = useState<Client[]>([])
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
@@ -29,22 +30,18 @@ export default function ClientsPage() {
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
 
   useEffect(() => {
+    if (!orgId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: member } = await supabase.from('org_members').select('org_id').eq('user_id', user.id).single()
-      if (!member) { setLoading(false); return }
-      setOrgId(member.org_id)
       const { data } = await supabase
         .from('clients')
         .select('*')
-        .eq('org_id', member.org_id)
+        .eq('org_id', orgId)
         .order('created_at', { ascending: false })
       setClients((data as Client[]) ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [orgId])
 
   const filtered = clients.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||

@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { useViewingContext } from '@/components/ViewingContext'
 import { Profile } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { toast } from 'sonner'
 
 export default function ProfileSettingsPage() {
   const supabase = createClient()
+  const { userId, isImpersonating } = useViewingContext()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [email, setEmail] = useState('')
   const [saving, setSaving] = useState(false)
@@ -22,15 +24,18 @@ export default function ProfileSettingsPage() {
   const [sendingReset, setSendingReset] = useState(false)
 
   useEffect(() => {
+    if (!userId) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setEmail(user.email ?? '')
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
       if (data) setProfile(data as Profile)
+      // Only set email from real auth session (not impersonated user)
+      if (!isImpersonating) {
+        const { data: { user } } = await supabase.auth.getUser()
+        setEmail(user?.email ?? '')
+      }
     }
     load()
-  }, [])
+  }, [userId])
 
   async function handleAvatarUpload(resizedFile: File) {
     if (!profile) return
