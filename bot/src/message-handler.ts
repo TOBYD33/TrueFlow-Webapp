@@ -3,8 +3,13 @@
 // Images are downloaded ONCE and analyzed in a SINGLE Claude Vision call to avoid
 // Twilio's 15-second webhook timeout. Direction determines whether the image is
 // an incoming client payment or an outgoing expense.
+//
+// Permission gate order (must not change):
+//   1. Organization suspended
+//   2. whatsapp_active revoked
+//   3. Viewer role (read-only, no submissions)
 
-import { getOrCreateUser, isNewUser, markUserNotNew, getMonthlyReceiptCount } from './user-service'
+import { getOrCreateUser, isNewUser, markUserNotNew, getMonthlyReceiptCount, findPendingInvite } from './user-service'
 import { analyzeImage, buildMissingFieldsNote } from './image-analyzer'
 import { handleIncomingPayment } from './smart-transfer'
 import { saveFromAnalysis } from './receipt-scanner'
@@ -12,10 +17,11 @@ import { getAIResponse, getWelcomeMessage } from './ai-assistant'
 import { executeActions } from './action-executor'
 import { buildTextResponse } from './twiml-builder'
 import { getSetupState, continueGuidedSetup } from './client-setup-service'
+import { supabase } from './supabase'
 import { TwilioWebhookBody } from '../types'
 
 const FREE_TIER_LIMIT = 10
-const APP_URL = process.env.WEBAPP_URL || 'app.gettrueflow.com'
+const APP_URL = process.env.WEBAPP_URL || 'app.trueflio.com'
 
 export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   const phoneNumber = body.From.replace('whatsapp:', '')
@@ -24,13 +30,97 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   const imageUrl = body.MediaUrl0
   const imageType = body.MediaContentType0
 
-  // Step 1: Resolve user
+  // ── Step 12: Handle "START" before normal onboarding ────────────────────
+  // If this phone number has a pending team invite and the message is START,
+  // link them to the invite rather than creating a new owner account.
+  if (messageText.toUpperCase() === 'START') {
+    const pendingInvite = await findPendingInvite(phoneNumber)
+    if (pendingInvite) {
+      const org = pendingInvite.organizations as any
+
+      // Create a profile if one doesn't exist for this number
+      let { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone', phoneNumber)
+        .single()
+
+      if (!existingProfile) {
+        const { data: newProfile } = await supabase
+          .from('profiles')
+          .insert({ phone: phoneNumber, full_name: null })
+          .select()
+          .single()
+        existingProfile = newProfile
+      }
+
+      if (existingProfile) {
+        // Link the profile to the pending org_members row
+        await supabase
+          .from('org_members')
+          .update({
+            user_id: existingProfile.id,
+            joined_at: new Date().toISOString(),
+            invite_token: null,
+            invite_expires_at: null,
+          })
+          .eq('id', pendingInvite.id)
+
+        // Create a WhatsApp session
+        await supabase.from('whatsapp_sessions').insert({
+          phone_number: phoneNumber,
+          org_id: pendingInvite.org_id,
+          user_id: existingProfile.id,
+          is_new: false,
+        })
+
+        return buildTextResponse(
+          `✅ You're in! Welcome to *${org?.name || 'the team'}*.\n\n` +
+          `You can now send receipts and I'll log them straight to the business account.\n\n` +
+          `Go ahead and send your first receipt whenever you're ready.`
+        )
+      }
+    }
+  }
+
+  // ── Step 1: Resolve user ─────────────────────────────────────────────────
   const user = await getOrCreateUser(phoneNumber)
   if (!user) {
     return buildTextResponse('Sorry, I could not set up your account. Please try again.')
   }
 
-  // Step 2: Welcome new users
+  // ── Permission Gate 1: Organization suspended ────────────────────────────
+  if (user.org_status === 'suspended') {
+    return buildTextResponse(
+      '⚠️ Your account is currently paused.\nContact support@trueflio.com for help.'
+    )
+  }
+
+  // ── Permission Gate 2: WhatsApp access revoked ───────────────────────────
+  if (!user.whatsapp_active) {
+    return buildTextResponse(
+      "You don't currently have WhatsApp access for this account.\n" +
+      'Ask your account owner to enable it in their team settings.'
+    )
+  }
+
+  // ── Permission Gate 3: Viewer role ───────────────────────────────────────
+  if (user.role === 'viewer') {
+    return buildTextResponse(
+      'Your account has view-only access.\n' +
+      "You can check summaries but can't submit receipts or make changes via WhatsApp."
+    )
+  }
+
+  // Build permission context to pass to AI
+  const userPermissions = {
+    canSeeClients: user.can_see_clients || ['owner', 'admin'].includes(user.role),
+    canSeeIncome: user.can_see_income || ['owner', 'admin'].includes(user.role),
+    canExport: user.can_export || ['owner', 'admin'].includes(user.role),
+    isOwnerOrAdmin: ['owner', 'admin'].includes(user.role),
+  }
+
+  // ── Step 2: Welcome new users ─────────────────────────────────────────────
   const newUser = await isNewUser(phoneNumber)
   if (newUser) {
     await markUserNotNew(phoneNumber)
@@ -38,7 +128,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     return buildTextResponse(welcome)
   }
 
-  // Step 3: Handle image — SINGLE Claude Vision call covers detection + extraction
+  // ── Step 3: Handle image — SINGLE Claude Vision call ─────────────────────
   let scannedReceipt: any = null
 
   if (hasImage && imageUrl) {
@@ -54,12 +144,16 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
       )
     }
 
-    // Incoming client payment → Smart Transfer Recognition
     if (analysis.direction === 'incoming') {
+      if (!userPermissions.canSeeClients) {
+        return buildTextResponse(
+          '📥 I can see a payment proof, but your account doesn\'t have access to client income tracking.\n' +
+          'Ask your account owner to enable client visibility for your account.'
+        )
+      }
       return buildTextResponse(await handleIncomingPayment(analysis, user))
     }
 
-    // Direction unknown → ask the user to clarify
     if (analysis.direction === 'unknown') {
       return buildTextResponse(
         `❓ I can see a financial image but I'm not sure which direction the money went.\n\n` +
@@ -68,23 +162,21 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
       )
     }
 
-    // Outgoing expense → check limit, save, pass to AI for commentary
+    // Outgoing expense — check free tier limit
     if (user.plan === 'free') {
       const count = await getMonthlyReceiptCount(user.org_id)
       if (count >= FREE_TIER_LIMIT) {
         return buildTextResponse(
-          `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade for unlimited receipts: ${process.env.PRICING_PAGE_URL || 'gettrueflow.com/pricing'}`
+          `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade for unlimited receipts: ${process.env.PRICING_PAGE_URL || 'trueflio.com/pricing'}`
         )
       }
     }
 
     scannedReceipt = await saveFromAnalysis(analysis, user.org_id, user.user_id, user.currency)
 
-    // If key fields are missing, reply immediately rather than sending through AI
     if (scannedReceipt) {
       const missingNote = buildMissingFieldsNote(analysis)
       if (missingNote) {
-        // Return quick confirmation so we don't hit the timeout — AI commentary is skipped
         const vendor = analysis.vendor_name || 'Unknown vendor'
         const amount = analysis.amount
           ? `${user.currency} ${Number(analysis.amount).toLocaleString()}`
@@ -102,7 +194,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     }
   }
 
-  // Step 4a: If the user is mid-guided-setup, route there instead of AI
+  // ── Step 4a: Mid-guided-setup routing ────────────────────────────────────
   if (!hasImage) {
     const setupState = await getSetupState(phoneNumber)
     if (setupState) {
@@ -112,13 +204,10 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
         setupState
       )
       if (setupReply) return buildTextResponse(setupReply)
-      if (done) {
-        // Flow complete, fall through to normal AI so user gets a normal response
-      }
     }
   }
 
-  // Step 4: Get AI response with full context (text messages + clean expense receipts)
+  // ── Step 4: Get AI response ───────────────────────────────────────────────
   const { reply, actions } = await getAIResponse({
     phoneNumber,
     orgId: user.org_id,
@@ -128,10 +217,11 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     currency: user.currency,
     plan: user.plan,
     defaultTaxCountry: user.default_tax_country,
-    scannedReceipt
+    scannedReceipt,
+    userPermissions,
   })
 
-  // Step 5: Execute any actions Claude detected
+  // ── Step 5: Execute any actions Claude detected ───────────────────────────
   if (actions.length > 0) {
     const notifications = await executeActions(actions, user)
     if (notifications.length > 0) {

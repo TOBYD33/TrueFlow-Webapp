@@ -126,6 +126,13 @@ User says "Remind me to pay VAT on the 21st, monthly" → end reply with: ACTION
 User says "Switch to Kenya" (in a tax context) → end reply with: ACTION:SWITCH_TAX_COUNTRY:Kenya
 `
 
+interface UserPermissions {
+  canSeeClients: boolean
+  canSeeIncome: boolean
+  canExport: boolean
+  isOwnerOrAdmin: boolean
+}
+
 interface AIParams {
   phoneNumber: string
   orgId: string
@@ -136,13 +143,23 @@ interface AIParams {
   plan: string
   defaultTaxCountry: string
   scannedReceipt?: any
+  userPermissions?: UserPermissions
 }
 
 export async function getAIResponse(params: AIParams): Promise<{
   reply: string
   actions: string[]
 }> {
-  const { phoneNumber, orgId, orgName, userName, userMessage, currency, plan, defaultTaxCountry, scannedReceipt } = params
+  const { phoneNumber, orgId, orgName, userName, userMessage, currency, plan, defaultTaxCountry, scannedReceipt, userPermissions } = params
+
+  // Role context block — tells the AI what this specific user is allowed to access
+  const roleContext = userPermissions ? `
+Current user permissions:
+- Client/income data: ${userPermissions.canSeeClients ? 'YES — can discuss clients and income' : 'NO — do not discuss client folders or income with this user'}
+- Export access: ${userPermissions.canExport ? 'YES' : 'NO'}
+- Admin level: ${userPermissions.isOwnerOrAdmin ? 'Owner or Admin — full access' : 'Staff or limited role'}
+If the user asks about clients, income, or projects and canSeeClients is NO, politely tell them their account doesn't have access to that information and they should ask their account owner.
+` : ''
 
   // Load conversation history (last 10 exchanges = 20 messages)
   const history = await getConversationHistory(phoneNumber, 20)
@@ -248,7 +265,7 @@ ${defaultCountryEstimates.filter(Boolean).length > 0
   const response = await claude.messages.create({
     model: 'claude-opus-4-6',
     max_tokens: 500,
-    system: SYSTEM_PROMPT,
+    system: roleContext ? `${SYSTEM_PROMPT}\n\n${roleContext}` : SYSTEM_PROMPT,
     messages
   })
 

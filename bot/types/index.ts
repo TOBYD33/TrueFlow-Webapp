@@ -28,11 +28,15 @@ export interface OrgMember {
   id: string
   org_id: string
   user_id: string
-  role: 'owner' | 'admin' | 'staff' | 'accountant'
+  role: 'owner' | 'admin' | 'staff' | 'family_member' | 'viewer' | 'accountant'
   whatsapp_number: string | null
   whatsapp_active: boolean
+  can_see_clients: boolean
+  can_see_income: boolean
+  can_export: boolean
   invited_at: string
   joined_at: string | null
+  removed_at: string | null
 }
 
 export interface Receipt {
@@ -120,12 +124,17 @@ export interface UserContext {
   user_id: string
   org_id: string
   org_name: string
+  org_status: string
   full_name: string
   plan: string
   currency: string
   receipt_limit: number
   whatsapp_number: string
-  role: string
+  role: 'owner' | 'admin' | 'staff' | 'family_member' | 'viewer' | 'accountant' | string
+  whatsapp_active: boolean
+  can_see_clients: boolean
+  can_see_income: boolean
+  can_export: boolean
   default_tax_country: string
 }
 

@@ -1,5 +1,6 @@
 // user-service.ts
 // Looks up or creates a user by WhatsApp phone number.
+// Fetches all permission fields from org_members including the new Layer 2 columns.
 // Staff can use the bot without a full app account — linked by phone number only.
 
 import { supabase } from './supabase'
@@ -11,14 +12,13 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     .from('whatsapp_sessions')
     .select(`
       *,
-      organizations(id, name, plan, currency, receipt_limit, default_tax_country),
+      organizations(id, name, plan, currency, receipt_limit, default_tax_country, status),
       profiles(id, full_name)
     `)
     .eq('phone_number', phoneNumber)
     .single()
 
   if (session && !sessionError) {
-    // Update last_active_at
     await supabase
       .from('whatsapp_sessions')
       .update({ last_active_at: new Date().toISOString() })
@@ -27,25 +27,30 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     const org = session.organizations as any
     const profile = session.profiles as any
 
-    // Get member role
     const { data: member } = await supabase
       .from('org_members')
-      .select('role')
+      .select('role, whatsapp_active, can_see_clients, can_see_income, can_export')
       .eq('org_id', session.org_id)
       .eq('user_id', session.user_id)
+      .is('removed_at', null)
       .single()
 
     return {
       user_id: session.user_id,
       org_id: session.org_id,
       org_name: org?.name || 'My Business',
+      org_status: org?.status || 'active',
       full_name: profile?.full_name || phoneNumber,
       plan: org?.plan || 'free',
       currency: org?.currency || 'NGN',
       receipt_limit: org?.receipt_limit || 10,
       whatsapp_number: phoneNumber,
       role: member?.role || 'staff',
-      default_tax_country: org?.default_tax_country || 'Nigeria'
+      whatsapp_active: member?.whatsapp_active ?? true,
+      can_see_clients: member?.can_see_clients ?? false,
+      can_see_income: member?.can_see_income ?? false,
+      can_export: member?.can_export ?? false,
+      default_tax_country: org?.default_tax_country || 'Nigeria',
     }
   }
 
@@ -54,41 +59,46 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     .from('org_members')
     .select(`
       *,
-      organizations(id, name, plan, currency, receipt_limit, default_tax_country),
+      organizations(id, name, plan, currency, receipt_limit, default_tax_country, status),
       profiles(id, full_name)
     `)
     .eq('whatsapp_number', phoneNumber)
     .eq('whatsapp_active', true)
+    .is('removed_at', null)
+    .is('invite_token', null)
     .single()
 
   if (orgMember && !memberError) {
     const org = orgMember.organizations as any
     const profile = orgMember.profiles as any
 
-    // Create session record
     await supabase.from('whatsapp_sessions').insert({
       phone_number: phoneNumber,
       org_id: orgMember.org_id,
       user_id: orgMember.user_id,
-      is_new: false
+      is_new: false,
     })
 
     return {
       user_id: orgMember.user_id,
       org_id: orgMember.org_id,
       org_name: org?.name || 'My Business',
+      org_status: org?.status || 'active',
       full_name: profile?.full_name || phoneNumber,
       plan: org?.plan || 'free',
       currency: org?.currency || 'NGN',
       receipt_limit: org?.receipt_limit || 10,
       whatsapp_number: phoneNumber,
       role: orgMember.role,
-      default_tax_country: org?.default_tax_country || 'Nigeria'
+      whatsapp_active: orgMember.whatsapp_active ?? true,
+      can_see_clients: orgMember.can_see_clients ?? false,
+      can_see_income: orgMember.can_see_income ?? false,
+      can_export: orgMember.can_export ?? false,
+      default_tax_country: org?.default_tax_country || 'Nigeria',
     }
   }
 
   // Brand new user — not in the system yet
-  // Generate a fresh UUID for the profile (no auth.users dependency for WhatsApp users)
   const { data: newProfile, error: profileError } = await supabase
     .from('profiles')
     .insert({ phone: phoneNumber, full_name: null })
@@ -108,7 +118,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
       owner_id: newProfile.id,
       plan: 'free',
       receipt_limit: 10,
-      currency: 'NGN'
+      currency: 'NGN',
     })
     .select()
     .single()
@@ -124,28 +134,54 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     role: 'owner',
     whatsapp_number: phoneNumber,
     whatsapp_active: true,
-    joined_at: new Date().toISOString()
+    can_see_clients: true,
+    can_see_income: true,
+    can_export: true,
+    joined_at: new Date().toISOString(),
   })
 
   await supabase.from('whatsapp_sessions').insert({
     phone_number: phoneNumber,
     org_id: newOrg.id,
     user_id: newProfile.id,
-    is_new: true
+    is_new: true,
   })
 
   return {
     user_id: newProfile.id,
     org_id: newOrg.id,
     org_name: 'My Business',
+    org_status: 'active',
     full_name: phoneNumber,
     plan: 'free',
     currency: 'NGN',
     receipt_limit: 10,
     whatsapp_number: phoneNumber,
     role: 'owner',
-    default_tax_country: 'Nigeria'
+    whatsapp_active: true,
+    can_see_clients: true,
+    can_see_income: true,
+    can_export: true,
+    default_tax_country: 'Nigeria',
   }
+}
+
+// Checks if the message is a "START" reply from a pending WhatsApp invite.
+// Returns the pending invite org_members row if found, null otherwise.
+export async function findPendingInvite(phoneNumber: string) {
+  const { data } = await supabase
+    .from('org_members')
+    .select(`
+      id, org_id, role, whatsapp_number, can_see_clients, can_see_income, can_export,
+      organizations(id, name, plan, currency, receipt_limit, default_tax_country, status)
+    `)
+    .eq('whatsapp_number', phoneNumber)
+    .not('invite_token', 'is', null)
+    .is('user_id', null)
+    .is('removed_at', null)
+    .single()
+
+  return data ?? null
 }
 
 export async function isNewUser(phoneNumber: string): Promise<boolean> {

@@ -2,10 +2,12 @@
 // Full user detail view with suspend/reactivate, change plan, and audit history.
 
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { AdminUserActions } from './AdminUserActions'
+import { ImpersonateButton } from './ImpersonateButton'
 
 function getAdmin() {
   return createClient(
@@ -34,6 +36,20 @@ export default async function AdminUserDetailPage({
   const { id } = await params
   const { org: orgIdParam } = await searchParams
   const admin = getAdmin()
+
+  // Determine caller's admin role for gating the Impersonate button
+  const supabaseClient = await createServerClient()
+  const { data: { user: callerUser } } = await supabaseClient.auth.getUser()
+  let callerAdminRole: string | null = null
+  if (callerUser) {
+    const { data: callerProfile } = await admin
+      .from('profiles')
+      .select('admin_role, is_super_admin')
+      .eq('id', callerUser.id)
+      .single()
+    callerAdminRole = callerProfile?.admin_role ?? (callerProfile?.is_super_admin ? 'super' : null)
+  }
+  const canImpersonate = callerAdminRole === 'super' || callerAdminRole === 'support'
 
   // Fetch profile
   const { data: profile } = await admin
@@ -95,7 +111,11 @@ export default async function AdminUserDetailPage({
           <Row label="Name" value={profile.full_name} />
           <Row label="Phone" value={profile.phone ? <span className="font-mono">{profile.phone}</span> : null} />
           <Row label="Signed up" value={profile.created_at ? formatDate(profile.created_at) : null} />
-          <Row label="Super admin" value={profile.is_super_admin ? <span className="text-violet-400 font-semibold">Yes</span> : 'No'} />
+          <Row label="Admin role" value={
+            profile.admin_role
+              ? <span className="text-violet-400 font-semibold">{profile.admin_role}</span>
+              : (profile.is_super_admin ? <span className="text-violet-400 font-semibold">super (legacy)</span> : 'None')
+          } />
         </div>
       </div>
 
@@ -143,6 +163,21 @@ export default async function AdminUserDetailPage({
           currentStatus={org.status ?? 'active'}
           currentPlan={org.plan}
         />
+      )}
+
+      {/* Impersonate — visible to Super + Support Admin only */}
+      {canImpersonate && org && (
+        <div className="bg-gray-900 border border-amber-900/30 rounded-xl px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-amber-300">Impersonate User</p>
+            <p className="text-xs text-gray-500 mt-0.5">Browse as this user in read-only mode. Fully logged.</p>
+          </div>
+          <ImpersonateButton
+            targetUserId={id}
+            targetOrgId={org.id}
+            targetName={profile.full_name ?? profile.phone ?? id}
+          />
+        </div>
       )}
 
       {/* Audit history for this user */}

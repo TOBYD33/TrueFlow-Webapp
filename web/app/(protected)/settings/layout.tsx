@@ -11,6 +11,7 @@ const tabs = [
   { href: '/settings/business', label: 'Business' },
   { href: '/settings/subscription', label: 'Subscription' },
   { href: '/settings/accountant', label: 'Accountant Access' },
+  { href: '/settings/team', label: 'Team' },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

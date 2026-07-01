@@ -36,7 +36,7 @@ const navItems = [
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/tax', label: 'Tax Hub', icon: Landmark },
   { href: '/invoices', label: 'Invoices', icon: FileText },
-  { href: '/team', label: 'Team', icon: Users },
+  { href: '/settings/team', label: 'Team', icon: Users },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
