@@ -36,7 +36,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   if (impersonationSessionId) {
     const { data: imp } = await admin
       .from('impersonation_sessions')
-      .select('target_org_id, target:profiles!target_user_id(full_name)')
+      .select('target_org_id, target_user_id, target:profiles!target_user_id(full_name)')
       .eq('id', impersonationSessionId)
       .eq('is_active', true)
       .single()
@@ -44,15 +44,26 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     if (imp) {
       impersonationUserName = (imp as any).target?.full_name ?? 'Unknown user'
       impersonationOrgId = (imp as any).target_org_id ?? null
+
+      // If session has no target_org_id, look it up from the target user's org_members row
+      if (!impersonationOrgId && (imp as any).target_user_id) {
+        const { data: targetMember } = await admin
+          .from('org_members')
+          .select('org_id')
+          .eq('user_id', (imp as any).target_user_id)
+          .is('removed_at', null)
+          .maybeSingle()
+        impersonationOrgId = targetMember?.org_id ?? null
+      }
     }
   }
 
-  // Use impersonation org if active, otherwise logged-in user's org
+  // Use impersonation org if active — NEVER fall back to admin's own org during impersonation
   let orgId: string | null = impersonationOrgId
   let orgName = 'TrueFlio'
   let plan = 'free'
 
-  if (!orgId) {
+  if (!orgId && !impersonationSessionId) {
     const { data: member } = await supabase
       .from('org_members')
       .select('org_id, role')
