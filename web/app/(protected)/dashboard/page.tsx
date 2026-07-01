@@ -8,6 +8,7 @@ import { useViewingContext } from '@/components/ViewingContext'
 import { Receipt, TaxCountry } from '@/types'
 import { DEFAULT_INCOME_TAX_TYPE, COUNTRY_TO_CURRENCY, parseRateEstimate } from '@/lib/tax'
 import { StatCard } from '@/components/StatCard'
+import { AndreaBadge } from '@/components/AndreaBadge'
 import { CategoryChart } from '@/components/CategoryChart'
 import { SpendTrendChart } from '@/components/SpendTrendChart'
 import { ChannelBadge } from '@/components/ChannelBadge'
@@ -280,6 +281,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Andrea Aid — shown only if org has made contributions */}
+      <AndreaBadge />
 
       {/* Recent receipts */}
       <Card>

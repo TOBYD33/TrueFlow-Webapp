@@ -109,6 +109,31 @@ export async function POST(req: NextRequest) {
 
       if (orgId && planId) {
         await activatePlan(admin, orgId, planId, data)
+
+        // Log Andrea Aid contribution (2% of subscription amount)
+        const paymentAmount = Number((data as any).amount ?? 0) / 100 // Paystack sends amount in kobo
+        if (paymentAmount > 0) {
+          const andreaAmount = Math.round(paymentAmount * 0.02 * 100) / 100
+          const now = new Date()
+
+          await admin.from('andrea_contributions').insert({
+            org_id: orgId,
+            amount: andreaAmount,
+            period_month: now.getMonth() + 1,
+            period_year: now.getFullYear(),
+            subscription_amount: paymentAmount,
+          })
+
+          // Calculate lifetime total for WhatsApp message
+          const { data: contribs } = await admin
+            .from('andrea_contributions')
+            .select('amount')
+            .eq('org_id', orgId)
+          const lifetimeTotal = (contribs ?? []).reduce((s: number, r: any) => s + Number(r.amount), 0)
+
+          // Send WhatsApp confirmation with Andrea mention
+          await sendAndreaWhatsApp(admin, orgId, planId, andreaAmount, lifetimeTotal)
+        }
       }
 
       // Mark logged event as processed
@@ -203,4 +228,62 @@ async function findOrgBySubscriptionCode(
     .eq('paystack_subscription_id', subscriptionCode)
     .single()
   return data?.id ?? null
+}
+
+const PLAN_LABELS: Record<string, string> = {
+  individual: 'Individual', family: 'Family', freelancer: 'Freelancer',
+  sme_starter: 'SME Starter', agency: 'Agency', sme_pro: 'SME Pro',
+  studio: 'Studio', enterprise: 'Enterprise',
+}
+
+async function sendAndreaWhatsApp(
+  admin: ReturnType<typeof getAdmin>,
+  orgId: string,
+  planId: string,
+  andreaAmount: number,
+  lifetimeTotal: number
+) {
+  try {
+    // Look up the owner's phone number
+    const { data: member } = await admin
+      .from('org_members')
+      .select('profiles(phone)')
+      .eq('org_id', orgId)
+      .eq('role', 'owner')
+      .single()
+    const phone = (member as any)?.profiles?.phone
+    if (!phone) return
+
+    const twilioSid = process.env.TWILIO_ACCOUNT_SID
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN
+    const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER ?? 'whatsapp:+14155238886'
+    if (!twilioSid || !twilioToken) return
+
+    const planLabel = PLAN_LABELS[planId] ?? planId
+    const fmt = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+    const body =
+      `✅ Payment confirmed!\n\n` +
+      `Your ${planLabel} plan is active.\n` +
+      `${fmt(andreaAmount)} from this payment goes to Andrea, ` +
+      `funding life-saving medical treatments for Nigerians in need.\n\n` +
+      `Total contributed to Andrea: ${fmt(lifetimeTotal)}\n` +
+      `See patient cases: andreaaid.com/cases`
+
+    const toNumber = phone.startsWith('whatsapp:') ? phone : `whatsapp:${phone}`
+
+    await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ From: fromNumber, To: toNumber, Body: body }).toString(),
+      }
+    )
+  } catch (err) {
+    console.error('sendAndreaWhatsApp failed:', err)
+  }
 }

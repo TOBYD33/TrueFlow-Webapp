@@ -8,7 +8,92 @@ import { useViewingContext } from '@/components/ViewingContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check } from 'lucide-react'
+import { Check, Heart } from 'lucide-react'
+
+function AndreaSection({ orgId }: { orgId: string | null }) {
+  const supabase = createClient()
+  const [orgTotal, setOrgTotal] = useState<number>(0)
+  const [communityTotal, setCommunityTotal] = useState<number | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!orgId) return
+    async function load() {
+      const [{ data: rows }, communityRes] = await Promise.all([
+        supabase.from('andrea_contributions').select('amount').eq('org_id', orgId),
+        fetch('/api/andrea/total').then(r => r.json()).catch(() => ({ total: null })),
+      ])
+      const t = (rows ?? []).reduce((s: number, r: { amount: number }) => s + Number(r.amount), 0)
+      setOrgTotal(t)
+      if (communityRes?.total != null) setCommunityTotal(Number(communityRes.total))
+      setLoaded(true)
+    }
+    load()
+  }, [orgId])
+
+  const fmt = (n: number) =>
+    `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  return (
+    <Card className="border-[#00D4AA]/30">
+      <CardContent className="pt-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-9 h-9 rounded-full bg-[#00D4AA]/15 flex items-center justify-center shrink-0">
+            <Heart size={16} className="text-[#00D4AA] fill-[#00D4AA]" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900">Andrea Aid Partnership</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              2% of every TrueFlow subscription funds life-saving medical treatments in Nigeria
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4 p-4 rounded-xl bg-[#00D4AA]/5 border border-[#00D4AA]/20">
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">Your contribution</p>
+            <p className="text-xl font-bold" style={{ color: '#00D4AA' }}>
+              {loaded ? fmt(orgTotal) : '—'}
+            </p>
+            <p className="text-xs text-gray-400">lifetime total</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">TrueFlow community</p>
+            <p className="text-xl font-bold" style={{ color: '#00D4AA' }}>
+              {communityTotal != null ? fmt(communityTotal) : 'Growing every month'}
+            </p>
+            <p className="text-xs text-gray-400">contributed in total</p>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500 mb-3">
+          Your contribution comes from TrueFlow&apos;s own revenue — you are never charged extra.
+          Every naira goes directly to verified patient care at partnered Nigerian hospitals.
+        </p>
+
+        <div className="flex gap-3">
+          <a
+            href="https://andreaaid.com/cases"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold px-3 py-2 rounded-lg text-white transition-colors"
+            style={{ backgroundColor: '#00D4AA' }}
+          >
+            Browse patient cases →
+          </a>
+          <a
+            href="https://andreaaid.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Learn about Andrea
+          </a>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 const PLANS = [
   { id: 'free',        label: 'Free',        ngn: '₦0',          receipts: '10/mo',     clients: 0,  staff: 1  },
@@ -190,6 +275,9 @@ export default function SubscriptionPage() {
           Payments processed securely via Paystack. Cancel any time from your Paystack account.
         </p>
       </div>
+
+      {/* Andrea Aid partnership */}
+      <AndreaSection orgId={orgId} />
     </div>
   )
 }
