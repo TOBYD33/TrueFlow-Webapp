@@ -42,6 +42,16 @@ export function AppShell({ children, orgName, plan }: AppShellProps) {
     loadAvatar()
   }, [])
 
+  // Live-refresh avatar when profile page saves a new one
+  useEffect(() => {
+    function onAvatarUpdated(e: Event) {
+      const url = (e as CustomEvent<{ url: string }>).detail?.url
+      if (url) setAvatarUrl(url)
+    }
+    window.addEventListener('trueflio:avatar-updated', onAvatarUpdated)
+    return () => window.removeEventListener('trueflio:avatar-updated', onAvatarUpdated)
+  }, [])
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClick(e: MouseEvent) {

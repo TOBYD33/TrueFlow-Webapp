@@ -3,8 +3,7 @@
 // Navigation sidebar — static on desktop, slide-in drawer on mobile.
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase-browser'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -13,7 +12,6 @@ import {
   FileText,
   Users,
   Settings,
-  LogOut,
   UserCircle2,
   FolderKanban,
   TrendingUp,
@@ -50,14 +48,6 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen = false, onClose, orgName }: SidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
-
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
 
   function handleNavClick() {
     onClose?.()
@@ -113,15 +103,6 @@ export function Sidebar({ isOpen = false, onClose, orgName }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="px-3 py-4 border-t border-gray-800">
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors w-full"
-        >
-          <LogOut size={18} />
-          Sign out
-        </button>
-      </div>
     </aside>
   )
 }

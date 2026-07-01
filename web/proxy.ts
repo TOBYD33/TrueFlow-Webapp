@@ -34,6 +34,7 @@ export async function proxy(request: NextRequest) {
     '/dashboard', '/whatsapp', '/receipts', '/budgets', '/reminders',
     '/clients', '/projects', '/income',
     '/reports', '/invoices', '/team', '/settings', '/admin',
+    '/inventory', '/tax',
   ]
   const isProtected = protectedPaths.some(p => request.nextUrl.pathname.startsWith(p))
 
