@@ -8,6 +8,8 @@ import { getMonthlySpending, getBudgetStatus } from './report-service'
 import { getUpcomingReminders } from './reminder-service'
 import { getConversationHistory, saveMessage } from './conversation'
 import { getAllTaxRates, calculateTaxEstimate, TAX_COUNTRIES } from './tax-service'
+import { getClientsByOrg } from './client-service'
+import { getProjectsByClient } from './project-service'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -54,6 +56,7 @@ ACTION:SHOW_BUDGETS
 ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
 ACTION:SHOW_INVENTORY
 ACTION:START_CLIENT_SETUP:{clientName}
+ACTION:LOG_PAYMENT:{clientName}:{amount}
 ACTION:GENERATE_INVOICE
 ACTION:GET_TAX_ESTIMATE:{country}:{period}
 ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
@@ -77,7 +80,7 @@ INVENTORY RULES:
   use ACTION:SHOW_INVENTORY so the real current quantities are listed, never
   recall a quantity from earlier in the conversation since it may be stale.
 
-CLIENT SETUP RULES:
+CLIENT AND PAYMENT RULES:
 - Only emit START_CLIENT_SETUP the first time the user mentions a genuinely new
   client by name (e.g. "New client Marcus Adebayo", "I have a new client called..").
   This hands the conversation to a guided multi-step flow (contact info → project →
@@ -85,7 +88,15 @@ CLIENT SETUP RULES:
   from the user will be routed through that flow automatically, not back to you.
 - Never invent a CREATE_CLIENT or CREATE_PROJECT action — they don't exist.
   START_CLIENT_SETUP is the only way to create a client.
+- When the user says a client paid them (e.g. "Marcus paid me 50k", "I received
+  150,000 from Amaka", "Client payment from Tunde — 300k"), emit
+  ACTION:LOG_PAYMENT:{clientName}:{amount} on a new line at the very end of your reply.
+  Only use this if the client name appears in the ACTIVE CLIENTS list below — if the
+  client doesn't exist yet, ask the user to create them first with START_CLIENT_SETUP.
+  Never emit LOG_PAYMENT for a client you cannot confirm exists.
 - For an invoice on an existing client/project, use ACTION:GENERATE_INVOICE.
+- Client balance questions (e.g. "What does Marcus owe me?") — answer from the
+  ACTIVE CLIENTS + PROJECTS context below. Never make up a balance figure.
 
 TAX HUB RULES — IMPORTANT, this is a tracking and estimating tool, NOT a tax
 filing or guaranteed-accurate calculator:
@@ -120,6 +131,7 @@ User says "I sold 12 yards of Ankara today" → end reply with: ACTION:UPDATE_IN
 User asks "What's my stock level?" → end reply with: ACTION:SHOW_INVENTORY
 User says "Add 50 units of Ankara fabric at 2000 each" → end reply with: ACTION:UPDATE_INVENTORY:Ankara:50:restock
 User says "New client Marcus Adebayo" → end reply with: ACTION:START_CLIENT_SETUP:Marcus Adebayo
+User says "Marcus paid me 150k" (Marcus is in client list) → end reply with: ACTION:LOG_PAYMENT:Marcus Adebayo:150000
 User says "Generate an invoice for Marcus" → end reply with: ACTION:GENERATE_INVOICE
 User asks "What's my estimated tax this month" → end reply with: ACTION:GET_TAX_ESTIMATE:Nigeria:this_month
 User says "Remind me to pay VAT on the 21st, monthly" → end reply with: ACTION:SET_TAX_REMINDER:Pay VAT:2025-06-21:monthly
@@ -165,12 +177,24 @@ If the user asks about clients, income, or projects and canSeeClients is NO, pol
   const history = await getConversationHistory(phoneNumber, 20)
 
   // Load financial context in parallel
-  const [spending, budgets, reminders, allTaxRates] = await Promise.all([
+  const [spending, budgets, reminders, allTaxRates, clients] = await Promise.all([
     getMonthlySpending(orgId),
     getBudgetStatus(orgId),
     getUpcomingReminders(orgId, 7),
-    getAllTaxRates().catch(() => [] as any[])
+    getAllTaxRates().catch(() => [] as any[]),
+    userPermissions?.canSeeClients
+      ? getClientsByOrg(orgId).catch(() => [] as any[])
+      : Promise.resolve([] as any[]),
   ])
+
+  // Load projects for clients that have outstanding balances
+  const clientsWithProjects: Array<{ client: any; projects: any[] }> = []
+  if (clients.length > 0) {
+    for (const client of clients.slice(0, 10)) {
+      const projects = await getProjectsByClient(client.id).catch(() => [] as any[])
+      clientsWithProjects.push({ client, projects })
+    }
+  }
 
   const taxCountry = TAX_COUNTRIES.includes(defaultTaxCountry as any) ? defaultTaxCountry : 'Nigeria'
   const ratesForDefaultCountry = allTaxRates.filter((r: any) => r.country === taxCountry)
@@ -213,6 +237,24 @@ UPCOMING REMINDERS (next 7 days):
 ${reminders.length > 0
     ? reminders.map((r: any) => `• ${r.title} — due ${r.due_date} (${r.category})`).join('\n')
     : '• No upcoming reminders.'
+  }
+
+ACTIVE CLIENTS:
+${clientsWithProjects.length > 0
+    ? clientsWithProjects.map(({ client, projects }) => {
+      const projectLines = projects.length > 0
+        ? projects.map((p: any) => {
+          const bal = p.balance_due != null ? ` — ${currency} ${Number(p.balance_due).toLocaleString()} remaining` : ''
+          const deadline = p.deadline ? ` (due ${p.deadline})` : ''
+          return `  ↳ ${p.name} [${p.status}]${deadline}${bal}`
+        }).join('\n')
+        : '  ↳ No active projects'
+      const outstanding = client.outstanding_balance > 0
+        ? ` | outstanding ${currency} ${Number(client.outstanding_balance).toLocaleString()}`
+        : ''
+      return `• ${client.name} — received ${currency} ${Number(client.total_earned).toLocaleString()}${outstanding}\n${projectLines}`
+    }).join('\n')
+    : '• No active clients yet. User can create one by saying "New client [name]".'
   }
 ${scannedReceipt ? `
 RECEIPT JUST SCANNED BY USER:

@@ -8,6 +8,8 @@ import { generateAndSendPDF } from './pdf-generator'
 import { getBudgetStatus } from './report-service'
 import { getInventoryItems, addInventoryItem, updateStock, getLowStockItems } from './inventory-service'
 import { startGuidedClientSetup } from './client-setup-service'
+import { findClientByName } from './client-service'
+import { recordClientPayment } from './client-payment-service'
 import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
 
 export async function executeActions(actions: string[], user: any): Promise<string[]> {
@@ -88,6 +90,40 @@ export async function executeActions(actions: string[], user: any): Promise<stri
             })
             notifications.push(`📦 *Your Inventory:*\n${lines.join('\n')}`)
           }
+          break
+        }
+
+        case 'LOG_PAYMENT': {
+          // LOG_PAYMENT:{clientName}:{amount}
+          // clientName may contain spaces; amount is always the last colon-separated segment
+          const paymentParts = parts.slice(1)
+          const amountStr = paymentParts[paymentParts.length - 1]
+          const clientName = paymentParts.slice(0, -1).join(':').trim()
+          const amount = parseFloat(amountStr)
+
+          if (!clientName || isNaN(amount) || amount <= 0) break
+
+          const client = await findClientByName(user.org_id, clientName)
+          if (!client) {
+            notifications.push(
+              `I couldn't find a client matching "${clientName}". Create them first by saying "New client ${clientName}".`
+            )
+            break
+          }
+
+          await recordClientPayment({
+            orgId: user.org_id,
+            clientId: client.id,
+            amount,
+            currency: user.currency || 'NGN',
+          })
+
+          const currency = user.currency || 'NGN'
+          notifications.push(
+            `✅ *Payment logged!*\n\n` +
+            `${currency} ${amount.toLocaleString()} from *${client.name}*\n` +
+            `Open your dashboard to link it to a specific project: app.trueflio.com/income`
+          )
           break
         }
 
