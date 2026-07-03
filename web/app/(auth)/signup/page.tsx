@@ -22,6 +22,7 @@ function WhatsAppSignUp() {
   const [otp, setOtp]                       = useState('')
   const [fullName, setFullName]             = useState('')
   const [businessName, setBusinessName]     = useState('')
+  const [accountType, setAccountType]       = useState<'business' | 'personal'>('business')
   const [isExistingUser, setIsExistingUser] = useState(false)
   const [existingRedirect, setExistingRedirect] = useState('')
   const [error, setError]                   = useState<string | null>(null)
@@ -78,7 +79,7 @@ function WhatsAppSignUp() {
     const res = await fetch('/api/auth/whatsapp/complete-signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: normalisedPhone, fullName, businessName }),
+      body: JSON.stringify({ phone: normalisedPhone, fullName, businessName, orgType: accountType === 'business' ? 'sme' : 'individual' }),
     })
     const json = await res.json()
     setBusy(false)
@@ -174,6 +175,28 @@ function WhatsAppSignUp() {
               <span>✅</span>
               <span>Number verified — just a few details to finish.</span>
             </div>
+
+            {/* Account type toggle */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1.5">I'm signing up for</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['business', 'personal'] as const).map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setAccountType(type)}
+                    className={`h-10 rounded-lg text-sm font-semibold border transition-colors ${
+                      accountType === type
+                        ? 'bg-[#25D366] border-[#25D366] text-white'
+                        : 'bg-white border-gray-200 text-gray-600 hover:border-[#25D366]/50'
+                    }`}
+                  >
+                    {type === 'business' ? '🏢 Business' : '👤 Personal'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <label className="text-sm font-medium text-gray-700">Your name</label>
               <Input
@@ -185,10 +208,13 @@ function WhatsAppSignUp() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700">Business name <span className="text-gray-400 font-normal">(optional)</span></label>
+              <label className="text-sm font-medium text-gray-700">
+                {accountType === 'business' ? 'Business name' : 'Your name or household name'}{' '}
+                <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
               <Input
                 className="mt-1"
-                placeholder="Adeleke Boutique"
+                placeholder={accountType === 'business' ? 'Adeleke Boutique' : 'Adeleke Family'}
                 value={businessName}
                 onChange={e => setBusinessName(e.target.value)}
               />
@@ -229,6 +255,7 @@ function SignupForm() {
 
   const [fullName, setFullName]         = useState('')
   const [businessName, setBusinessName] = useState('')
+  const [accountType, setAccountType]   = useState<'business' | 'personal'>('business')
   const [email, setEmail]               = useState('')
   const [password, setPassword]         = useState('')
   const [loading, setLoading]           = useState(false)
@@ -247,7 +274,7 @@ function SignupForm() {
     const res = await fetch('/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, fullName, businessName, inviteOrgId, inviteRole }),
+      body: JSON.stringify({ email, password, fullName, businessName, inviteOrgId, inviteRole, orgType: accountType === 'business' ? 'sme' : 'individual' }),
     })
     const json = await res.json()
 
@@ -285,14 +312,42 @@ function SignupForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignup} className="space-y-4">
+            {!inviteOrgId && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">I'm signing up for</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['business', 'personal'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setAccountType(type)}
+                      className={`h-10 rounded-lg text-sm font-semibold border transition-colors ${
+                        accountType === type
+                          ? 'bg-emerald-600 border-emerald-600 text-white'
+                          : 'bg-white border-gray-200 text-gray-600 hover:border-emerald-400'
+                      }`}
+                    >
+                      {type === 'business' ? '🏢 Business' : '👤 Personal'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Your name</label>
               <Input placeholder="Tobi Adeleke" value={fullName} onChange={e => setFullName(e.target.value)} required />
             </div>
             {!inviteOrgId && (
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Business name</label>
-                <Input placeholder="Adeleke Boutique" value={businessName} onChange={e => setBusinessName(e.target.value)} />
+                <label className="text-sm font-medium text-gray-700">
+                  {accountType === 'business' ? 'Business name' : 'Household name'}{' '}
+                  <span className="text-gray-400 font-normal text-xs">(optional)</span>
+                </label>
+                <Input
+                  placeholder={accountType === 'business' ? 'Adeleke Boutique' : 'Adeleke Family'}
+                  value={businessName}
+                  onChange={e => setBusinessName(e.target.value)}
+                />
               </div>
             )}
             <div className="space-y-2">

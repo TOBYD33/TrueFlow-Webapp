@@ -18,10 +18,11 @@ const CALLBACK_URL = `${APP_URL}/auth/callback`
 
 export async function POST(req: NextRequest) {
   try {
-    const { phone, fullName, businessName } = await req.json() as {
+    const { phone, fullName, businessName, orgType } = await req.json() as {
       phone: string
       fullName: string
       businessName: string
+      orgType?: string
     }
 
     if (!phone || !fullName) {
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
       const orgName = businessName?.trim() || `${fullName}'s Business`
       const { data: org, error: orgError } = await admin
         .from('organizations')
-        .insert({ name: orgName, owner_id: userId })
+        .insert({ name: orgName, owner_id: userId, type: orgType ?? 'sme' })
         .select()
         .single()
 

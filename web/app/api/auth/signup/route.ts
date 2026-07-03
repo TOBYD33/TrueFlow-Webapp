@@ -15,7 +15,7 @@ function getSupabaseAdmin() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, fullName, businessName, inviteOrgId, inviteRole } =
+    const { email, password, fullName, businessName, inviteOrgId, inviteRole, orgType } =
       await req.json() as {
         email: string
         password: string
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
         businessName?: string
         inviteOrgId?: string
         inviteRole?: string
+        orgType?: string
       }
 
     if (!email || !password || !fullName) {
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
       const orgName = businessName?.trim() || `${fullName}'s Business`
       const { data: org, error: orgError } = await admin
         .from('organizations')
-        .insert({ name: orgName, owner_id: userId, plan: 'free' })
+        .insert({ name: orgName, owner_id: userId, plan: 'free', type: orgType ?? 'sme' })
         .select()
         .single()
 
