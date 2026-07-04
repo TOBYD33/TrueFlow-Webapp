@@ -122,7 +122,7 @@ export async function executeActions(actions: string[], user: any): Promise<stri
           notifications.push(
             `✅ *Payment logged!*\n\n` +
             `${currency} ${amount.toLocaleString()} from *${client.name}*\n` +
-            `Open your dashboard to link it to a specific project: app.trueflio.com/income`
+            `Open your dashboard to link it to a specific project: app.gettrueflow.com/income`
           )
           break
         }
@@ -131,7 +131,7 @@ export async function executeActions(actions: string[], user: any): Promise<stri
           // GENERATE_INVOICE:{clientId}:{projectId}
           // Invoice generation is handled in the web app — acknowledge only
           notifications.push(
-            'Invoice generation is available on your web dashboard: app.trueflio.com/invoices'
+            'Invoice generation is available on your web dashboard: app.gettrueflow.com/invoices'
           )
           break
         }

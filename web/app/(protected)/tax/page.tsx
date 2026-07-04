@@ -400,7 +400,7 @@ export default function TaxHubPage() {
             {estimate && !estimate.computable && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
                 <p className="text-sm text-gray-800">
-                  {estimateTaxType} in {country} is set at <span className="font-semibold">{estimate.rateLabel}</span> — this can&apos;t be reduced to a single number TrueFlio can calculate from. Check the rate reference card above or confirm directly with a local tax authority or accountant.
+                  {estimateTaxType} in {country} is set at <span className="font-semibold">{estimate.rateLabel}</span> — this can&apos;t be reduced to a single number TrueFlow can calculate from. Check the rate reference card above or confirm directly with a local tax authority or accountant.
                 </p>
                 <p className="text-xs text-gray-400">Reference rate as of {formatTaxDate(estimate.lastVerifiedDate)}.</p>
               </div>

@@ -68,7 +68,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   let orgId: string | null = impersonationOrgId
   let viewingUserId: string | null = impersonationUserId
   let viewingPhone: string | null = impersonationPhone
-  let orgName = 'TrueFlio'
+  let orgName = 'TrueFlow'
   let plan = 'free'
 
   if (!impersonationSessionId) {

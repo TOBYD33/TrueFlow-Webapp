@@ -57,7 +57,7 @@ export default function ProfileSettingsPage() {
     if (error) { toast.error(error.message); return }
     setProfile(p => p ? { ...p, avatar_url: publicUrl } : p)
     // Notify AppShell to refresh its avatar without a page reload
-    window.dispatchEvent(new CustomEvent('trueflio:avatar-updated', { detail: { url: publicUrl } }))
+    window.dispatchEvent(new CustomEvent('trueflow:avatar-updated', { detail: { url: publicUrl } }))
     toast.success('Avatar updated')
   }
 

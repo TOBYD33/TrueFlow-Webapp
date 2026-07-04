@@ -101,7 +101,7 @@ function buildIncomingReply(
   const dateStr = formatPaymentDate(analysis.date)
   const refStr = analysis.reference ? `\nRef: ${analysis.reference}` : ''
   const missingNote = buildMissingFieldsNote(analysis)
-  const appUrl = process.env.WEBAPP_URL || 'app.trueflio.com'
+  const appUrl = process.env.WEBAPP_URL || 'app.gettrueflow.com'
 
   if (matchedClientName) {
     return (

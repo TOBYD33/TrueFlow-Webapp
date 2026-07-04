@@ -157,7 +157,7 @@ export function AdminTeamActions({ currentUserId, targetId, targetName, currentR
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 className="text-base font-bold text-white mb-4">Invite Platform Admin</h3>
             <p className="text-xs text-gray-400 mb-4">
-              Enter the TrueFlio phone number of the person to grant admin access.
+              Enter the TrueFlow phone number of the person to grant admin access.
               Super Admin cannot be assigned here — use direct SQL only.
             </p>
 

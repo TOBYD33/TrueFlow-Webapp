@@ -21,7 +21,7 @@ import { supabase } from './supabase'
 import { TwilioWebhookBody } from '../types'
 
 const FREE_TIER_LIMIT = 10
-const APP_URL = process.env.WEBAPP_URL || 'app.trueflio.com'
+const APP_URL = process.env.WEBAPP_URL || 'app.trueflow.com'
 
 export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   const phoneNumber = body.From.replace('whatsapp:', '')
@@ -92,7 +92,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   // ── Permission Gate 1: Organization suspended ────────────────────────────
   if (user.org_status === 'suspended') {
     return buildTextResponse(
-      '⚠️ Your account is currently paused.\nContact support@trueflio.com for help.'
+      '⚠️ Your account is currently paused.\nContact support@trueflow.com for help.'
     )
   }
 
@@ -167,7 +167,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
       const count = await getMonthlyReceiptCount(user.org_id)
       if (count >= FREE_TIER_LIMIT) {
         return buildTextResponse(
-          `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade for unlimited receipts: ${process.env.PRICING_PAGE_URL || 'trueflio.com/pricing'}`
+          `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade for unlimited receipts: ${process.env.PRICING_PAGE_URL || 'trueflow.com/pricing'}`
         )
       }
     }

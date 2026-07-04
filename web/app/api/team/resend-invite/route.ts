@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.trueflio.com'}/invite/accept/${newToken}`
+  const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.gettrueflow.com'}/invite/accept/${newToken}`
 
   // Re-send WhatsApp if phone invite
   if (invite.whatsapp_number && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const form = new URLSearchParams({
       From: process.env.TWILIO_WHATSAPP_NUMBER!,
       To: `whatsapp:${invite.whatsapp_number}`,
-      Body: `📨 Your TrueFlio team invite has been renewed.\n\nAccept here: ${acceptLink}\n\nOr reply *START* to begin.`,
+      Body: `📨 Your TrueFlow team invite has been renewed.\n\nAccept here: ${acceptLink}\n\nOr reply *START* to begin.`,
     })
     fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
       method: 'POST',
@@ -75,10 +75,10 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'TrueFlio <hello@trueflio.com>',
+        from: 'TrueFlow <hello@gettrueflow.com>',
         to: [invite.invited_email],
-        subject: 'Your TrueFlio team invite has been renewed',
-        html: `<p>Your invitation to join a TrueFlio workspace has been renewed.</p><p><a href="${acceptLink}" style="background:#6C63FF;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p><p>This link expires in 7 days.</p>`,
+        subject: 'Your TrueFlow team invite has been renewed',
+        html: `<p>Your invitation to join a TrueFlow workspace has been renewed.</p><p><a href="${acceptLink}" style="background:#6C63FF;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p><p>This link expires in 7 days.</p>`,
       }),
     }).catch(err => console.error('Resend email failed:', err))
   }

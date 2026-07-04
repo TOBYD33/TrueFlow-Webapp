@@ -147,7 +147,7 @@ export async function continueGuidedSetup(
       const wantsInvoice = userReply.toUpperCase() === 'YES'
       await clearSetupState(phoneNumber)
       const invoiceLine = wantsInvoice
-        ? '\n• Open app.trueflio.com/invoices to review and send'
+        ? '\n• Open app.gettrueflow.com/invoices to review and send'
         : ''
       return {
         reply:

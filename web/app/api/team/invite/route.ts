@@ -107,14 +107,14 @@ export async function POST(req: NextRequest) {
       .eq('id', org_id)
       .single()
 
-    const orgName = orgData?.name ?? 'a TrueFlio workspace'
+    const orgName = orgData?.name ?? 'a TrueFlow workspace'
     const inviterName = inviterProfile?.full_name ?? 'Your account owner'
-    const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.trueflio.com'}/invite/accept/${inviteToken}`
+    const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.gettrueflow.com'}/invite/accept/${inviteToken}`
 
     if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
       const sid = process.env.TWILIO_ACCOUNT_SID
       const auth = process.env.TWILIO_AUTH_TOKEN
-      const body = `👋 ${inviterName} has invited you to join ${orgName} on TrueFlio as ${role}.\n\nTap to accept: ${acceptLink}\n\nOr reply *START* to begin using the bot right away.`
+      const body = `👋 ${inviterName} has invited you to join ${orgName} on TrueFlow as ${role}.\n\nTap to accept: ${acceptLink}\n\nOr reply *START* to begin using the bot right away.`
       const form = new URLSearchParams({
         From: process.env.TWILIO_WHATSAPP_NUMBER!,
         To: `whatsapp:${contact}`,
@@ -148,18 +148,18 @@ export async function POST(req: NextRequest) {
     if (process.env.RESEND_API_KEY) {
       const { data: orgData } = await admin.from('organizations').select('name').eq('id', org_id).single()
       const { data: inviterProfile } = await admin.from('profiles').select('full_name').eq('id', user.id).single()
-      const orgName = orgData?.name ?? 'a TrueFlio workspace'
+      const orgName = orgData?.name ?? 'a TrueFlow workspace'
       const inviterName = inviterProfile?.full_name ?? 'Your team owner'
-      const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.trueflio.com'}/invite/accept/${inviteToken}`
+      const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.gettrueflow.com'}/invite/accept/${inviteToken}`
 
       fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'TrueFlio <hello@trueflio.com>',
+          from: 'TrueFlow <hello@gettrueflow.com>',
           to: [contact],
-          subject: `${inviterName} invited you to join ${orgName} on TrueFlio`,
-          html: `<p>Hi there,</p><p><strong>${inviterName}</strong> has invited you to join <strong>${orgName}</strong> on TrueFlio as <strong>${role}</strong>.</p><p><a href="${acceptLink}" style="background:#6C63FF;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p><p>This link expires in 7 days.</p><p>— The TrueFlio Team</p>`,
+          subject: `${inviterName} invited you to join ${orgName} on TrueFlow`,
+          html: `<p>Hi there,</p><p><strong>${inviterName}</strong> has invited you to join <strong>${orgName}</strong> on TrueFlow as <strong>${role}</strong>.</p><p><a href="${acceptLink}" style="background:#6C63FF;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p><p>This link expires in 7 days.</p><p>— The TrueFlow Team</p>`,
         }),
       }).catch(err => console.error('Resend invite failed:', err))
     }

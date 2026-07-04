@@ -46,7 +46,7 @@ export default async function InviteAcceptPage({
           <h1 className="text-lg font-bold text-gray-900 mb-2">Invite not found</h1>
           <p className="text-sm text-gray-500">This invite link is invalid or has already been used.</p>
           <Link href="/login" className="mt-6 inline-block text-sm text-violet-600 hover:underline">
-            Sign in to TrueFlio →
+            Sign in to TrueFlow →
           </Link>
         </div>
       </div>
@@ -102,7 +102,7 @@ export default async function InviteAcceptPage({
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-violet-600 mb-3">
             <span className="text-white font-bold text-lg">T</span>
           </div>
-          <p className="text-xs text-gray-400 tracking-wide uppercase">TrueFlio</p>
+          <p className="text-xs text-gray-400 tracking-wide uppercase">TrueFlow</p>
         </div>
 
         <div className="text-center mb-6">
@@ -125,7 +125,7 @@ export default async function InviteAcceptPage({
             </Link>
             <p className="text-xs text-gray-400 text-center">
               Don&apos;t have an account? Sign up at{' '}
-              <Link href="/login" className="text-violet-600 hover:underline">trueflio.com</Link>
+              <Link href="/login" className="text-violet-600 hover:underline">gettrueflow.com</Link>
             </p>
           </div>
         )}

@@ -48,8 +48,8 @@ export function AppShell({ children, orgName, plan }: AppShellProps) {
       const url = (e as CustomEvent<{ url: string }>).detail?.url
       if (url) setAvatarUrl(url)
     }
-    window.addEventListener('trueflio:avatar-updated', onAvatarUpdated)
-    return () => window.removeEventListener('trueflio:avatar-updated', onAvatarUpdated)
+    window.addEventListener('trueflow:avatar-updated', onAvatarUpdated)
+    return () => window.removeEventListener('trueflow:avatar-updated', onAvatarUpdated)
   }, [])
 
   // Close dropdown when clicking outside

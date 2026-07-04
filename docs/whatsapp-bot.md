@@ -113,7 +113,30 @@ You are TrueFlow, a friendly and honest WhatsApp financial assistant for small
 business owners. You help them track expenses, manage budgets, set reminders,
 and understand their finances.
 
-YOUR PERSONALITY:
+SCOPE BOUNDARY — READ THIS FIRST, IT OVERRIDES EVERYTHING ELSE BELOW:
+You ONLY help with these specific tasks: scanning and logging receipts,
+tracking expenses, managing client payments and projects, setting and
+checking budgets, setting and checking reminders, and answering questions
+about the user's OWN financial data already stored in TrueFlow.
+
+You do NOT answer general knowledge questions, give investment or legal
+advice, write code, explain unrelated topics, or engage in open-ended
+conversation of any kind, even if the user asks nicely or rephrases the
+request. This is a hard rule, not a tone preference, and it is non-negotiable
+for platform compliance reasons, not just product design.
+
+If a message falls outside this scope, respond with this exact pattern,
+clearly and politely, every time, with no exceptions:
+"I'm built specifically to help you track receipts, budgets, clients, and
+reminders. I can't help with [brief restatement], but here's what I can do:
+[one relevant suggestion based on their account]."
+
+Never attempt to partially answer an out-of-scope question before redirecting.
+Never apologize excessively or explain the policy reason to the user, just
+redirect cleanly and warmly, the same way you would naturally say "that's
+not something I handle" without making it sound like a legal disclaimer.
+
+YOUR PERSONALITY (applies only WITHIN the scope above):
 - Warm and conversational — like a smart friend who happens to be an accountant
 - Honest — if they are overspending, say so clearly but kindly
 - Proactive — spot problems before they become serious
@@ -121,8 +144,14 @@ YOUR PERSONALITY:
 - Use emojis sparingly — only ✅ ⚠️ 📊 💰 🔴 🟡 where they add real clarity
 - Use *bold* for numbers and key points (WhatsApp markdown)
 - Never use dashes for bullet points — use • instead
-- Never say "I cannot" — always find a helpful way to respond
+- Within scope, never say "I cannot" — always find a helpful way to respond
 - If user writes in Nigerian Pidgin English, reply in Pidgin too
+
+Note the distinction: "never say I cannot" applies to in-scope financial
+tasks (e.g. a confusing budget request), where you should always find a
+helpful path forward. It does NOT apply to out-of-scope requests, where the
+clear redirect above is the correct and required response, not a failure
+to be helpful around.
 
 ACTIONS:
 When the user wants to set a budget, set a reminder, or export a PDF,
@@ -141,6 +170,8 @@ EXAMPLES:
 User sets transport budget → end reply with: ACTION:SET_BUDGET:Transport:120000
 User sets salary reminder → end reply with: ACTION:SET_REMINDER:Pay staff salaries:2025-06-25:monthly
 User asks for PDF → end reply with: ACTION:EXPORT_PDF
+User asks "what's the weather today" → out-of-scope redirect, no ACTION tag
+User asks "write me a poem" → out-of-scope redirect, no ACTION tag
 `
 
 interface AIParams {
@@ -981,3 +1012,741 @@ $$ language plpgsql security definer;
 6. Update `ai-assistant.ts` — add `incomingTransfer` context block
 7. Update `action-executor.ts` — add `CREATE_CLIENT_PAYMENT`, `MATCH_CLIENT` actions
 8. Test with real GTBank, Access, Opay screenshots
+
+---
+
+## Seamless Onboarding Implementation
+
+### Overview
+The bot must handle three states for every incoming user: brand new (no
+profile exists), mid-onboarding (profile exists but Q1/Q2 not answered yet),
+and fully onboarded (normal AI assistant flow applies).
+
+### onboarding-service.ts
+
+```typescript
+// onboarding-service.ts
+// Tracks where a user is in the onboarding flow and returns the next
+// appropriate bot message. Onboarding state lives on the organizations
+// and whatsapp_sessions tables, no separate state machine table needed.
+
+import { supabase } from './supabase'
+
+export type OnboardingStep = 'new' | 'awaiting_name' | 'awaiting_type' | 'awaiting_first_receipt' | 'complete'
+
+export async function getOnboardingStep(orgId: string, isNew: boolean): Promise<OnboardingStep> {
+  if (isNew) return 'new'
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('name, type')
+    .eq('id', orgId)
+    .single()
+
+  if (!org || org.name === 'Unnamed') return 'awaiting_name'
+  if (!org.type) return 'awaiting_type'
+
+  const { count } = await supabase
+    .from('receipts')
+    .select('id', { count: 'exact', head: true })
+    .eq('org_id', orgId)
+
+  if (!count || count === 0) return 'awaiting_first_receipt'
+
+  return 'complete'
+}
+
+export async function handleOnboardingReply(
+  step: OnboardingStep,
+  orgId: string,
+  userMessage: string
+): Promise<string> {
+  switch (step) {
+    case 'new':
+      // Create placeholder org happens in user-service.ts getOrCreateUser
+      return `👋 Welcome to TrueFlow!
+
+I'm your AI assistant for tracking money, in and out.
+
+Before we start, what should I call your business? (Or just your name if this is personal.)`
+
+    case 'awaiting_name':
+      await supabase
+        .from('organizations')
+        .update({ name: userMessage.trim() })
+        .eq('id', orgId)
+
+      return `Got it, ${userMessage.trim()} ✅
+
+Quick one, is this for:
+1️⃣ My business
+2️⃣ My family
+3️⃣ Just me, personal`
+
+    case 'awaiting_type': {
+      const typeMap: Record<string, string> = { '1': 'sme', '2': 'family', '3': 'individual' }
+      const type = typeMap[userMessage.trim()] || 'sme'
+
+      await supabase
+        .from('organizations')
+        .update({ type })
+        .eq('id', orgId)
+
+      return `Perfect. Last thing, send me a photo of any receipt, or a payment screenshot a client sent you. I'll show you exactly what I can do.`
+    }
+
+    case 'awaiting_first_receipt':
+      return `Send me a photo of any receipt or payment screenshot to get started 📷`
+
+    default:
+      return ''
+  }
+}
+```
+
+### Updated user-service.ts — getOrCreateUser
+
+```typescript
+// user-service.ts
+// Creates the full chain (profile, organization, org_member) on the
+// very first message, with a placeholder name. The onboarding-service
+// fills in real details conversationally.
+
+import { supabase } from './supabase'
+
+export async function getOrCreateUser(phoneNumber: string) {
+  const { data: existing } = await supabase
+    .from('whatsapp_sessions')
+    .select('*, organizations(*)')
+    .eq('phone_number', phoneNumber)
+    .single()
+
+  if (existing) {
+    return { ...existing, is_new: false }
+  }
+
+  // First contact ever, create the full chain immediately
+  const { data: profile } = await supabase
+    .from('profiles')
+    .insert({ phone: phoneNumber })
+    .select()
+    .single()
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .insert({
+      name: 'Unnamed',
+      type: null,
+      owner_id: profile!.id,
+      plan: 'free'
+    })
+    .select()
+    .single()
+
+  await supabase
+    .from('org_members')
+    .insert({
+      org_id: org!.id,
+      user_id: profile!.id,
+      role: 'owner',
+      whatsapp_number: phoneNumber,
+      joined_at: new Date()
+    })
+
+  const { data: session } = await supabase
+    .from('whatsapp_sessions')
+    .insert({
+      phone_number: phoneNumber,
+      org_id: org!.id,
+      user_id: profile!.id,
+      is_new: true
+    })
+    .select()
+    .single()
+
+  return { ...session, organizations: org, is_new: true }
+}
+```
+
+### Updated message-handler.ts — Onboarding Gate
+
+```typescript
+// message-handler.ts
+// Onboarding check happens BEFORE normal AI assistant routing.
+// If onboarding is incomplete, the bot stays focused on finishing it
+// rather than processing unrelated commands.
+
+import { getOrCreateUser } from './user-service'
+import { getOnboardingStep, handleOnboardingReply } from './onboarding-service'
+import { getAIResponse } from './ai-assistant'
+import { buildTwiML, buildReply } from './twiml-builder'
+
+export async function handleIncomingMessage(msg: {
+  phoneNumber: string
+  body: string
+  hasImage: boolean
+  mediaUrl?: string
+}) {
+  const user = await getOrCreateUser(msg.phoneNumber)
+  const step = await getOnboardingStep(user.org_id, user.is_new)
+
+  if (step !== 'complete') {
+    // Special case: if awaiting_first_receipt and an image just arrived,
+    // let it fall through to the normal receipt scanning flow so the
+    // first scan IS the onboarding completion moment.
+    if (step === 'awaiting_first_receipt' && msg.hasImage) {
+      // fall through to normal flow below
+    } else {
+      const reply = await handleOnboardingReply(step, user.org_id, msg.body || '')
+      return buildTwiML(buildReply(reply))
+    }
+  }
+
+  // Normal AI assistant flow continues here for fully onboarded users
+  // and for the first-receipt-during-onboarding case
+  // ... existing logic from ai-assistant.ts
+}
+```
+
+### Staff Onboarding via Team Invite
+
+```typescript
+// Triggered when an owner invites a staff member from the web app.
+// Sends an immediate WhatsApp welcome, no separate signup flow.
+
+export async function sendStaffWelcome(phoneNumber: string, orgName: string) {
+  const message = `👋 Hi! ${orgName} has added you to their TrueFlow team.
+
+Send me photos of receipts and I'll log them straight to the business account.
+
+Reply START to begin.`
+
+  await sendWhatsAppMessage(phoneNumber, message)
+
+  // Create org_members row immediately, whatsapp_active = true
+  // Staff member does not go through the owner onboarding flow
+  // (no business name question, no type question, already known)
+}
+```
+
+### Build Order for Onboarding
+
+1. Add `otp_codes` table to Supabase
+2. Build `onboarding-service.ts`
+3. Update `user-service.ts` — `getOrCreateUser()` creates full chain on
+   first contact
+4. Update `message-handler.ts` — add onboarding gate before normal routing
+5. Update staff invite flow to send immediate WhatsApp welcome
+6. Test full flow end to end with a fresh phone number
+
+---
+
+## Inventory Tracking — WhatsApp Bot Implementation
+
+### inventory-service.ts
+
+```typescript
+// inventory-service.ts
+// Creates and manages inventory items and stock movements.
+// Called by action-executor when the AI detects inventory intent.
+// Always requires explicit owner confirmation before any stock change.
+
+import { supabase } from './supabase'
+
+export async function getInventoryItems(orgId: string) {
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('status', 'active')
+    .order('name', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+export async function getLowStockItems(orgId: string) {
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('status', 'active')
+    .filter('quantity_on_hand', 'lte', 'low_stock_threshold')
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+export async function addInventoryItem(params: {
+  orgId: string
+  name: string
+  quantity: number
+  unitCost?: number
+  unitPrice?: number
+  sku?: string
+  category?: string
+}) {
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .insert({
+      org_id: params.orgId,
+      name: params.name,
+      quantity_on_hand: params.quantity,
+      unit_cost: params.unitCost || null,
+      unit_price: params.unitPrice || null,
+      sku: params.sku || null,
+      category: params.category || null
+    })
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function updateStock(params: {
+  orgId: string
+  itemId: string
+  quantityChange: number
+  changeType: 'restock' | 'sale' | 'adjustment'
+  referenceType?: string
+  referenceId?: string
+  notes?: string
+  createdBy?: string
+}) {
+  const { error } = await supabase.rpc('update_inventory_stock', {
+    p_item_id: params.itemId,
+    p_quantity_change: params.quantityChange,
+    p_change_type: params.changeType,
+    p_reference_type: params.referenceType || null,
+    p_reference_id: params.referenceId || null,
+    p_notes: params.notes || null,
+    p_created_by: params.createdBy || null
+  })
+  if (error) throw new Error(error.message)
+
+  // Check for low stock after every sale
+  if (params.changeType === 'sale') {
+    await checkAndAlertLowStock(params.orgId, params.itemId)
+  }
+}
+
+async function checkAndAlertLowStock(orgId: string, itemId: string) {
+  const { data: item } = await supabase
+    .from('inventory_items')
+    .select('name, quantity_on_hand, low_stock_threshold')
+    .eq('id', itemId)
+    .single()
+
+  if (!item) return
+  if (item.quantity_on_hand <= item.low_stock_threshold) {
+    // Create a restock reminder using the existing reminder-service
+    const { setReminder } = await import('./reminder-service')
+    await setReminder({
+      orgId,
+      title: `Restock ${item.name} — only ${item.quantity_on_hand} units left`,
+      dueDate: new Date().toISOString().split('T')[0],
+      recurrence: 'once',
+      category: 'operations'
+    })
+  }
+}
+```
+
+### Updated action-executor.ts — Inventory and Guided Client Setup Actions
+
+Add these cases to the existing switch statement in action-executor.ts:
+
+```typescript
+case 'UPDATE_INVENTORY': {
+  // UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
+  const [, itemName, quantityChange, changeType] = action.split(':')
+  const items = await getInventoryItems(user.org_id)
+  const item = items.find(i => i.name.toLowerCase() === itemName.toLowerCase())
+
+  if (item) {
+    await updateStock({
+      orgId: user.org_id,
+      itemId: item.id,
+      quantityChange: parseFloat(quantityChange),
+      changeType: changeType as 'restock' | 'sale' | 'adjustment',
+      createdBy: user.user_id
+    })
+  } else if (parseFloat(quantityChange) > 0) {
+    // New item, add it with opening stock
+    await addInventoryItem({
+      orgId: user.org_id,
+      name: itemName,
+      quantity: parseFloat(quantityChange)
+    })
+  }
+  break
+}
+
+case 'GENERATE_INVOICE': {
+  // GENERATE_INVOICE:{clientId}:{projectId}
+  const [, clientId, projectId] = action.split(':')
+  // Invoice creation already handled in invoice-service.ts
+  // This action just triggers it explicitly from the AI
+  break
+}
+
+case 'START_CLIENT_SETUP': {
+  // Triggers the guided conversational client creation flow
+  // This sets a session-level flag so the next messages from this
+  // user are routed to client-setup-service.ts instead of the normal
+  // AI assistant flow until the flow completes or the user exits
+  const [, clientName] = action.split(':')
+  await startGuidedClientSetup(user.org_id, user.phone_number, clientName)
+  break
+}
+```
+
+### Updated ai-assistant.ts System Prompt Additions
+
+Add these lines to the ACTIONS section of SYSTEM_PROMPT (in addition
+to all existing actions, not replacing them):
+
+```
+ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
+  Use for: user mentions selling units, restocking, or stock adjustment
+  changeType: restock (positive qty) | sale (negative qty) | adjustment
+  ALWAYS confirm with user before emitting this action
+
+ACTION:GENERATE_INVOICE:{clientId}:{projectId}
+  Use ONLY when user explicitly asks to generate or send an invoice
+  Never auto-trigger at client creation, only on explicit request
+
+ACTION:START_CLIENT_SETUP:{clientName}
+  Use when user says "new client", "add client", or clearly describes
+  starting a relationship with a new business contact
+```
+
+Also add inventory context to the financial context block injected on
+every message, so the AI knows current stock levels when a user asks:
+
+```typescript
+// In getAIResponse(), add to contextBlock:
+const [spending, budgets, reminders, lowStock] = await Promise.all([
+  getMonthlySpending(orgId),
+  getBudgetStatus(orgId),
+  getUpcomingReminders(orgId, 7),
+  getLowStockItems(orgId)   // ← new
+])
+
+// Add to contextBlock string:
+`INVENTORY (low stock alerts only):
+${lowStock.length > 0
+  ? lowStock.map((i: any) => `• ${i.name}: ${i.quantity_on_hand} units left (threshold: ${i.low_stock_threshold})`).join('\n')
+  : '• All stock levels healthy'
+}`
+```
+
+### Bot Reply Templates for Inventory
+
+```
+New item added:
+"✅ Added *[name]* to your inventory.
+ Quantity: [qty] units
+ Cost per unit: ₦[cost]
+ Reply STOCK to see all your inventory."
+
+Stock updated after sale:
+"✅ *[qty] units* of *[name]* sold.
+ Remaining: [qty_after] units
+ [if low: ⚠️ Running low — you have less than [threshold] left]"
+
+Stock check:
+"📦 *Your inventory*
+
+[for each item]:
+• [name]: [qty] units ([low emoji if below threshold])
+
+Total items tracked: [count]"
+
+Low stock alert (proactive):
+"⚠️ *Low stock: [name]*
+You have [qty] units left, below your threshold of [threshold].
+Want me to set a restock reminder?"
+```
+
+### Guided Client Setup — client-setup-service.ts
+
+```typescript
+// client-setup-service.ts
+// Manages the conversational guided client creation flow.
+// Tracks setup state per phone number so multi-turn conversations
+// work correctly across separate webhook calls.
+
+import { supabase } from './supabase'
+
+export type SetupStep =
+  'contact_info' | 'project' | 'deposit' | 'invoice' | 'complete'
+
+export async function startGuidedClientSetup(
+  orgId: string,
+  phoneNumber: string,
+  clientName: string
+) {
+  // Create the client immediately with the name we already have
+  const { data: client } = await supabase
+    .from('clients')
+    .insert({ org_id: orgId, name: clientName, created_via: 'whatsapp' })
+    .select().single()
+
+  // Save setup state so next messages from this number are routed here
+  await supabase.from('whatsapp_sessions').update({
+    setup_state: JSON.stringify({
+      flow: 'client_setup',
+      step: 'contact_info',
+      client_id: client.id,
+      client_name: clientName
+    })
+  }).eq('phone_number', phoneNumber)
+}
+
+export async function continueGuidedSetup(
+  phoneNumber: string,
+  userReply: string,
+  setupState: any
+): Promise<{ reply: string; nextState: any | null }> {
+
+  switch (setupState.step) {
+
+    case 'contact_info': {
+      if (userReply.toUpperCase() !== 'SKIP') {
+        // Detect phone vs email and save accordingly
+        const isPhone = /^\+?[\d\s]{7,}$/.test(userReply)
+        await supabase.from('clients').update(
+          isPhone ? { phone: userReply } : { email: userReply }
+        ).eq('id', setupState.client_id)
+      }
+      return {
+        reply: `✅ *${setupState.client_name}* added.\n\nIs there a project to set up for them now? Reply with the project name, fee, and deadline, or reply SKIP.`,
+        nextState: { ...setupState, step: 'project' }
+      }
+    }
+
+    case 'project': {
+      if (userReply.toUpperCase() === 'SKIP') {
+        return {
+          reply: `Got it, you can add a project later from your dashboard.\n\nHas ${setupState.client_name} paid anything yet? Reply with the amount or NO.`,
+          nextState: { ...setupState, step: 'deposit', project_id: null }
+        }
+      }
+      // Parse "Website design 450000 July 30" style input
+      // Create project and auto-set deadline reminders
+      // (see createProject in project-service.ts, already specced)
+      return {
+        reply: `✅ Project created with deadline reminders set.\n\nHas ${setupState.client_name} paid a deposit yet? Reply with the amount or NO.`,
+        nextState: { ...setupState, step: 'deposit' }
+      }
+    }
+
+    case 'deposit': {
+      if (userReply.toUpperCase() !== 'NO') {
+        const amount = parseFloat(userReply.replace(/[^0-9.]/g, ''))
+        if (amount > 0 && setupState.project_id) {
+          await supabase.rpc('increment_project_received', {
+            p_project_id: setupState.project_id,
+            p_amount: amount
+          })
+        }
+      }
+      return {
+        reply: `Want me to generate an invoice for ${setupState.client_name} now? Reply YES or NO.`,
+        nextState: { ...setupState, step: 'invoice' }
+      }
+    }
+
+    case 'invoice': {
+      const wantsInvoice = userReply.toUpperCase() === 'YES'
+      // Generate invoice only on explicit YES
+      const invoiceNote = wantsInvoice
+        ? '\n• Invoice ready to review and send'
+        : ''
+      // Clear setup state
+      await supabase.from('whatsapp_sessions').update({
+        setup_state: null
+      }).eq('phone_number', phoneNumber)
+
+      return {
+        reply: `✅ *${setupState.client_name} is fully set up!*
+
+Here's what was created:
+• Client folder: ${setupState.client_name}
+${setupState.project_id ? '• Project created with deadline reminders' : ''}
+${invoiceNote}
+
+Reply *CLIENTS* to see all your clients.`,
+        nextState: null  // flow complete
+      }
+    }
+
+    default:
+      return { reply: '', nextState: null }
+  }
+}
+```
+
+### Build Order for Both Features in the Bot
+
+1. Run inventory SQL (tables + RPC function) in Supabase
+2. Build `inventory-service.ts`
+3. Add inventory action to `action-executor.ts`
+4. Add `GENERATE_INVOICE` and `START_CLIENT_SETUP` actions to
+   `action-executor.ts`
+5. Update `ai-assistant.ts` SYSTEM_PROMPT with new action tags and
+   inventory context injection
+6. Build `client-setup-service.ts`
+7. Add `setup_state` column to `whatsapp_sessions` table:
+   `alter table whatsapp_sessions add column setup_state jsonb;`
+8. Update `message-handler.ts` to check `setup_state` before routing
+   to normal AI flow, if state is not null, route to
+   `continueGuidedSetup()` instead
+9. Test: "I have 50 units of Ankara fabric" (inventory add)
+10. Test: "I sold 12 units of Ankara" (stock decrement)
+11. Test: "New client Marcus, website 450k, due July 30" (guided setup)
+
+---
+
+## Two-Layer Permission System — WhatsApp Bot Implementation
+
+### Updated Identity Resolution in message-handler.ts
+
+The bot now resolves THREE identity types per incoming message, not
+just owner/staff. Add this enhanced lookup before any message routing:
+
+```typescript
+// Enhanced getOrCreateUser() result now includes role and permissions
+export interface BotUser {
+  user_id: string
+  org_id: string
+  phone_number: string
+  role: 'owner' | 'admin' | 'staff' | 'family_member' | 'viewer'
+  can_see_clients: boolean
+  can_see_income: boolean
+  can_export: boolean
+  whatsapp_active: boolean
+  organizations: {
+    name: string
+    plan: string
+    status: string
+    currency: string
+  }
+}
+
+// In message-handler.ts, after user lookup, add these gates:
+
+// Gate 1: Organization suspended
+if (user.organizations.status === 'suspended') {
+  return buildReply(
+    '⚠️ Your account is currently paused.\n' +
+    'Contact support@gettrueflow.com for help.'
+  )
+}
+
+// Gate 2: WhatsApp access revoked by owner
+if (!user.whatsapp_active) {
+  return buildReply(
+    'You don\'t currently have WhatsApp access for this account.\n' +
+    'Ask your account owner to enable it in their team settings.'
+  )
+}
+
+// Gate 3: Viewer role has no write access via bot
+if (user.role === 'viewer') {
+  return buildReply(
+    'Your account has view-only access.\n' +
+    'You can check summaries but can\'t submit receipts or\n' +
+    'make changes via WhatsApp.'
+  )
+}
+
+// Pass permissions as context to getAIResponse()
+// so the AI knows what THIS specific user can see
+const userPermissions = {
+  isOwnerOrAdmin: ['owner', 'admin'].includes(user.role),
+  canSeeClients: user.can_see_clients || ['owner','admin'].includes(user.role),
+  canSeeIncome: user.can_see_income || ['owner','admin'].includes(user.role),
+  canExport: user.can_export || ['owner','admin'].includes(user.role),
+  isFamilyMember: user.role === 'family_member'
+}
+```
+
+### Role-Specific Bot Responses
+
+Add these to the SYSTEM_PROMPT in ai-assistant.ts, inside the
+SCOPE BOUNDARY section, after the existing out-of-scope redirect rule:
+
+```
+ROLE CONTEXT:
+The current user's role is provided in the context block below.
+Respond based on their actual permissions, never assume Owner-level
+access unless the role says 'owner' or 'admin'.
+
+If role is 'staff' and user asks about clients or income:
+"You don't have access to client and income data for this account.
+ You can scan receipts, check your submitted expenses, and set
+ reminders. For financial summaries, the account owner can help."
+
+If role is 'family_member' and user asks about business clients:
+"That looks like a business question. I can help you track household
+ expenses, set family budgets, and manage your own reminders.
+ For business data, message on the business account."
+
+If role is 'viewer' and user tries to submit anything:
+"Your account has view-only access. I can share summaries and
+ reports but can't accept submissions on your behalf. The account
+ owner can change your access level in their team settings."
+```
+
+### WhatsApp Invite Message Template
+
+When an owner invites a staff member via phone number from the web
+app, send this message immediately via Twilio:
+
+```
+👋 Hi! [Owner name] has invited you to join
+[Business name] on TrueFlow as [Role].
+
+[If Staff]:
+You'll be able to scan receipts and log expenses
+for the business by messaging this number.
+
+[If Family Member]:
+You'll be able to track your household expenses
+and budgets together with [Owner first name].
+
+[If Admin]:
+You'll have full access to manage [Business name]'s
+finances and team on TrueFlow.
+
+Tap here to accept and set up your account:
+[invite link]
+
+Or simply reply START to begin using the WhatsApp
+bot right away (you can complete your profile later).
+```
+
+When the invited person replies START before clicking the invite link:
+- Create their profile linked to the org immediately
+- Set role and permissions from the pending org_members row
+- Clear the invite_token
+- Send the standard first-time welcome message
+
+### Build Order for Bot Permission Updates
+
+1. Update the BotUser interface in user-service.ts to include all
+   new org_members fields (role, can_see_clients, can_see_income,
+   can_export, whatsapp_active)
+2. Update the getOrCreateUser() Supabase query to select these new
+   columns from org_members
+3. Add the three permission gates to message-handler.ts in the
+   exact order shown above (suspended check first, then whatsapp_active,
+   then viewer check)
+4. Add userPermissions object construction and pass it into
+   getAIResponse() as additional context
+5. Add the role context block to the SYSTEM_PROMPT in ai-assistant.ts
+6. Update the WhatsApp invite message sending function to use the
+   new template above
+7. Handle the "reply START before accepting invite link" case in
+   message-handler.ts by checking for pending org_members rows
+   where whatsapp_number matches and invite_token is not null

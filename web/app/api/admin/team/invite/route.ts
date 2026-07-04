@@ -1,5 +1,5 @@
 // api/admin/team/invite/route.ts
-// Grants platform admin role to a TrueFlio user by phone number.
+// Grants platform admin role to a TrueFlow user by phone number.
 // Super Admin only. Super role cannot be assigned here.
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     .eq('phone', phone)
     .single()
 
-  if (!target) return NextResponse.json({ error: 'No TrueFlio account found for that phone number' }, { status: 404 })
+  if (!target) return NextResponse.json({ error: 'No TrueFlow account found for that phone number' }, { status: 404 })
 
   const { error } = await admin
     .from('profiles')
