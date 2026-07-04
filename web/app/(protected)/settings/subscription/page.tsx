@@ -168,19 +168,43 @@ export default function SubscriptionPage() {
     }
   }
 
-  // Show success banner after returning from Flutterwave
-  // Flutterwave redirects back with ?status=successful&transaction_id=xxx&tx_ref=xxx
+  // Show success banner and activate plan after returning from Flutterwave.
+  // Flutterwave redirects back with ?status=successful&transaction_id=xxx&tx_ref=xxx&plan=xxx&upgraded=1
   const [showSuccess, setShowSuccess] = useState(false)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const upgraded = params.get('upgraded') === '1'
       const flwStatus = params.get('status')
-      if (upgraded && flwStatus !== 'cancelled') {
-        setShowSuccess(true)
-        window.history.replaceState({}, '', '/settings/subscription')
-        // Reload plan after a short delay to pick up webhook update
-        setTimeout(() => window.location.reload(), 4000)
+      const transactionId = params.get('transaction_id')
+      const planFromUrl = params.get('plan')
+
+      if (!upgraded || flwStatus === 'cancelled') return
+
+      setShowSuccess(true)
+      window.history.replaceState({}, '', '/settings/subscription')
+
+      if (flwStatus === 'successful' && transactionId && planFromUrl) {
+        // Verify transaction and activate plan immediately
+        fetch('/api/flutterwave/verify-redirect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transaction_id: transactionId, plan_id: planFromUrl }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.success) {
+              // Short pause then reload to show the upgraded plan
+              setTimeout(() => window.location.reload(), 1500)
+            }
+          })
+          .catch(() => {
+            // Fallback: reload after a delay and hope webhook fired
+            setTimeout(() => window.location.reload(), 5000)
+          })
+      } else {
+        // Webhook-based fallback
+        setTimeout(() => window.location.reload(), 5000)
       }
     }
   }, [])
