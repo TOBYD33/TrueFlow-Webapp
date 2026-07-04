@@ -193,17 +193,14 @@ export default function SubscriptionPage() {
         })
           .then(r => r.json())
           .then(data => {
-            if (data.success) {
-              // Short pause then reload to show the upgraded plan
-              setTimeout(() => window.location.reload(), 1500)
-            }
+            // Always reload — if success show new plan, if failed webhook may have handled it
+            setTimeout(() => window.location.reload(), data.success ? 1500 : 4000)
           })
           .catch(() => {
-            // Fallback: reload after a delay and hope webhook fired
-            setTimeout(() => window.location.reload(), 5000)
+            setTimeout(() => window.location.reload(), 4000)
           })
       } else {
-        // Webhook-based fallback
+        // Fallback: reload and let webhook handle activation
         setTimeout(() => window.location.reload(), 5000)
       }
     }

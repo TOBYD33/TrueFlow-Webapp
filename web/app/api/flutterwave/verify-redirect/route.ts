@@ -80,7 +80,6 @@ export async function POST(req: NextRequest) {
       .select('id')
       .eq('org_id', orgId)
       .eq('event_type', 'charge.completed')
-      .ilike('payload->>id', txId)
       .maybeSingle()
 
     if (already) {
@@ -94,19 +93,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Activate the new plan
-    await admin.from('organizations').update({
+    const { error: updateError } = await admin.from('organizations').update({
       plan: plan_id,
       paystack_subscription_status: 'active',
       receipt_limit: PLAN_RECEIPT_LIMITS[plan_id],
       client_limit: PLAN_CLIENT_LIMITS[plan_id] ?? 0,
     }).eq('id', orgId)
 
-    // Log the event
+    if (updateError) {
+      console.error('verify-redirect: organizations update failed:', updateError)
+      return NextResponse.json({ error: 'Plan update failed', detail: updateError.message }, { status: 500 })
+    }
+
+    // Log the event (best-effort — don't fail the request if this errors)
     await admin.from('subscription_events').insert({
       org_id: orgId,
       event_type: 'charge.completed',
-      payload: txData,
+      payload: { ...txData, _tx_id: txId },
       processed: true,
+    }).then(({ error: evtErr }) => {
+      if (evtErr) console.error('verify-redirect: subscription_events insert failed:', evtErr)
     })
 
     // Log Andrea Aid contribution (2% of payment)
