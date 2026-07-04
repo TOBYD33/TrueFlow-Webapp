@@ -272,7 +272,7 @@ export default function SubscriptionPage() {
           })}
         </div>
         <p className="text-xs text-gray-400 mt-3">
-          Payments processed securely via Paystack. Cancel any time from your Paystack account.
+          Payments processed securely via Flutterwave. Cancel any time from your account settings.
         </p>
       </div>
 
