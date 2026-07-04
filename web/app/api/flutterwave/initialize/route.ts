@@ -50,16 +50,20 @@ export async function POST(req: NextRequest) {
     // Get user profile for customer name
     const admin = getAdmin()
     const [memberRes, profileRes] = await Promise.all([
-      admin.from('org_members').select('org_id').eq('user_id', user.id).single(),
-      admin.from('profiles').select('full_name').eq('id', user.id).single(),
+      admin.from('org_members').select('org_id, role').eq('user_id', user.id),
+      admin.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
     ])
 
-    if (!memberRes.data) {
+    const members = memberRes.data ?? []
+    if (members.length === 0) {
       return NextResponse.json({ error: 'No organisation found' }, { status: 404 })
     }
 
+    // Prefer the org this user owns — staff can belong to other orgs too
+    const ownRow = members.find(m => m.role === 'owner') ?? members[0]
+
     const config = PLAN_CONFIG[plan_id]
-    const orgId = memberRes.data.org_id
+    const orgId = ownRow.org_id
     const customerName = profileRes.data?.full_name ?? user.email ?? 'TrueFlow User'
     const txRef = `TF-${orgId.slice(0, 8)}-${Date.now()}`
 
