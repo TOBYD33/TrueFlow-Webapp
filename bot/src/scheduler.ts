@@ -7,8 +7,9 @@ import { sendWeeklySummaries, sendMonthlyReports } from './report-service'
 import { checkBudgetAlerts } from './budget-service'
 
 export function startScheduler() {
-  // Fire due reminders — every day 8am WAT (7am UTC)
-  cron.schedule('0 7 * * *', () => fireDueReminders(), { timezone: 'UTC' })
+  // Fire due reminders — every minute, so timed reminders (e.g. 8:30 PM)
+  // deliver on time. fireDueReminders only sends what is actually due.
+  cron.schedule('* * * * *', () => fireDueReminders(), { timezone: 'UTC' })
 
   // Fire 3-day advance warnings — every day 8am WAT
   cron.schedule('0 7 * * *', () => fireAdvanceReminders(), { timezone: 'UTC' })

@@ -28,9 +28,18 @@ export async function executeActions(actions: string[], user: any): Promise<stri
           break
         }
         case 'SET_REMINDER': {
-          // SET_REMINDER:Pay VAT:2025-06-21:monthly
-          const [, title, date, recurrence] = parts
-          await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once' })
+          // SET_REMINDER:Pay VAT:2025-06-21:monthly:2030
+          // Last part is an optional time as HHMM digits (24h WAT)
+          const [, title, date, recurrence, timeRaw] = parts
+          let dueTime: string | undefined
+          if (timeRaw) {
+            const digits = timeRaw.replace(/\D/g, '').padStart(4, '0')
+            const hh = parseInt(digits.slice(0, 2)), mm = parseInt(digits.slice(2, 4))
+            if (digits.length === 4 && hh < 24 && mm < 60) {
+              dueTime = `${digits.slice(0, 2)}:${digits.slice(2, 4)}`
+            }
+          }
+          await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', dueTime })
           break
         }
         case 'EXPORT_PDF': {

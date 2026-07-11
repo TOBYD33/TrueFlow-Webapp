@@ -50,7 +50,10 @@ The user never sees ACTION tags — they are stripped before sending.
 
 Available actions:
 ACTION:SET_BUDGET:{category}:{amount}
-ACTION:SET_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
+ACTION:SET_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}:{HHMM}
+  (HHMM = optional time as 4 digits, 24-hour WAT, e.g. 2030 for 8:30 PM.
+   ALWAYS include it when the user gives a time. Omit only when no time
+   is given — those reminders deliver at 8:00 AM on the due date.)
 ACTION:EXPORT_PDF
 ACTION:SHOW_BUDGETS
 ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}
@@ -126,6 +129,7 @@ filing or guaranteed-accurate calculator:
 EXAMPLES:
 User sets transport budget → end reply with: ACTION:SET_BUDGET:Transport:120000
 User sets salary reminder → end reply with: ACTION:SET_REMINDER:Pay staff salaries:2025-06-25:monthly
+User says "Remind me 8:30pm today to pick up Jennifer" → end reply with: ACTION:SET_REMINDER:Pick up Jennifer:2026-07-12:once:2030
 User asks for PDF → end reply with: ACTION:EXPORT_PDF
 User says "I sold 12 yards of Ankara today" → end reply with: ACTION:UPDATE_INVENTORY:Ankara:-12:sale
 User asks "What's my stock level?" → end reply with: ACTION:SHOW_INVENTORY
