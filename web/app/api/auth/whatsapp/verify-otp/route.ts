@@ -79,7 +79,18 @@ export async function POST(req: NextRequest) {
     let isNewUser = true
 
     // Check profile match first
-    const matchedUserId = profile?.id ?? waSession?.user_id ?? null
+    let matchedUserId = profile?.id ?? waSession?.user_id ?? null
+
+    // Identity merge: if this phone's profile was merged into a primary
+    // profile, log the user into the PRIMARY account — never a duplicate.
+    if (matchedUserId) {
+      const { data: mergeCheck } = await getSupabaseAdmin()
+        .from('profiles')
+        .select('merged_into_id')
+        .eq('id', matchedUserId)
+        .maybeSingle()
+      if (mergeCheck?.merged_into_id) matchedUserId = mergeCheck.merged_into_id
+    }
 
     if (matchedUserId) {
       const { data: { user: existingAuthUser } } = await getSupabaseAdmin().auth.admin.getUserById(matchedUserId)

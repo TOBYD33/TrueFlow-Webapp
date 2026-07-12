@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendWhatsAppMessage, normalisePhone } from '@/lib/whatsapp'
 
 function getSupabaseAdmin() {
   return createClient(
@@ -15,17 +16,6 @@ function getSupabaseAdmin() {
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
-}
-
-function normalisePhone(raw: string): string {
-  const digits = raw.replace(/[\s\-().]/g, '')
-  // Nigerian local format: 0XXXXXXXXXX → +234XXXXXXXXX
-  if (/^0[7-9][01]\d{8}$/.test(digits)) return `+234${digits.slice(1)}`
-  // Already has +
-  if (digits.startsWith('+')) return digits
-  // Bare digits with country code (no +)
-  if (digits.length >= 10) return `+${digits}`
-  return digits
 }
 
 export async function POST(req: NextRequest) {
@@ -55,38 +45,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Could not generate code. Please try again.' }, { status: 500 })
     }
 
-    const twilioSid = process.env.TWILIO_ACCOUNT_SID
-    const twilioToken = process.env.TWILIO_AUTH_TOKEN
-    const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886'
-
-    if (!twilioSid || !twilioToken) {
-      return NextResponse.json({ error: 'WhatsApp service not configured.' }, { status: 500 })
-    }
-
     const messageBody =
       `Your TrueFlow sign-in code is: *${code}*\n\n` +
       `This code expires in 10 minutes. Do not share it with anyone.\n\n` +
       `— TrueFlow`
 
-    const twilioRes = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          From: fromNumber,
-          To: `whatsapp:${normalised}`,
-          Body: messageBody,
-        }),
-      }
-    )
-
-    if (!twilioRes.ok) {
-      const errText = await twilioRes.text()
-      console.error('send-otp: Twilio error:', errText)
+    const sent = await sendWhatsAppMessage(normalised, messageBody)
+    if (!sent) {
       return NextResponse.json(
         { error: 'Could not send WhatsApp message. Make sure your number has chatted with the TrueFlow bot before.' },
         { status: 502 }

@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ImageUpload } from '@/components/ImageUpload'
+import { LinkWhatsAppCard } from '@/components/shared/LinkWhatsAppCard'
 import { toast } from 'sonner'
 
 export default function ProfileSettingsPage() {
@@ -138,6 +139,17 @@ export default function ProfileSettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Optional WhatsApp link — only for web-first users with no phone on file */}
+      {profile && !profile.phone && !isImpersonating && (
+        <LinkWhatsAppCard
+          onLinked={() => {
+            // Re-load the (possibly merged) profile
+            supabase.from('profiles').select('*').eq('id', profile.id).single()
+              .then(({ data }) => { if (data) setProfile(data as Profile) })
+          }}
+        />
+      )}
 
       {/* Password */}
       <Card>

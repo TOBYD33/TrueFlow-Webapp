@@ -242,7 +242,31 @@ async function clearMergeState(phoneNumber: string) {
 }
 
 // ── Merge logic — earliest created_at wins as primary ────────────────────
+// Primary implementation is the SHARED perform_identity_merge Postgres
+// function (also used by the web app's Flow 2), so the two channels can
+// never diverge. The local TS logic below is kept only as a fallback for
+// environments where the SQL function has not been created yet.
 async function performMerge(waProfileId: string, webProfileId: string, phoneNumber: string): Promise<boolean> {
+  const { error: rpcError } = await supabase.rpc('perform_identity_merge', {
+    profile_a: waProfileId,
+    profile_b: webProfileId,
+  })
+  if (!rpcError) {
+    // Point this WhatsApp session at whichever profile is now primary
+    const { data: me } = await supabase
+      .from('profiles')
+      .select('merged_into_id')
+      .eq('id', waProfileId)
+      .maybeSingle()
+    const primaryId = me?.merged_into_id ?? waProfileId
+    await supabase
+      .from('whatsapp_sessions')
+      .update({ user_id: primaryId })
+      .eq('phone_number', phoneNumber)
+    return true
+  }
+  console.warn('performMerge: shared RPC unavailable, using local fallback:', rpcError.message)
+
   try {
     const { data: profiles } = await supabase
       .from('profiles')
