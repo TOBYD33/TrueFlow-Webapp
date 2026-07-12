@@ -64,9 +64,12 @@ export function ConceptShell({ children }: { children: React.ReactNode }) {
         }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-lg" style={{ background: '#6C63FF' }}>
-            T
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/dashboard-concept/TFLogo.png"
+            alt="TrueFlow logo"
+            className="w-9 h-9 rounded-full object-cover"
+          />
           <span className="font-bold text-lg tracking-tight" style={{ color: dark ? '#F5F5F7' : '#0A0A0F' }}>
             TrueFlow
           </span>
