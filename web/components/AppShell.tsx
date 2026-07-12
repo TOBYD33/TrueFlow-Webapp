@@ -176,17 +176,7 @@ function AppShellInner({ children, orgName, plan }: AppShellProps) {
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* Export CSV — enabled only when the page registers exportable data */}
-          <button
-            onClick={runExport}
-            disabled={!exportEnabled}
-            title={exportEnabled ? 'Export this page as CSV' : 'Nothing to export here yet'}
-            className="hidden sm:flex items-center gap-2 h-10 px-3.5 rounded-xl border text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ borderColor: t.border, color: t.text }}
-          >
-            <Download size={14} /> Export CSV
-          </button>
-          {/* Light/dark toggle pill */}
+          {/* Light/dark toggle pill — before Export CSV, matching the approved concept order */}
           <div className="flex gap-1 p-1 rounded-xl border" style={{ borderColor: t.border }}>
             <button
               onClick={() => setDark(true)}
@@ -205,6 +195,17 @@ function AppShellInner({ children, orgName, plan }: AppShellProps) {
               <Sun size={15} />
             </button>
           </div>
+
+          {/* Export CSV — enabled only when the page registers exportable data */}
+          <button
+            onClick={runExport}
+            disabled={!exportEnabled}
+            title={exportEnabled ? 'Export this page as CSV' : 'Nothing to export here yet'}
+            className="hidden sm:flex items-center gap-2 h-10 px-3.5 rounded-xl border text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: t.border, color: t.text }}
+          >
+            <Download size={14} /> Export CSV
+          </button>
 
           <span
             className="hidden sm:inline text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full"

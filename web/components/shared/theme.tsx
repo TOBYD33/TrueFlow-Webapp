@@ -4,7 +4,7 @@
 // Single source of truth — every component imports from here, never inline
 // hex duplicates. Palette per CLAUDE.md brand identity.
 
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 
 // ── Brand tokens ─────────────────────────────────────────────────────────
 export const BRAND = {
@@ -46,6 +46,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Light mode is the default. State lives in the persistent (protected)
   // layout shell, so it survives client-side navigation within a session.
   const [dark, setDark] = useState(false)
+
+  // The app's CSS uses class-based dark mode (`.dark` on <html> flips the
+  // shadcn tokens: --background, --card, --card-foreground, etc.). Without
+  // this, cards keep their light background in dark mode.
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    return () => document.documentElement.classList.remove('dark')
+  }, [dark])
+
   return <ThemeContext.Provider value={{ dark, setDark }}>{children}</ThemeContext.Provider>
 }
 

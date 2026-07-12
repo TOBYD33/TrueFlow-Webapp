@@ -1,136 +1,143 @@
 'use client'
 // dashboard/page.tsx
-// Main dashboard — stat cards, charts, recent receipts, real-time updates
+// Main dashboard — the approved concept design on live data:
+// stat row (spent, receipts, outstanding, reminders), spending donut,
+// recent activity feed, income vs expenses, budget gauge, client balance
+// bars, Tello promo, team leaderboard. Realtime receipt updates preserved.
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useViewingContext } from '@/components/ViewingContext'
-import { Receipt, TaxCountry } from '@/types'
-import { DEFAULT_INCOME_TAX_TYPE, COUNTRY_TO_CURRENCY, parseRateEstimate } from '@/lib/tax'
-import { StatCard } from '@/components/StatCard'
-import { AndreaBadge } from '@/components/AndreaBadge'
-import { CategoryChart } from '@/components/CategoryChart'
-import { SpendTrendChart } from '@/components/SpendTrendChart'
-import { ChannelBadge } from '@/components/ChannelBadge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { formatCurrency, formatDate, CATEGORY_COLORS } from '@/lib/utils'
+import { Receipt } from '@/types'
+import { formatCurrency } from '@/lib/utils'
+import { ThemedCard, ThemedStatCard, PageHeader } from '@/components/shared/Cards'
 import {
-  DollarSign,
-  Receipt as ReceiptIcon,
-  MessageSquare,
-  TrendingUp,
-  Upload,
-  TrendingDown,
-  Calculator,
-} from 'lucide-react'
+  SpendDonut,
+  IncomeExpenseLines,
+  BudgetGauge,
+  ClientBalanceBars,
+  TelloPromoCard,
+  TeamLeaderboard,
+  ActivityFeed,
+  LeaderboardMember,
+  ActivityItem,
+} from '@/components/shared/DashboardWidgets'
+import { useTheme, tone } from '@/components/shared/theme'
+import { Button } from '@/components/ui/button'
+import { Wallet, Receipt as ReceiptIcon, UserCircle2, Bell, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
+interface ReceiptRow {
+  amount: number
+  date: string
+  category: string
+  uploaded_by: string | null
+  vendor_name: string | null
+  uploaded_via: string | null
+  created_at: string
+}
+
 export default function DashboardPage() {
   const supabase = createClient()
-
   const { orgId } = useViewingContext()
-  const [receipts, setReceipts] = useState<Receipt[]>([])
-  const [incomeThisMonth, setIncomeThisMonth] = useState(0)
-  const [taxEstimate, setTaxEstimate] = useState<{ value: number; currency: string; approximate: boolean } | null>(null)
-  const [recentChats, setRecentChats] = useState<{ id: string; phone_number: string; role: string; content: string; created_at: string }[]>([])
+  const { dark } = useTheme()
+  const t = tone(dark)
+
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([])
+  const [payments, setPayments] = useState<{ amount: number; payment_date: string }[]>([])
+  const [activity, setActivity] = useState<ActivityItem[]>([])
+  const [budgetTotal, setBudgetTotal] = useState(0)
+  const [clients, setClients] = useState<{ name: string; balance: number }[]>([])
+  const [outstandingTotal, setOutstandingTotal] = useState(0)
+  const [activeReminders, setActiveReminders] = useState(0)
+  const [members, setMembers] = useState<LeaderboardMember[]>([])
   const [loading, setLoading] = useState(true)
-
-  // Derived metrics
-  const thisMonth = new Date()
-  const monthReceipts = receipts.filter(r => {
-    const d = new Date(r.date)
-    return d.getMonth() === thisMonth.getMonth() && d.getFullYear() === thisMonth.getFullYear()
-  })
-  const totalSpent = monthReceipts.reduce((s, r) => s + Number(r.amount), 0)
-  const taxTracked = monthReceipts.reduce((s, r) => s + Number(r.tax_amount ?? 0), 0)
-  const whatsappPct = monthReceipts.length
-    ? Math.round((monthReceipts.filter(r => r.uploaded_via === 'whatsapp').length / monthReceipts.length) * 100)
-    : 0
-
-  // Category totals for chart
-  const categoryTotals = Object.entries(
-    monthReceipts.reduce<Record<string, number>>((acc, r) => {
-      acc[r.category] = (acc[r.category] ?? 0) + Number(r.amount)
-      return acc
-    }, {})
-  )
-    .map(([category, total]) => ({ category, total }))
-    .sort((a, b) => b.total - a.total)
-
-  // 6-month trend
-  const trendData = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - (5 - i))
-    const m = d.getMonth()
-    const y = d.getFullYear()
-    const total = receipts
-      .filter(r => {
-        const rd = new Date(r.date)
-        return rd.getMonth() === m && rd.getFullYear() === y
-      })
-      .reduce((s, r) => s + Number(r.amount), 0)
-    return {
-      month: d.toLocaleString('default', { month: 'short' }),
-      total,
-    }
-  })
 
   useEffect(() => {
     if (!orgId) return
     async function load() {
+      const since = new Date()
+      since.setMonth(since.getMonth() - 6)
+      const sinceStr = since.toISOString().split('T')[0]
       const now = new Date()
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
-      const [{ data: receiptData }, { data: paymentData }, { data: org }] = await Promise.all([
-        supabase.from('receipts').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('client_payments').select('amount').eq('org_id', orgId).gte('payment_date', monthStart).lte('payment_date', monthEnd),
-        supabase.from('organizations').select('default_tax_country').eq('id', orgId).single(),
+      const [receiptsRes, paymentsRes, budgetsRes, clientsRes, remindersRes, membersRes] = await Promise.all([
+        supabase.from('receipts').select('amount, date, category, uploaded_by, vendor_name, uploaded_via, created_at').eq('org_id', orgId).gte('date', sinceStr),
+        supabase.from('client_payments').select('amount, payment_date, created_at, notes, clients(name)').eq('org_id', orgId).gte('payment_date', sinceStr),
+        supabase.from('budgets').select('amount, month, year').eq('org_id', orgId),
+        supabase.from('clients').select('name, outstanding_balance').eq('org_id', orgId).eq('status', 'active').order('outstanding_balance', { ascending: false }),
+        supabase.from('reminders').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', 'active'),
+        supabase.from('org_members').select('role, user_id, profiles(full_name)').eq('org_id', orgId),
       ])
 
-      setReceipts((receiptData as Receipt[]) ?? [])
-      const income = ((paymentData ?? []) as { amount: number }[]).reduce((s, p) => s + Number(p.amount), 0)
-      setIncomeThisMonth(income)
+      const receiptRows = (receiptsRes.data ?? []) as ReceiptRow[]
+      setReceipts(receiptRows)
 
-      // Tax estimate — same bounded Layer 3 calculation as Tax Hub, for the
-      // org's default country, surfaced here as a quick read-only preview.
-      const taxCountry = (org?.default_tax_country as TaxCountry) || 'Nigeria'
-      const taxType = DEFAULT_INCOME_TAX_TYPE[taxCountry]
-      const { data: rateRow } = await supabase
-        .from('tax_rate_reference')
-        .select('rate')
-        .eq('country', taxCountry)
-        .eq('tax_type', taxType)
-        .maybeSingle()
+      const paymentRows = ((paymentsRes.data ?? []) as unknown) as {
+        amount: number
+        payment_date: string
+        created_at: string
+        notes: string | null
+        clients: { name: string } | { name: string }[] | null
+      }[]
+      setPayments(paymentRows)
 
-      if (rateRow) {
-        const parsed = parseRateEstimate(rateRow.rate)
-        if (parsed) {
-          setTaxEstimate({ value: income * parsed.pct, currency: COUNTRY_TO_CURRENCY[taxCountry], approximate: parsed.approximate })
+      // Merged money in/out activity feed, newest first
+      const activityIn: ActivityItem[] = paymentRows.map(p => {
+        const client = Array.isArray(p.clients) ? p.clients[0] : p.clients
+        return {
+          direction: 'in',
+          title: client?.name ? `${client.name}${p.notes ? ` · ${p.notes}` : ''}` : 'Client payment',
+          subtitle: 'Payment received',
+          channel: 'transfer',
+          amount: Number(p.amount),
+          createdAt: p.created_at,
         }
-      }
+      })
+      const activityOut: ActivityItem[] = receiptRows.map(r => ({
+        direction: 'out',
+        title: `${r.vendor_name ?? 'Receipt'} · ${r.category}`,
+        subtitle: r.uploaded_via === 'whatsapp' ? 'Receipt forwarded' : 'Receipt scanned',
+        channel: (r.uploaded_via === 'whatsapp' || r.uploaded_via === 'mobile' ? r.uploaded_via : 'web') as ActivityItem['channel'],
+        amount: Number(r.amount),
+        createdAt: r.created_at,
+      }))
+      setActivity(
+        [...activityIn, ...activityOut]
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 6)
+      )
 
-      // Load recent WhatsApp conversations for this org
-      const { data: sessions } = await supabase
-        .from('whatsapp_sessions')
-        .select('phone_number')
-        .eq('org_id', orgId)
-        .order('last_active_at', { ascending: false })
-        .limit(10)
+      const budgets = (budgetsRes.data ?? []) as { amount: number; month: number | null; year: number | null }[]
+      const monthBudgets = budgets.filter(
+        b => (b.month === now.getMonth() + 1 && b.year === now.getFullYear()) || b.month == null
+      )
+      setBudgetTotal(monthBudgets.reduce((s, b) => s + Number(b.amount), 0))
 
-      const phones = (sessions ?? []).map((s: { phone_number: string }) => s.phone_number)
+      const clientRows = ((clientsRes.data ?? []) as { name: string; outstanding_balance: number }[])
+        .map(c => ({ name: c.name, balance: Number(c.outstanding_balance) }))
+      setOutstandingTotal(clientRows.reduce((s, c) => s + c.balance, 0))
+      setClients(clientRows.filter(c => c.balance > 0).slice(0, 5))
 
-      if (phones.length > 0) {
-        const { data: chats } = await supabase
-          .from('whatsapp_conversations')
-          .select('id, phone_number, role, content, created_at')
-          .in('phone_number', phones)
-          .order('created_at', { ascending: false })
-          .limit(8)
-        setRecentChats((chats ?? []) as typeof recentChats)
-      }
+      setActiveReminders(remindersRes.count ?? 0)
+
+      const memberRows = ((membersRes.data ?? []) as unknown) as { role: string; user_id: string; profiles: { full_name: string | null } | { full_name: string | null }[] | null }[]
+      const totalLogged = receiptRows.reduce((s, r) => s + Number(r.amount), 0)
+      const board: LeaderboardMember[] = memberRows.map(m => {
+        const mine = receiptRows.filter(r => r.uploaded_by === m.user_id)
+        const mineTotal = mine.reduce((s, r) => s + Number(r.amount), 0)
+        const profile = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
+        return {
+          name: profile?.full_name ?? 'Member',
+          role: m.role,
+          receipts: mine.length,
+          total: mineTotal,
+          sharePct: totalLogged > 0 ? Math.round((mineTotal / totalLogged) * 100) : 0,
+        }
+      })
+      board.sort((a, b) => b.total - a.total)
+      setMembers(board.slice(0, 4))
 
       setLoading(false)
     }
@@ -140,7 +147,6 @@ export default function DashboardPage() {
   // Real-time: new receipt scanned via WhatsApp appears instantly
   useEffect(() => {
     if (!orgId) return
-
     const channel = supabase
       .channel(`receipts:${orgId}`)
       .on(
@@ -148,194 +154,162 @@ export default function DashboardPage() {
         { event: 'INSERT', schema: 'public', table: 'receipts', filter: `org_id=eq.${orgId}` },
         payload => {
           const receipt = payload.new as Receipt
-          setReceipts(prev => [receipt, ...prev])
+          setReceipts(prev => [{
+            amount: Number(receipt.amount),
+            date: receipt.date,
+            category: receipt.category,
+            uploaded_by: receipt.uploaded_by ?? null,
+            vendor_name: receipt.vendor_name ?? null,
+            uploaded_via: receipt.uploaded_via,
+            created_at: receipt.created_at,
+          }, ...prev])
           toast.success(`New receipt via WhatsApp — ${formatCurrency(receipt.amount)} ${receipt.category}`)
         }
       )
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [orgId])
 
-  const recentReceipts = receipts.slice(0, 10)
+  // ── Derived metrics ──────────────────────────────────────────────────
+  const now = new Date()
+  const inMonth = (dateStr: string, monthOffset = 0) => {
+    const d = new Date(dateStr)
+    const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+    return d.getMonth() === target.getMonth() && d.getFullYear() === target.getFullYear()
+  }
+
+  const spentThisMonth = receipts.filter(r => inMonth(r.date)).reduce((s, r) => s + Number(r.amount), 0)
+  const spentLastMonth = receipts.filter(r => inMonth(r.date, -1)).reduce((s, r) => s + Number(r.amount), 0)
+  const receiptsThisMonth = receipts.filter(r => inMonth(r.date)).length
+  const receiptsLastMonth = receipts.filter(r => inMonth(r.date, -1)).length
+
+  const pctChange = (cur: number, prev: number): number | null =>
+    prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null
+
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+    return { m: d.getMonth(), y: d.getFullYear(), label: d.toLocaleString('default', { month: 'short' }) }
+  })
+
+  const donutData = Object.entries(
+    receipts.filter(r => inMonth(r.date)).reduce<Record<string, number>>((acc, r) => {
+      acc[r.category] = (acc[r.category] ?? 0) + Number(r.amount)
+      return acc
+    }, {})
+  ).map(([category, total]) => ({ category, total }))
+  const monthLabel = now.toLocaleString('default', { month: 'long' })
+
+  const lineData = months.map(({ m, y, label }) => {
+    const expenses = receipts.filter(r => { const d = new Date(r.date); return d.getMonth() === m && d.getFullYear() === y }).reduce((s, r) => s + Number(r.amount), 0)
+    const income = payments.filter(p => { const d = new Date(p.payment_date); return d.getMonth() === m && d.getFullYear() === y }).reduce((s, p) => s + Number(p.amount), 0)
+    return { month: label, income, expenses }
+  })
+
+  const budgetPctUsed = budgetTotal > 0 ? (spentThisMonth / budgetTotal) * 100 : 0
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {new Date().toLocaleString('en-NG', { month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <Link href="/receipts">
-          <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2">
-            <Upload size={16} /> Upload Receipt
-          </Button>
-        </Link>
-      </div>
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard
-          label="Money Out (this month)"
-          value={formatCurrency(totalSpent)}
-          sub={`${monthReceipts.length} receipts`}
-          icon={TrendingDown}
-          color="orange"
-        />
-        <StatCard
-          label="Money In (this month)"
-          value={formatCurrency(incomeThisMonth)}
-          sub="from clients"
-          icon={TrendingUp}
-          color="emerald"
-        />
-        <StatCard
-          label="Via WhatsApp"
-          value={`${whatsappPct}%`}
-          sub="of receipts"
-          icon={MessageSquare}
-          color="purple"
-        />
-        <StatCard
-          label="Tax on Expenses"
-          value={formatCurrency(taxTracked)}
-          sub="itemized on receipts"
-          icon={DollarSign}
-          color="blue"
-        />
-        <Link href="/tax">
-          <StatCard
-            label="Tax Estimate (this month)"
-            value={taxEstimate ? formatCurrency(taxEstimate.value, taxEstimate.currency) : '—'}
-            sub={taxEstimate ? (taxEstimate.approximate ? 'Approx. — view in Tax Hub' : 'View in Tax Hub') : 'Set up in Tax Hub'}
-            icon={Calculator}
-            color="indigo"
-          />
-        </Link>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Spending by Category</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="h-60 flex items-center justify-center text-gray-400 text-sm">Loading…</div>
-            ) : (
-              <CategoryChart data={categoryTotals} />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">6-Month Spend Trend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Loading…</div>
-            ) : (
-              <SpendTrendChart data={trendData} />
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* WhatsApp activity feed */}
-      {(recentChats.length > 0 || !loading) && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <MessageSquare size={16} className="text-[#25D366]" />
-              WhatsApp Activity
-            </CardTitle>
-            <Link href="/whatsapp" className="text-sm text-[#6C63FF] hover:underline">
-              View all chats
-            </Link>
-          </CardHeader>
-          <CardContent className="p-0">
-            {recentChats.length === 0 ? (
-              <p className="px-5 py-5 text-sm text-gray-400">No WhatsApp messages yet. Send a message to your bot to get started.</p>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {recentChats.map(msg => (
-                  <div key={msg.id} className="flex items-start gap-3 px-5 py-3">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5 ${msg.role === 'user' ? 'bg-[#25D366] text-white' : 'bg-gray-100 text-gray-500'}`}>
-                      {msg.role === 'user' ? '👤' : '🤖'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs font-medium text-gray-500">{msg.phone_number}</span>
-                        <span className="text-xs text-gray-300">{new Date(msg.created_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <p className="text-sm text-gray-700 truncate">{msg.content}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Andrea Aid — shown only if org has made contributions */}
-      <AndreaBadge />
-
-      {/* Recent receipts */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Recent Receipts</CardTitle>
-          <Link href="/receipts" className="text-sm text-[#6C63FF] hover:underline">
-            View all
+    <div>
+      <PageHeader
+        title="Dashboard"
+        subtitle={now.toLocaleString('en-NG', { month: 'long', year: 'numeric' })}
+        action={
+          <Link href="/receipts">
+            <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2">
+              <Upload size={16} /> Upload Receipt
+            </Button>
           </Link>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 text-center text-sm text-gray-400">Loading…</div>
-          ) : recentReceipts.length === 0 ? (
-            <div className="p-6 text-center text-sm text-gray-400">
-              No receipts yet. Scan one on WhatsApp or upload below.
+        }
+      />
+
+      {loading ? (
+        <div className="h-64 flex items-center justify-center text-sm" style={{ color: t.textDim }}>
+          Loading dashboard…
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {/* Top stat row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <ThemedStatCard
+              label="Total Spent This Month"
+              value={formatCurrency(spentThisMonth)}
+              change={pctChange(spentThisMonth, spentLastMonth)}
+              icon={<Wallet size={17} />}
+            />
+            <ThemedStatCard
+              label="Receipts Scanned"
+              value={String(receiptsThisMonth)}
+              change={pctChange(receiptsThisMonth, receiptsLastMonth)}
+              icon={<ReceiptIcon size={17} />}
+            />
+            <ThemedStatCard
+              label="Outstanding Client Balance"
+              value={formatCurrency(outstandingTotal)}
+              change={null}
+              icon={<UserCircle2 size={17} />}
+            />
+            <ThemedStatCard
+              label="Active Reminders"
+              value={String(activeReminders)}
+              change={null}
+              icon={<Bell size={17} />}
+            />
+          </div>
+
+          {/* Main grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div className="xl:col-span-2 space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                <ThemedCard title="Spending by Category" className="lg:col-span-2">
+                  <SpendDonut data={donutData} monthLabel={monthLabel} />
+                </ThemedCard>
+                <ThemedCard
+                  title="Recent Activity"
+                  className="lg:col-span-3"
+                  action={<span className="text-xs" style={{ color: t.textDim }}>money in &amp; out · all channels</span>}
+                >
+                  <ActivityFeed items={activity} />
+                </ThemedCard>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <ThemedCard title="Income vs Expenses">
+                  <IncomeExpenseLines data={lineData} />
+                </ThemedCard>
+                <ThemedCard title="Budget Health">
+                  {budgetTotal > 0 ? (
+                    <BudgetGauge pctUsed={budgetPctUsed} target={budgetTotal} />
+                  ) : (
+                    <div className="h-48 flex flex-col items-center justify-center gap-1 text-sm" style={{ color: t.textDim }}>
+                      <p>No budgets set for this month.</p>
+                      <Link href="/budgets" className="text-xs" style={{ color: '#6C63FF' }}>
+                        Set one in Budgets to activate this gauge →
+                      </Link>
+                    </div>
+                  )}
+                </ThemedCard>
+              </div>
+
+              <ThemedCard title="Top Clients by Outstanding Balance">
+                <ClientBalanceBars clients={clients} />
+              </ThemedCard>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                  <tr>
-                    <th className="px-4 py-3 text-left">Date</th>
-                    <th className="px-4 py-3 text-left">Vendor</th>
-                    <th className="px-4 py-3 text-left">Category</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                    <th className="px-4 py-3 text-left">Channel</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {recentReceipts.map(r => (
-                    <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500">{formatDate(r.date)}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{r.vendor_name ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="inline-block w-2 h-2 rounded-full mr-2"
-                          style={{ background: CATEGORY_COLORS[r.category] ?? '#6b7280' }}
-                        />
-                        {r.category}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold">{formatCurrency(r.amount, r.currency)}</td>
-                      <td className="px-4 py-3">
-                        <ChannelBadge channel={r.uploaded_via} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            <div className="space-y-5">
+              <TelloPromoCard />
+              <ThemedCard
+                title="Team Leaderboard"
+                action={
+                  <Link href="/team" className="text-xs font-medium" style={{ color: '#6C63FF' }}>
+                    View All
+                  </Link>
+                }
+              >
+                <TeamLeaderboard members={members} />
+              </ThemedCard>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
