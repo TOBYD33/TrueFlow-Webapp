@@ -20,7 +20,6 @@ import {
   TrendingUp,
   Bell,
   PiggyBank,
-  MessageSquare,
   Package,
   Landmark,
   Search,
@@ -30,13 +29,14 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react'
 import { useConcept } from './ConceptProvider'
 
 // Same destinations as the live sidebar, restyled as a collapsible rail
 const navItems = [
   { href: '/dashboard-concept', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/whatsapp', label: 'True Assistant', icon: MessageSquare },
+  { href: '/whatsapp', label: 'True Assistant', icon: Sparkles },
   { href: '/receipts', label: 'Receipts', icon: Receipt },
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/budgets', label: 'Budgets', icon: PiggyBank },
