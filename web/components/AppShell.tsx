@@ -1,14 +1,18 @@
 'use client'
 // AppShell.tsx
-// Client wrapper that manages mobile sidebar open/close state, the sticky
-// top header with user avatar dropdown, and passes orgName to the sidebar.
+// App-wide chrome in the approved concept design: top bar (logo, theme
+// toggle, plan badge, avatar menu) + collapsible AppSidebar. Mounts the
+// ThemeProvider so light/dark state persists across page navigation.
+// All prior behavior preserved: avatar fetch + live refresh, dropdown,
+// sign out, mobile drawer.
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Sidebar } from './Sidebar'
 import { createClient } from '@/lib/supabase-browser'
-import { Menu, Settings, User, LogOut } from 'lucide-react'
+import { Menu, Settings, User, LogOut, Sun, Moon } from 'lucide-react'
+import { ThemeProvider, useTheme, tone, BRAND } from './shared/theme'
+import { AppSidebar } from './shared/AppSidebar'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -16,9 +20,19 @@ interface AppShellProps {
   plan: string
 }
 
-export function AppShell({ children, orgName, plan }: AppShellProps) {
+export function AppShell(props: AppShellProps) {
+  return (
+    <ThemeProvider>
+      <AppShellInner {...props} />
+    </ThemeProvider>
+  )
+}
+
+function AppShellInner({ children, orgName, plan }: AppShellProps) {
   const supabase = createClient()
   const router = useRouter()
+  const { dark, setDark } = useTheme()
+  const t = tone(dark)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [initials, setInitials] = useState('?')
@@ -69,41 +83,89 @@ export function AppShell({ children, orgName, plan }: AppShellProps) {
     router.refresh()
   }
 
+  const planLabel = plan.replace('_', ' ')
+
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Mobile backdrop */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+    <div className="min-h-screen transition-colors duration-300" style={{ background: t.page }}>
+      {/* Transitional dark-mode mapping for pages not yet converted to the
+          new design system: remaps legacy gray/white utility classes so
+          every page stays readable in dark mode during the rollout.
+          Removed once all pages use the shared themed components. */}
+      {dark && (
+        <style>{`
+          main.tf-legacy .text-gray-900, main.tf-legacy .text-gray-800 { color: #F5F5F7 !important; }
+          main.tf-legacy .text-gray-700, main.tf-legacy .text-gray-600 { color: rgba(245,245,247,0.75) !important; }
+          main.tf-legacy .text-gray-500, main.tf-legacy .text-gray-400 { color: rgba(245,245,247,0.50) !important; }
+          main.tf-legacy .text-gray-300 { color: rgba(245,245,247,0.35) !important; }
+          main.tf-legacy .bg-white { background-color: #14141B !important; }
+          main.tf-legacy .bg-gray-50 { background-color: #101017 !important; }
+          main.tf-legacy .bg-gray-100 { background-color: rgba(245,245,247,0.07) !important; }
+          main.tf-legacy .border-gray-100, main.tf-legacy .border-gray-200 { border-color: rgba(245,245,247,0.09) !important; }
+          main.tf-legacy .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(245,245,247,0.09) !important; }
+          main.tf-legacy .hover\\:bg-gray-50:hover { background-color: rgba(245,245,247,0.05) !important; }
+          main.tf-legacy .hover\\:bg-gray-100:hover { background-color: rgba(245,245,247,0.08) !important; }
+        `}</style>
       )}
 
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} orgName={orgName} />
-
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
+      {/* Top bar */}
+      <header
+        className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 md:px-5 h-16 border-b transition-colors duration-300"
+        style={{ background: t.chrome, borderColor: t.border }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
           {/* Hamburger — mobile only */}
           <button
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors -ml-1 shrink-0"
+            className="md:hidden p-2 rounded-lg -ml-1 shrink-0"
             onClick={() => setSidebarOpen(true)}
             aria-label="Open menu"
+            style={{ color: t.textMid }}
           >
-            <Menu size={20} className="text-gray-600" />
+            <Menu size={20} />
           </button>
 
-          <h2 className="text-sm font-medium text-gray-600 truncate flex-1">{orgName}</h2>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/dashboard-concept/TFLogo.png" alt="TrueFlow" className="w-9 h-9 rounded-full object-cover shrink-0" />
+          <span className="font-bold text-lg tracking-tight hidden sm:inline" style={{ color: t.text }}>
+            TrueFlow
+          </span>
+          <span className="text-sm truncate" style={{ color: t.textDim }}>{orgName}</span>
+        </div>
 
-          <span className="text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 shrink-0">
-            {plan}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Light/dark toggle pill */}
+          <div className="flex gap-1 p-1 rounded-xl border" style={{ borderColor: t.border }}>
+            <button
+              onClick={() => setDark(true)}
+              aria-label="Dark mode"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+              style={dark ? { background: 'rgba(108,99,255,0.22)', color: BRAND.violet } : { color: t.textDim }}
+            >
+              <Moon size={15} />
+            </button>
+            <button
+              onClick={() => setDark(false)}
+              aria-label="Light mode"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+              style={!dark ? { background: 'rgba(108,99,255,0.10)', color: BRAND.violet } : { color: t.textDim }}
+            >
+              <Sun size={15} />
+            </button>
+          </div>
+
+          <span
+            className="hidden sm:inline text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full"
+            style={{ background: 'rgba(108,99,255,0.10)', color: BRAND.violet }}
+          >
+            {planLabel}
           </span>
 
           {/* User avatar + dropdown */}
-          <div className="relative shrink-0" ref={dropdownRef}>
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(v => !v)}
-              className="w-8 h-8 rounded-full overflow-hidden border-2 border-gray-200 hover:border-emerald-400 transition-colors flex items-center justify-center bg-emerald-100 text-emerald-700 text-xs font-bold"
+              className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold text-white"
               aria-label="User menu"
+              style={{ background: BRAND.mint }}
             >
               {avatarUrl
                 ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
@@ -112,34 +174,43 @@ export function AppShell({ children, orgName, plan }: AppShellProps) {
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+              <div
+                className="absolute right-0 top-full mt-2 w-44 rounded-xl py-1 z-50 border"
+                style={{ background: t.surface, borderColor: t.border, boxShadow: '0 8px 24px rgba(10,10,15,0.16)' }}
+              >
                 <Link
                   href="/settings/profile"
                   onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm"
+                  style={{ color: t.text }}
                 >
-                  <User size={15} className="text-gray-400" /> Profile
+                  <User size={15} style={{ color: t.textDim }} /> Profile
                 </Link>
                 <Link
                   href="/settings/business"
                   onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm"
+                  style={{ color: t.text }}
                 >
-                  <Settings size={15} className="text-gray-400" /> Settings
+                  <Settings size={15} style={{ color: t.textDim }} /> Settings
                 </Link>
-                <div className="border-t border-gray-100 my-1" />
+                <div className="my-1 border-t" style={{ borderColor: t.border }} />
                 <button
                   onClick={handleSignOut}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm"
+                  style={{ color: BRAND.red }}
                 >
                   <LogOut size={15} /> Sign out
                 </button>
               </div>
             )}
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="flex-1 p-4 md:p-6 min-w-0">
+      <div className="flex">
+        <AppSidebar plan={plan} mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
+        <main className="tf-legacy flex-1 min-w-0 p-4 md:p-6">
           {children}
         </main>
       </div>
