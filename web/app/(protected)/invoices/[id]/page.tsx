@@ -14,8 +14,8 @@ import { toast } from 'sonner'
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
-  sent: 'bg-blue-100 text-blue-700',
-  paid: 'bg-emerald-100 text-emerald-700',
+  sent: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  paid: 'bg-[#00D4AA]/10 text-[#00A88A]',
   overdue: 'bg-red-100 text-red-700',
   cancelled: 'bg-yellow-100 text-yellow-700',
 }
@@ -91,7 +91,7 @@ export default function InvoiceDetailPage() {
           </Button>
         )}
         {(invoice.status === 'sent' || invoice.status === 'overdue') && (
-          <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={() => updateStatus('paid')} disabled={updating}>
+          <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2" onClick={() => updateStatus('paid')} disabled={updating}>
             <CheckCircle size={15} /> Mark as Paid
           </Button>
         )}
@@ -109,7 +109,7 @@ export default function InvoiceDetailPage() {
             <p className="text-sm text-gray-400 mt-1">hello@gettrueflow.com</p>
           </div>
           <div className="text-right">
-            <p className="text-3xl font-bold text-emerald-600">INVOICE</p>
+            <p className="text-3xl font-bold text-[#00A88A]">INVOICE</p>
             <p className="text-sm font-mono text-gray-500 mt-1">{invoice.invoice_number ?? '—'}</p>
           </div>
         </div>
@@ -135,7 +135,7 @@ export default function InvoiceDetailPage() {
             {invoice.paid_at && (
               <div className="flex justify-end gap-4 text-sm">
                 <span className="text-gray-400">Paid On</span>
-                <span className="font-medium text-emerald-600">{formatDate(invoice.paid_at)}</span>
+                <span className="font-medium text-[#00A88A]">{formatDate(invoice.paid_at)}</span>
               </div>
             )}
           </div>
@@ -178,7 +178,7 @@ export default function InvoiceDetailPage() {
             )}
             <div className="flex justify-between font-bold text-base border-t pt-2">
               <span>Total</span>
-              <span className="text-emerald-600">{formatCurrency(invoice.total_amount, invoice.currency)}</span>
+              <span className="text-[#00A88A]">{formatCurrency(invoice.total_amount, invoice.currency)}</span>
             </div>
           </div>
         </div>

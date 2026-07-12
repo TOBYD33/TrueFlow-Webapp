@@ -169,7 +169,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <Link href="/receipts">
-          <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+          <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2">
             <Upload size={16} /> Upload Receipt
           </Button>
         </Link>
@@ -253,7 +253,7 @@ export default function DashboardPage() {
               <MessageSquare size={16} className="text-[#25D366]" />
               WhatsApp Activity
             </CardTitle>
-            <Link href="/whatsapp" className="text-sm text-emerald-600 hover:underline">
+            <Link href="/whatsapp" className="text-sm text-[#6C63FF] hover:underline">
               View all chats
             </Link>
           </CardHeader>
@@ -289,7 +289,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Recent Receipts</CardTitle>
-          <Link href="/receipts" className="text-sm text-emerald-600 hover:underline">
+          <Link href="/receipts" className="text-sm text-[#6C63FF] hover:underline">
             View all
           </Link>
         </CardHeader>

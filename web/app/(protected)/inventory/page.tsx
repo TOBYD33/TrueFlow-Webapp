@@ -145,7 +145,7 @@ export default function InventoryPage() {
             {showArchived ? 'Back to active items' : `View archived${archivedCount > 0 ? ` (${archivedCount})` : ''}`}
           </button>
           <Link href="/inventory/new">
-            <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+            <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2">
               <Plus size={16} /> Add Item
             </Button>
           </Link>
@@ -156,7 +156,7 @@ export default function InventoryPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600">
+            <div className="p-2.5 rounded-lg bg-[#00D4AA]/5 text-[#00A88A]">
               <Package size={20} />
             </div>
             <div>
@@ -167,7 +167,7 @@ export default function InventoryPage() {
         </Card>
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
+            <div className="p-2.5 rounded-lg bg-[#6C63FF]/5 text-[#6C63FF]">
               <TrendingUp size={20} />
             </div>
             <div>
@@ -204,7 +204,7 @@ export default function InventoryPage() {
               <>
                 <p className="text-sm text-gray-500">No inventory items yet.</p>
                 <Link href="/inventory/new">
-                  <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 gap-2">
+                  <Button className="mt-4 bg-[#6C63FF] hover:bg-[#5A52E0] gap-2">
                     <Plus size={15} /> Add your first item
                   </Button>
                 </Link>
@@ -232,7 +232,7 @@ export default function InventoryPage() {
                 {items.map(item => (
                   <tr key={item.id} className={cn('hover:bg-gray-50 transition-colors', rowBg(item))}>
                     <td className="px-4 py-3">
-                      <Link href={`/inventory/${item.id}`} className="font-medium text-gray-900 hover:text-emerald-600 transition-colors">
+                      <Link href={`/inventory/${item.id}`} className="font-medium text-gray-900 hover:text-[#00A88A] transition-colors">
                         {item.name}
                       </Link>
                       {item.quantity_on_hand === 0 && (
@@ -255,7 +255,7 @@ export default function InventoryPage() {
                         {showArchived ? (
                           <button
                             onClick={() => handleRestore(item)}
-                            className="px-2 py-1 rounded text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                            className="px-2 py-1 rounded text-xs font-medium bg-[#00D4AA]/5 text-[#00A88A] hover:bg-[#00D4AA]/10 transition-colors flex items-center gap-1"
                             title="Restore"
                           >
                             <ArchiveRestore size={13} /> Restore
@@ -264,14 +264,14 @@ export default function InventoryPage() {
                           <>
                             <button
                               onClick={() => { setActionModal({ item, type: 'restock' }); setActionQty(''); setActionNotes('') }}
-                              className="px-2 py-1 rounded text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                              className="px-2 py-1 rounded text-xs font-medium bg-[#00D4AA]/5 text-[#00A88A] hover:bg-[#00D4AA]/10 transition-colors"
                               title="Restock"
                             >
                               <TrendingUp size={13} />
                             </button>
                             <button
                               onClick={() => { setActionModal({ item, type: 'sale' }); setActionQty(''); setActionNotes('') }}
-                              className="px-2 py-1 rounded text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                              className="px-2 py-1 rounded text-xs font-medium bg-[#6C63FF]/5 text-[#6C63FF] hover:bg-[#6C63FF]/10 transition-colors"
                               title="Record sale"
                             >
                               <TrendingDown size={13} />
@@ -332,7 +332,7 @@ export default function InventoryPage() {
             <div className="flex gap-3 pt-1">
               <Button variant="outline" className="flex-1" onClick={() => setActionModal(null)}>Cancel</Button>
               <Button
-                className={cn('flex-1', actionModal?.type === 'restock' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700')}
+                className={cn('flex-1', actionModal?.type === 'restock' ? 'bg-[#6C63FF] hover:bg-[#5A52E0]' : 'bg-[#6C63FF] hover:bg-[#5A52E0]')}
                 onClick={handleQuickAction}
                 disabled={saving || !actionQty}
               >

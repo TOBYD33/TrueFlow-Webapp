@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatCurrency, CATEGORY_COLORS } from '@/lib/utils'
 import { Download, FileSpreadsheet } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { usePageTools } from '@/components/shared/PageTools'
 
 type Range = 'this-month' | 'last-month' | 'last-3' | 'last-6' | 'this-year'
 
@@ -56,6 +57,21 @@ export default function ReportsPage() {
     }
     load()
   }, [orgId])
+
+  // Header Export CSV exports the receipts in the selected date range
+  usePageTools({
+    exportName: 'report',
+    exportRows: () =>
+      filtered.map(r => ({
+        date: r.date,
+        vendor: r.vendor_name ?? '',
+        category: r.category,
+        amount: r.amount,
+        tax: r.tax_amount ?? 0,
+        currency: r.currency,
+        channel: r.uploaded_via,
+      })),
+  })
 
   const { start, end } = getDateRange(range)
   const filtered = useMemo(() =>

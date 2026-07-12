@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { UserPlus, Search, Phone, Mail, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
+import { usePageTools } from '@/components/shared/PageTools'
 
 export default function ClientsPage() {
   const supabase = createClient()
@@ -43,10 +44,25 @@ export default function ClientsPage() {
     load()
   }, [orgId])
 
+  const { query: headerQuery } = usePageTools({
+    searchable: true,
+    exportName: 'clients',
+    exportRows: () =>
+      filtered.map(c => ({
+        name: c.name,
+        phone: c.phone ?? '',
+        email: c.email ?? '',
+        status: c.status,
+        total_earned: c.total_earned,
+        outstanding_balance: c.outstanding_balance,
+      })),
+  })
+
+  const effectiveSearch = search || headerQuery
   const filtered = clients.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.phone ?? '').includes(search) ||
-    (c.email ?? '').toLowerCase().includes(search.toLowerCase())
+    c.name.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
+    (c.phone ?? '').includes(effectiveSearch) ||
+    (c.email ?? '').toLowerCase().includes(effectiveSearch.toLowerCase())
   )
 
   const totalEarned = clients.reduce((s, c) => s + Number(c.total_earned), 0)
@@ -73,7 +89,7 @@ export default function ClientsPage() {
     toast.success('Client added')
   }
 
-  const statusColor = (s: string) => s === 'active' ? 'bg-green-100 text-green-700' : s === 'inactive' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
+  const statusColor = (s: string) => s === 'active' ? 'bg-[#00D4AA]/10 text-[#00A88A]' : s === 'inactive' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
 
   return (
     <div className="space-y-6">
@@ -82,7 +98,7 @@ export default function ClientsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
           <p className="text-sm text-gray-500 mt-0.5">{clients.length} clients · Money In</p>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={() => setAddOpen(true)}>
+        <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2" onClick={() => setAddOpen(true)}>
           <UserPlus size={16} /> Add Client
         </Button>
       </div>
@@ -92,7 +108,7 @@ export default function ClientsPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-gray-500 font-medium uppercase">Total Earned</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalEarned)}</p>
+            <p className="text-2xl font-bold text-[#00A88A] mt-1">{formatCurrency(totalEarned)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -137,7 +153,7 @@ export default function ClientsPage() {
                   className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 cursor-pointer"
                   onClick={() => router.push(`/clients/${client.id}`)}
                 >
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-[#6C63FF]/10 text-[#6C63FF] flex items-center justify-center font-semibold text-sm flex-shrink-0">
                     {client.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -191,7 +207,7 @@ export default function ClientsPage() {
             </div>
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setAddOpen(false)}>Cancel</Button>
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={handleAdd} disabled={saving || !form.name.trim()}>
+              <Button className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={handleAdd} disabled={saving || !form.name.trim()}>
                 {saving ? 'Saving…' : 'Add Client'}
               </Button>
             </div>

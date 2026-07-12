@@ -28,10 +28,10 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 const ROLE_COLORS: Record<string, string> = {
-  owner: 'bg-emerald-100 text-emerald-700',
-  admin: 'bg-blue-100 text-blue-700',
+  owner: 'bg-[#00D4AA]/10 text-[#00A88A]',
+  admin: 'bg-[#6C63FF]/10 text-[#6C63FF]',
   staff: 'bg-gray-100 text-gray-600',
-  family_member: 'bg-purple-100 text-purple-700',
+  family_member: 'bg-[#6C63FF]/10 text-[#6C63FF]',
   viewer: 'bg-yellow-100 text-yellow-700',
 }
 
@@ -130,8 +130,8 @@ export default async function TeamSettingsPage() {
         </div>
         <div className="px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
-              <span className="text-sm font-bold text-emerald-700">
+            <div className="w-9 h-9 rounded-full bg-[#00D4AA]/10 flex items-center justify-center">
+              <span className="text-sm font-bold text-[#00A88A]">
                 {(myProfile.data?.full_name ?? user.email ?? '?')[0].toUpperCase()}
               </span>
             </div>
@@ -240,7 +240,7 @@ export default async function TeamSettingsPage() {
                         <span className="text-sm font-mono text-gray-600 truncate max-w-[200px]">
                           {`/accountant/${link.token.slice(0, 12)}…`}
                         </span>
-                        <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${expired ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${expired ? 'bg-red-100 text-red-600' : 'bg-[#00D4AA]/10 text-[#00A88A]'}`}>
                           {expired ? 'Expired' : link.permission === 'export' ? 'Read + Export' : 'Read only'}
                         </span>
                       </div>

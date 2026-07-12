@@ -13,13 +13,14 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Plus, Search, FileText } from 'lucide-react'
+import { usePageTools } from '@/components/shared/PageTools'
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
-  sent: 'bg-blue-100 text-blue-700',
-  paid: 'bg-emerald-100 text-emerald-700',
+  sent: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  paid: 'bg-[#00D4AA]/10 text-[#00A88A]',
   overdue: 'bg-red-100 text-red-700',
-  cancelled: 'bg-yellow-100 text-yellow-700',
+  cancelled: 'bg-amber-100 text-amber-700',
 }
 
 type InvoiceWithClient = Invoice & { clients: { name: string } | null }
@@ -48,8 +49,23 @@ export default function InvoicesPage() {
     load()
   }, [orgId])
 
+  const { query: headerQuery } = usePageTools({
+    searchable: true,
+    exportName: 'invoices',
+    exportRows: () =>
+      filtered.map(inv => ({
+        invoice_number: inv.invoice_number ?? '',
+        client: inv.clients?.name ?? inv.client_name ?? '',
+        status: inv.status,
+        issue_date: inv.issue_date,
+        due_date: inv.due_date ?? '',
+        amount: inv.total_amount,
+        currency: inv.currency,
+      })),
+  })
+
   const filtered = invoices.filter(inv => {
-    const q = search.toLowerCase()
+    const q = (search || headerQuery).toLowerCase()
     return (
       (inv.invoice_number ?? '').toLowerCase().includes(q) ||
       (inv.clients?.name ?? inv.client_name ?? '').toLowerCase().includes(q)
@@ -67,7 +83,7 @@ export default function InvoicesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
           <p className="text-sm text-gray-500 mt-0.5">{invoices.length} total · {totalDraft} draft · {totalSent} sent</p>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2 shrink-0" onClick={() => router.push('/invoices/new')}>
+        <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2 shrink-0" onClick={() => router.push('/invoices/new')}>
           <Plus size={16} /> New Invoice
         </Button>
       </div>
@@ -76,8 +92,8 @@ export default function InvoicesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Draft', value: String(totalDraft), color: 'text-gray-700' },
-          { label: 'Sent / Awaiting', value: String(totalSent), color: 'text-blue-600' },
-          { label: 'Total Paid', value: formatCurrency(totalPaid), color: 'text-emerald-600' },
+          { label: 'Sent / Awaiting', value: String(totalSent), color: 'text-[#6C63FF]' },
+          { label: 'Total Paid', value: formatCurrency(totalPaid), color: 'text-[#00A88A]' },
         ].map(({ label, value, color }) => (
           <Card key={label}>
             <CardContent className="p-4">

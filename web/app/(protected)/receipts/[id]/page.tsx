@@ -142,7 +142,7 @@ export default function ReceiptDetailPage() {
   if (!receipt) return <div className="p-8 text-center text-gray-400">Receipt not found</div>
 
   const confidenceColor = receipt.ai_confidence === 'high'
-    ? 'bg-green-100 text-green-700'
+    ? 'bg-[#00D4AA]/10 text-[#00A88A]'
     : receipt.ai_confidence === 'medium'
     ? 'bg-yellow-100 text-yellow-700'
     : 'bg-red-100 text-red-700'
@@ -222,14 +222,14 @@ export default function ReceiptDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                  className="gap-1.5 text-[#00A88A] border-[#00D4AA]/30 hover:bg-[#00D4AA]/5"
                   onClick={() => setAttachOpen(true)}
                 >
                   <Paperclip size={14} /> Attach to Client
                 </Button>
                 <Button
                   size="sm"
-                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                  className="gap-1.5 bg-[#6C63FF] hover:bg-[#5A52E0]"
                   onClick={handleSave}
                   disabled={saving}
                 >
@@ -316,7 +316,7 @@ export default function ReceiptDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span>Verified</span>
-                <span className={receipt.is_verified ? 'text-green-600 font-medium' : 'text-gray-400'}>
+                <span className={receipt.is_verified ? 'text-[#00A88A] font-medium' : 'text-gray-400'}>
                   {receipt.is_verified ? 'Yes' : 'No'}
                 </span>
               </div>
@@ -365,7 +365,7 @@ export default function ReceiptDetailPage() {
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setAttachOpen(false)}>Cancel</Button>
               <Button
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]"
                 onClick={handleAttach}
                 disabled={!selectedClientId}
               >

@@ -155,7 +155,7 @@ export default function BusinessSettingsPage() {
               Business address <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <textarea
-              className="mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              className="mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6C63FF] resize-none"
               rows={3}
               placeholder="123 Lagos Island, Lagos, Nigeria"
               value={org?.address ?? ''}
@@ -163,7 +163,7 @@ export default function BusinessSettingsPage() {
             />
             <p className="text-xs text-gray-400 mt-1">Shown below your business name on invoice headers.</p>
           </div>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={saveOrg} disabled={saving}>
+          <Button className="bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={saveOrg} disabled={saving}>
             {saving ? 'Saving…' : 'Save Business Settings'}
           </Button>
         </CardContent>

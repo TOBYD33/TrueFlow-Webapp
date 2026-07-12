@@ -16,12 +16,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { UserPlus, Trash2, Link2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { usePageTools } from '@/components/shared/PageTools'
 
 const ROLE_COLORS: Record<string, string> = {
-  owner: 'bg-emerald-100 text-emerald-700',
-  admin: 'bg-blue-100 text-blue-700',
+  owner: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  admin: 'bg-[#00D4AA]/10 text-[#00A88A]',
   staff: 'bg-gray-100 text-gray-700',
-  accountant: 'bg-purple-100 text-purple-700',
+  accountant: 'bg-amber-100 text-amber-700',
 }
 
 export default function TeamPage() {
@@ -84,6 +85,29 @@ export default function TeamPage() {
 
   const canManage = myRole === 'owner' || myRole === 'admin'
 
+  const { query: headerQuery } = usePageTools({
+    searchable: true,
+    exportName: 'team',
+    exportRows: () =>
+      visibleMembers.map(m => ({
+        name: m.profiles?.full_name ?? '',
+        phone: m.whatsapp_number ?? m.profiles?.phone ?? '',
+        role: m.role,
+        whatsapp_active: m.whatsapp_active ? 'yes' : 'no',
+      })),
+  })
+
+  const visibleMembers = headerQuery
+    ? members.filter(m => {
+        const q = headerQuery.toLowerCase()
+        return (
+          (m.profiles?.full_name ?? '').toLowerCase().includes(q) ||
+          (m.whatsapp_number ?? '').includes(headerQuery) ||
+          m.role.toLowerCase().includes(q)
+        )
+      })
+    : members
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -104,7 +128,7 @@ export default function TeamPage() {
             >
               <Link2 size={16} /> Copy Invite Link
             </Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={() => setInviteOpen(true)}>
+            <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2" onClick={() => setInviteOpen(true)}>
               <UserPlus size={16} /> Add WhatsApp Staff
             </Button>
           </div>
@@ -117,13 +141,13 @@ export default function TeamPage() {
             <div className="p-8 text-center text-sm text-gray-400">Loading…</div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {members.map(member => {
+              {visibleMembers.map(member => {
                 const name = member.profiles?.full_name ?? member.whatsapp_number ?? 'Unknown'
                 const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
                 return (
                   <div key={member.id} className="flex items-center gap-3 px-4 py-4 flex-wrap sm:flex-nowrap">
                     <Avatar className="h-9 w-9 shrink-0">
-                      <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-semibold">{initials}</AvatarFallback>
+                      <AvatarFallback className="bg-[#6C63FF]/10 text-[#6C63FF] text-sm font-semibold">{initials}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 truncate">{name}</p>
@@ -137,7 +161,7 @@ export default function TeamPage() {
                           checked={member.whatsapp_active}
                           onChange={() => canManage && toggleWhatsApp(member)}
                           disabled={!canManage}
-                          className="accent-emerald-600"
+                          className="accent-[#6C63FF]"
                         />
                         <span className="hidden sm:inline">WhatsApp</span>
                       </label>
@@ -184,7 +208,7 @@ export default function TeamPage() {
             </div>
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setInviteOpen(false)}>Cancel</Button>
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={handleInvite} disabled={inviting}>
+              <Button className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={handleInvite} disabled={inviting}>
                 {inviting ? 'Adding…' : 'Add Member'}
               </Button>
             </div>

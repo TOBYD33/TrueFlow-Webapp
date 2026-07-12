@@ -78,7 +78,7 @@ export default function AccountantAccessPage() {
           </div>
 
           <Button
-            className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+            className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2"
             onClick={generateLink}
             disabled={generating}
           >
@@ -99,7 +99,7 @@ export default function AccountantAccessPage() {
                   <div
                     key={link.id}
                     className={`flex items-center gap-2 rounded-lg px-3 py-2.5 border ${
-                      expired ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-emerald-50 border-emerald-200'
+                      expired ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-[#00D4AA]/5 border-[#00D4AA]/30'
                     }`}
                   >
                     <div className="flex-1 min-w-0">
@@ -116,7 +116,7 @@ export default function AccountantAccessPage() {
                       <>
                         <button
                           onClick={() => copyLink(link.token)}
-                          className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
+                          className="text-gray-400 hover:text-[#00A88A] transition-colors p-1"
                           title="Copy link"
                         >
                           <Copy size={15} />
@@ -125,7 +125,7 @@ export default function AccountantAccessPage() {
                           href={url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-gray-400 hover:text-emerald-600 transition-colors p-1"
+                          className="text-gray-400 hover:text-[#00A88A] transition-colors p-1"
                           title="Open link"
                         >
                           <ExternalLink size={15} />

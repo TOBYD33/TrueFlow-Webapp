@@ -18,9 +18,9 @@ const STATUS_OPTIONS = ['all', 'in_progress', 'delivered', 'completed', 'on_hold
 type StatusFilter = typeof STATUS_OPTIONS[number]
 
 const STATUS_COLORS: Record<string, string> = {
-  in_progress: 'bg-blue-100 text-blue-700',
-  delivered: 'bg-purple-100 text-purple-700',
-  completed: 'bg-green-100 text-green-700',
+  in_progress: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  delivered: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  completed: 'bg-[#00D4AA]/10 text-[#00A88A]',
   cancelled: 'bg-red-100 text-red-700',
   on_hold: 'bg-yellow-100 text-yellow-700',
 }
@@ -76,9 +76,9 @@ export default function ProjectsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Fee', value: formatCurrency(totalFee), color: 'text-gray-900' },
-          { label: 'Received', value: formatCurrency(totalReceived), color: 'text-emerald-600' },
+          { label: 'Received', value: formatCurrency(totalReceived), color: 'text-[#00A88A]' },
           { label: 'Balance Due', value: formatCurrency(totalBalance), color: 'text-orange-500' },
-          { label: 'In Progress', value: String(activeCount), color: 'text-blue-600' },
+          { label: 'In Progress', value: String(activeCount), color: 'text-[#6C63FF]' },
         ].map(({ label, value, color }) => (
           <Card key={label}>
             <CardContent className="p-4">
@@ -160,7 +160,7 @@ export default function ProjectsPage() {
                           {p.deadline ? formatDate(p.deadline) : '—'}
                         </td>
                         <td className="px-4 py-3 text-right hidden lg:table-cell">{p.total_fee ? formatCurrency(p.total_fee) : '—'}</td>
-                        <td className="px-4 py-3 text-right text-emerald-600 hidden lg:table-cell">{formatCurrency(p.amount_received)}</td>
+                        <td className="px-4 py-3 text-right text-[#00A88A] hidden lg:table-cell">{formatCurrency(p.amount_received)}</td>
                         <td className={`px-4 py-3 text-right font-semibold ${balance > 0 ? 'text-orange-500' : 'text-gray-400'}`}>
                           {formatCurrency(balance)}
                         </td>

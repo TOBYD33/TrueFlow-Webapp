@@ -133,7 +133,7 @@ export default function ProfileSettingsPage() {
             <Input className="mt-1 bg-gray-50" value={email} disabled />
             <p className="text-xs text-gray-400 mt-1">To change your email, contact support.</p>
           </div>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={saveProfile} disabled={saving}>
+          <Button className="bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={saveProfile} disabled={saving}>
             {saving ? 'Saving…' : 'Save Profile'}
           </Button>
         </CardContent>

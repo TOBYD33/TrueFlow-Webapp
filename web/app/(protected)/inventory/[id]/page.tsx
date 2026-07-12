@@ -138,8 +138,8 @@ export default function InventoryItemPage() {
   }
 
   function movementLabel(type: string) {
-    if (type === 'restock') return { label: 'Restock', cls: 'bg-emerald-100 text-emerald-700' }
-    if (type === 'sale') return { label: 'Sale', cls: 'bg-blue-100 text-blue-700' }
+    if (type === 'restock') return { label: 'Restock', cls: 'bg-[#00D4AA]/10 text-[#00A88A]' }
+    if (type === 'sale') return { label: 'Sale', cls: 'bg-[#6C63FF]/10 text-[#6C63FF]' }
     return { label: 'Adjustment', cls: 'bg-gray-100 text-gray-600' }
   }
 
@@ -165,7 +165,7 @@ export default function InventoryItemPage() {
           {item.status === 'archived' && <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500 font-semibold">ARCHIVED</span>}
         </div>
         {item.status === 'archived' ? (
-          <button onClick={handleRestore} className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 transition-colors">
+          <button onClick={handleRestore} className="flex items-center gap-1.5 text-xs text-[#00A88A] hover:text-[#5A52E0] transition-colors">
             <ArchiveRestore size={14} /> Restore
           </button>
         ) : (
@@ -187,13 +187,13 @@ export default function InventoryItemPage() {
           </div>
           <div className="flex gap-3 sm:ml-auto">
             <Button
-              className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+              className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2"
               onClick={() => { setActionModal('restock'); setActionQty(''); setActionNotes('') }}
             >
               <TrendingUp size={15} /> Restock
             </Button>
             <Button
-              className="bg-blue-600 hover:bg-blue-700 gap-2"
+              className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2"
               onClick={() => { setActionModal('sale'); setActionQty(''); setActionNotes('') }}
             >
               <TrendingDown size={15} /> Record Sale
@@ -210,7 +210,7 @@ export default function InventoryItemPage() {
             ? <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Edit</Button>
             : <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveEdit} disabled={saving}>
+                <Button size="sm" className="bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={handleSaveEdit} disabled={saving}>
                   {saving ? 'Saving…' : 'Save'}
                 </Button>
               </div>
@@ -304,7 +304,7 @@ export default function InventoryItemPage() {
                       <td className="px-4 py-3">
                         <span className={cn('px-2 py-0.5 rounded text-xs font-semibold', cls)}>{label}</span>
                       </td>
-                      <td className={cn('px-4 py-3 text-right font-semibold', m.quantity_change >= 0 ? 'text-emerald-600' : 'text-red-500')}>
+                      <td className={cn('px-4 py-3 text-right font-semibold', m.quantity_change >= 0 ? 'text-[#00A88A]' : 'text-red-500')}>
                         {m.quantity_change >= 0 ? '+' : ''}{m.quantity_change}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900">{m.quantity_after}</td>
@@ -351,7 +351,7 @@ export default function InventoryItemPage() {
             <div className="flex gap-3 pt-1">
               <Button variant="outline" className="flex-1" onClick={() => setActionModal(null)}>Cancel</Button>
               <Button
-                className={cn('flex-1', actionModal === 'restock' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700')}
+                className={cn('flex-1', actionModal === 'restock' ? 'bg-[#6C63FF] hover:bg-[#5A52E0]' : 'bg-[#6C63FF] hover:bg-[#5A52E0]')}
                 onClick={handleAction}
                 disabled={actionSaving || !actionQty}
               >

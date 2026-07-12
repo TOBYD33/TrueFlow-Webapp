@@ -19,13 +19,13 @@ import { cn } from '@/lib/utils'
 function progressColor(pct: number) {
   if (pct >= 100) return 'bg-red-500'
   if (pct >= 70) return 'bg-amber-400'
-  return 'bg-emerald-500'
+  return 'bg-[#6C63FF]'
 }
 
 function progressTextColor(pct: number) {
   if (pct >= 100) return 'text-red-600'
   if (pct >= 70) return 'text-amber-600'
-  return 'text-emerald-600'
+  return 'text-[#00A88A]'
 }
 
 export default function BudgetsPage() {
@@ -132,7 +132,7 @@ export default function BudgetsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Budgets</h1>
           <p className="text-sm text-gray-500 mt-0.5">{monthLabel}</p>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={openAdd}>
+        <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2" onClick={openAdd}>
           <Plus size={16} /> Add Budget
         </Button>
       </div>
@@ -240,7 +240,7 @@ export default function BudgetsPage() {
             <div className="flex gap-3 pt-1">
               <Button variant="outline" className="flex-1" onClick={() => setModalOpen(false)}>Cancel</Button>
               <Button
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]"
                 onClick={handleSave}
                 disabled={saving || !form.amount || (!editBudget && !form.category)}
               >

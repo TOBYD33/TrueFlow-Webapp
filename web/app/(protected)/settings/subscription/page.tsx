@@ -209,9 +209,9 @@ export default function SubscriptionPage() {
   return (
     <div className="space-y-6">
       {showSuccess && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-3">
-          <Check size={16} className="text-emerald-600 shrink-0" />
-          <p className="text-sm text-emerald-700 font-medium">Payment received! Your plan will activate within a few minutes.</p>
+        <div className="bg-[#00D4AA]/5 border border-[#00D4AA]/30 rounded-xl px-4 py-3 flex items-center gap-3">
+          <Check size={16} className="text-[#00A88A] shrink-0" />
+          <p className="text-sm text-[#00A88A] font-medium">Payment received! Your plan will activate within a few minutes.</p>
         </div>
       )}
 
@@ -222,9 +222,9 @@ export default function SubscriptionPage() {
             <div>
               <p className="text-sm text-gray-500">Current plan</p>
               <p className="text-2xl font-bold text-gray-900 mt-0.5">{currentPlan.label}</p>
-              <p className="text-lg text-emerald-600 font-semibold mt-0.5">{currentPlan.ngn}</p>
+              <p className="text-lg text-[#00A88A] font-semibold mt-0.5">{currentPlan.ngn}</p>
             </div>
-            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs uppercase tracking-wide">
+            <Badge className="bg-[#00D4AA]/10 text-[#00A88A] border-0 text-xs uppercase tracking-wide">
               {loading ? '…' : plan}
             </Badge>
           </div>
@@ -256,13 +256,13 @@ export default function SubscriptionPage() {
             return (
               <div
                 key={p.id}
-                className={`rounded-xl border p-4 ${isCurrent ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white'}`}
+                className={`rounded-xl border p-4 ${isCurrent ? 'border-[#00D4AA]/60 bg-[#00D4AA]/5' : 'border-gray-200 bg-white'}`}
               >
                 <div className="flex items-start justify-between mb-1">
                   <p className="font-semibold text-sm text-gray-900">{p.label}</p>
-                  {isCurrent && <Check size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />}
+                  {isCurrent && <Check size={14} className="text-[#00A88A] mt-0.5 flex-shrink-0" />}
                 </div>
-                <p className="text-emerald-600 font-bold text-base mb-2">{p.ngn}</p>
+                <p className="text-[#00A88A] font-bold text-base mb-2">{p.ngn}</p>
                 <div className="space-y-1 mb-3">
                   <p className="text-xs text-gray-500">Receipts: <span className="font-medium text-gray-700">{p.receipts}</span></p>
                   <p className="text-xs text-gray-500">Clients: <span className="font-medium text-gray-700">{formatLimit(p.clients)}</span></p>
@@ -286,7 +286,7 @@ export default function SubscriptionPage() {
                   </a>
                 )}
                 {isCurrent && (
-                  <p className="text-xs text-emerald-600 font-medium text-center">✓ Current plan</p>
+                  <p className="text-xs text-[#00A88A] font-medium text-center">✓ Current plan</p>
                 )}
               </div>
             )

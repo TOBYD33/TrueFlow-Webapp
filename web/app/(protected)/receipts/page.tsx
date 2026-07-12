@@ -26,6 +26,7 @@ import {
 import { ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
+import { usePageTools } from '@/components/shared/PageTools'
 
 const FREE_LIMIT = 10
 
@@ -114,17 +115,33 @@ export default function ReceiptsPage() {
     init()
   }, [orgId])
 
+  // Header search (shared top bar) combines with the page's own search box
+  const { query: headerQuery } = usePageTools({
+    searchable: true,
+    exportName: 'receipts',
+    exportRows: () =>
+      filtered.map(r => ({
+        date: r.date,
+        vendor: r.vendor_name ?? '',
+        category: r.category,
+        amount: r.amount,
+        currency: r.currency,
+        channel: r.uploaded_via,
+      })),
+  })
+
   const filtered = useMemo(() => {
+    const search = globalFilter || headerQuery
     return receipts.filter(r => {
       if (categoryFilter !== 'all' && r.category !== categoryFilter) return false
       if (channelFilter !== 'all' && r.uploaded_via !== channelFilter) return false
-      if (globalFilter) {
-        const q = globalFilter.toLowerCase()
+      if (search) {
+        const q = search.toLowerCase()
         return (r.vendor_name ?? '').toLowerCase().includes(q) || r.category.toLowerCase().includes(q)
       }
       return true
     })
-  }, [receipts, categoryFilter, channelFilter, globalFilter])
+  }, [receipts, categoryFilter, channelFilter, globalFilter, headerQuery])
 
   const columns = useMemo<ColumnDef<Receipt>[]>(() => [
     {
@@ -176,7 +193,7 @@ export default function ReceiptsPage() {
       cell: ({ row }) => {
         const conf = row.original.ai_confidence
         if (!conf) return null
-        const color = conf === 'high' ? 'bg-green-100 text-green-700' : conf === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+        const color = conf === 'high' ? 'bg-[#00D4AA]/10 text-[#00A88A]' : conf === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
         return <Badge variant="outline" className={color}>{conf}</Badge>
       },
     },

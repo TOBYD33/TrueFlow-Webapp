@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Search, TrendingUp } from 'lucide-react'
+import { usePageTools } from '@/components/shared/PageTools'
 
 type PaymentWithClient = ClientPayment & {
   clients: { name: string } | null
@@ -19,10 +20,10 @@ type PaymentWithClient = ClientPayment & {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  deposit: 'bg-blue-100 text-blue-700',
-  part_payment: 'bg-yellow-100 text-yellow-700',
-  full_payment: 'bg-emerald-100 text-emerald-700',
-  retainer: 'bg-purple-100 text-purple-700',
+  deposit: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  part_payment: 'bg-amber-100 text-amber-700',
+  full_payment: 'bg-[#00D4AA]/10 text-[#00A88A]',
+  retainer: 'bg-[#6C63FF]/10 text-[#6C63FF]',
 }
 
 export default function IncomePage() {
@@ -49,11 +50,27 @@ export default function IncomePage() {
     load()
   }, [orgId])
 
+  const { query: headerQuery } = usePageTools({
+    searchable: true,
+    exportName: 'income',
+    exportRows: () =>
+      filtered.map(p => ({
+        date: p.payment_date,
+        client: p.clients?.name ?? '',
+        project: p.projects?.name ?? '',
+        type: p.payment_type,
+        reference: p.payment_reference ?? '',
+        amount: p.amount,
+        currency: p.currency,
+      })),
+  })
+
+  const effectiveSearch = search || headerQuery
   const filtered = payments.filter(p => {
     const matchesType = typeFilter === 'all' || p.payment_type === typeFilter
     const clientName = p.clients?.name ?? ''
-    const matchesSearch = clientName.toLowerCase().includes(search.toLowerCase()) ||
-      (p.payment_reference ?? '').toLowerCase().includes(search.toLowerCase())
+    const matchesSearch = clientName.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
+      (p.payment_reference ?? '').toLowerCase().includes(effectiveSearch.toLowerCase())
     return matchesType && matchesSearch
   })
 
@@ -77,7 +94,7 @@ export default function IncomePage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-gray-500 uppercase font-medium">This Month</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(incomeThisMonth)}</p>
+            <p className="text-2xl font-bold text-[#00A88A] mt-1">{formatCurrency(incomeThisMonth)}</p>
             <p className="text-xs text-gray-400 mt-0.5">{thisMonthPayments.length} payments</p>
           </CardContent>
         </Card>
@@ -90,7 +107,7 @@ export default function IncomePage() {
         </Card>
         <Card className="sm:col-span-1 col-span-2">
           <CardContent className="p-4 flex items-center gap-3">
-            <TrendingUp size={24} className="text-emerald-500" />
+            <TrendingUp size={24} className="text-[#00D4AA]" />
             <div>
               <p className="text-xs text-gray-500 font-medium uppercase">Avg per payment</p>
               <p className="text-xl font-bold text-gray-900">{formatCurrency(payments.length ? totalAllTime / payments.length : 0)}</p>
@@ -159,7 +176,7 @@ export default function IncomePage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-gray-400 font-mono text-xs hidden lg:table-cell">{p.payment_reference ?? '—'}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-emerald-600">{formatCurrency(p.amount, p.currency)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-[#00A88A]">{formatCurrency(p.amount, p.currency)}</td>
                     </tr>
                   ))}
                 </tbody>

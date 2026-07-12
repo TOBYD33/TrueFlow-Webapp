@@ -144,7 +144,7 @@ export default function NewInventoryItemPage() {
           <Button variant="outline" className="w-full">Cancel</Button>
         </Link>
         <Button
-          className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+          className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]"
           onClick={handleSave}
           disabled={saving || !form.name.trim()}
         >

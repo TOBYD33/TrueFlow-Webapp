@@ -37,11 +37,11 @@ const CATEGORIES = [
 
 const CATEGORY_COLORS: Record<string, string> = {
   tax: 'bg-red-100 text-red-700',
-  salary: 'bg-blue-100 text-blue-700',
+  salary: 'bg-[#6C63FF]/10 text-[#6C63FF]',
   supplier: 'bg-orange-100 text-orange-700',
   bill: 'bg-yellow-100 text-yellow-700',
-  compliance: 'bg-purple-100 text-purple-700',
-  project_deadline: 'bg-indigo-100 text-indigo-700',
+  compliance: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  project_deadline: 'bg-[#6C63FF]/10 text-indigo-700',
   custom: 'bg-gray-100 text-gray-600',
 }
 
@@ -144,7 +144,7 @@ export default function RemindersPage() {
           {CATEGORIES.find(c => c.value === r.category)?.label ?? r.category}
         </Badge>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => dismiss(r.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-emerald-600" title="Dismiss">
+          <button onClick={() => dismiss(r.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-[#00A88A]" title="Dismiss">
             <CheckCircle size={15} />
           </button>
           <button onClick={() => del(r.id)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-red-500" title="Delete">
@@ -162,7 +162,7 @@ export default function RemindersPage() {
           <h1 className="text-2xl font-bold text-gray-900">Reminders</h1>
           <p className="text-sm text-gray-500 mt-0.5">{reminders.length} active</p>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2" onClick={() => setModalOpen(true)}>
+        <Button className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2" onClick={() => setModalOpen(true)}>
           <Plus size={16} /> Add Reminder
         </Button>
       </div>
@@ -232,7 +232,7 @@ export default function RemindersPage() {
             <div className="flex gap-3 pt-1">
               <Button variant="outline" className="flex-1" onClick={() => setModalOpen(false)}>Cancel</Button>
               <Button
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]"
                 onClick={handleAdd}
                 disabled={saving || !form.title.trim() || !form.due_date}
               >

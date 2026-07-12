@@ -238,7 +238,7 @@ export default function NewInvoicePage() {
             </div>
             <div className="flex justify-end gap-4 text-sm font-bold border-t pt-2">
               <span>Total</span>
-              <span className="w-28 text-right text-emerald-600 text-base">{formatCurrency(totalAmount)}</span>
+              <span className="w-28 text-right text-[#00A88A] text-base">{formatCurrency(totalAmount)}</span>
             </div>
           </div>
         </CardContent>
@@ -249,7 +249,7 @@ export default function NewInvoicePage() {
         <CardContent className="pt-5">
           <label className="text-sm font-medium text-gray-700">Notes / Payment terms</label>
           <textarea
-            className="mt-1 w-full rounded-md border border-gray-200 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="mt-1 w-full rounded-md border border-gray-200 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#6C63FF]"
             rows={3}
             placeholder="E.g. Payment due within 7 days. Bank: GTB 0123456789"
             value={notes}
@@ -269,7 +269,7 @@ export default function NewInvoicePage() {
           {saving ? 'Saving…' : 'Save as Draft'}
         </Button>
         <Button
-          className="bg-emerald-600 hover:bg-emerald-700"
+          className="bg-[#6C63FF] hover:bg-[#5A52E0]"
           disabled={saving || !hasItems || !clientId}
           onClick={() => save('sent')}
         >

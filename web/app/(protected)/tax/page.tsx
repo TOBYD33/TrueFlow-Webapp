@@ -184,7 +184,7 @@ export default function TaxHubPage() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Landmark size={24} className="text-emerald-600" /> Tax Hub
+          <Landmark size={24} className="text-[#00A88A]" /> Tax Hub
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">Tax Hub: Track &amp; Estimate.</p>
       </div>
@@ -234,7 +234,7 @@ export default function TaxHubPage() {
                   <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(taxCollected, currency)}</p>
                   <p className="text-xs text-gray-400 mt-0.5">e.g. VAT charged to clients on paid invoices — separate from income tax</p>
                 </div>
-                <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600"><TrendingUp size={20} /></div>
+                <div className="p-2.5 rounded-lg bg-[#00D4AA]/5 text-[#00A88A]"><TrendingUp size={20} /></div>
               </div>
             </CardContent>
           </Card>
@@ -257,7 +257,7 @@ export default function TaxHubPage() {
                     <tr key={row.month}>
                       <td className="px-4 py-2 text-gray-700">{row.month}</td>
                       <td className="px-4 py-2 text-right text-red-500">{formatCurrency(row.paidOut, currency)}</td>
-                      <td className="px-4 py-2 text-right text-emerald-600">{formatCurrency(row.collected, currency)}</td>
+                      <td className="px-4 py-2 text-right text-[#00A88A]">{formatCurrency(row.collected, currency)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -340,7 +340,7 @@ export default function TaxHubPage() {
                 </Select>
               </div>
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-2"
                 onClick={handleAddReminder}
                 disabled={savingReminder || !reminderForm.title.trim() || !reminderForm.due_date}
               >
@@ -377,13 +377,13 @@ export default function TaxHubPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCalculate} disabled={calculating || !estimateTaxType}>
+              <Button className="bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={handleCalculate} disabled={calculating || !estimateTaxType}>
                 {calculating ? 'Calculating…' : 'Calculate estimate'}
               </Button>
             </div>
 
             {estimate && estimate.computable && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+              <div className="rounded-lg border border-[#00D4AA]/30 bg-[#00D4AA]/5 p-4 space-y-3">
                 <p className="text-sm text-gray-800">
                   Based on <span className="font-semibold">{formatCurrency(estimate.taxableIncome, estimate.currency)}</span> recorded income this {estimate.periodLabel}, your estimated <span className="font-semibold">{estimateTaxType}</span> liability is approximately <span className="font-semibold">{formatCurrency(estimate.liability ?? 0, estimate.currency)}</span>.
                 </p>
@@ -391,7 +391,7 @@ export default function TaxHubPage() {
                   <p className="text-xs text-amber-700">This tax type has a progressive or multi-tier rate ({estimate.rateLabel}) — this estimate uses the top rate as a rough upper bound, not your actual band.</p>
                 )}
                 <p className="text-xs text-gray-500">{ESTIMATE_DISCLAIMER}</p>
-                <Link href="/settings/accountant" className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 hover:text-emerald-800">
+                <Link href="/settings/accountant" className="inline-flex items-center gap-1.5 text-sm font-medium text-[#00A88A] hover:text-emerald-800">
                   Send this to your accountant <ArrowRight size={14} />
                 </Link>
               </div>

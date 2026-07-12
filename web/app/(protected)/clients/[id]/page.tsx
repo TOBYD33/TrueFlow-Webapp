@@ -17,9 +17,9 @@ import { ArrowLeft, Plus, FolderOpen } from 'lucide-react'
 import { toast } from 'sonner'
 
 const PROJECT_STATUS_COLORS: Record<string, string> = {
-  in_progress: 'bg-blue-100 text-blue-700',
-  delivered: 'bg-purple-100 text-purple-700',
-  completed: 'bg-green-100 text-green-700',
+  in_progress: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  delivered: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  completed: 'bg-[#00D4AA]/10 text-[#00A88A]',
   cancelled: 'bg-red-100 text-red-700',
   on_hold: 'bg-yellow-100 text-yellow-700',
 }
@@ -154,8 +154,8 @@ export default function ClientDetailPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Earned', value: formatCurrency(client.total_earned), color: 'text-emerald-600' },
-          { label: 'Paid This Session', value: formatCurrency(totalPaid), color: 'text-blue-600' },
+          { label: 'Total Earned', value: formatCurrency(client.total_earned), color: 'text-[#00A88A]' },
+          { label: 'Paid This Session', value: formatCurrency(totalPaid), color: 'text-[#6C63FF]' },
           { label: 'Outstanding', value: formatCurrency(client.outstanding_balance), color: 'text-orange-500' },
           { label: 'Projects', value: String(projects.length), color: 'text-gray-900' },
         ].map(({ label, value, color }) => (
@@ -172,7 +172,7 @@ export default function ClientDetailPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2"><FolderOpen size={16} />Projects</CardTitle>
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1" onClick={() => setProjectOpen(true)}>
+          <Button size="sm" className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-1" onClick={() => setProjectOpen(true)}>
             <Plus size={14} /> Add Project
           </Button>
         </CardHeader>
@@ -205,7 +205,7 @@ export default function ClientDetailPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Payment History</CardTitle>
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1" onClick={() => setPaymentOpen(true)}>
+          <Button size="sm" className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-1" onClick={() => setPaymentOpen(true)}>
             <Plus size={14} /> Record Payment
           </Button>
         </CardHeader>
@@ -220,7 +220,7 @@ export default function ClientDetailPage() {
                     <p className="text-sm font-medium capitalize">{pay.payment_type.replace('_', ' ')}</p>
                     <p className="text-xs text-gray-400">{formatDate(pay.payment_date)}{pay.payment_reference ? ` · Ref: ${pay.payment_reference}` : ''}</p>
                   </div>
-                  <p className="font-semibold text-emerald-600">{formatCurrency(pay.amount, pay.currency)}</p>
+                  <p className="font-semibold text-[#00A88A]">{formatCurrency(pay.amount, pay.currency)}</p>
                 </div>
               ))}
             </div>
@@ -253,7 +253,7 @@ export default function ClientDetailPage() {
             </div>
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setProjectOpen(false)}>Cancel</Button>
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={addProject} disabled={saving || !projectForm.name.trim()}>
+              <Button className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={addProject} disabled={saving || !projectForm.name.trim()}>
                 {saving ? 'Saving…' : 'Create Project'}
               </Button>
             </div>
@@ -305,7 +305,7 @@ export default function ClientDetailPage() {
             </div>
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setPaymentOpen(false)}>Cancel</Button>
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={addPayment} disabled={saving || !paymentForm.amount}>
+              <Button className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={addPayment} disabled={saving || !paymentForm.amount}>
                 {saving ? 'Saving…' : `Record ${paymentForm.amount ? formatCurrency(Number(paymentForm.amount)) : 'Payment'}`}
               </Button>
             </div>

@@ -14,12 +14,14 @@ interface StatCardProps {
 }
 
 export function StatCard({ label, value, sub, icon: Icon, color = 'emerald' }: StatCardProps) {
+  // Brand palette only: mint for positive/inflow stats, violet for the rest,
+  // amber (documented Warn colour) for outflow/warning stats.
   const colorMap: Record<string, string> = {
-    emerald: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    purple: 'bg-purple-50 text-purple-600',
-    orange: 'bg-orange-50 text-orange-600',
-    indigo: 'bg-indigo-50 text-indigo-600',
+    emerald: 'bg-[#00D4AA]/10 text-[#00A88A]',
+    blue: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+    purple: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+    orange: 'bg-[#FFB545]/15 text-[#D9932A]',
+    indigo: 'bg-[#6C63FF]/10 text-[#6C63FF]',
   }
 
   return (

@@ -10,9 +10,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
-import { Menu, Settings, User, LogOut, Sun, Moon } from 'lucide-react'
+import { Menu, Settings, User, LogOut, Sun, Moon, Search, Download } from 'lucide-react'
 import { ThemeProvider, useTheme, tone, BRAND } from './shared/theme'
 import { AppSidebar } from './shared/AppSidebar'
+import { PageToolsProvider, usePageToolsHeader } from './shared/PageTools'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -23,7 +24,9 @@ interface AppShellProps {
 export function AppShell(props: AppShellProps) {
   return (
     <ThemeProvider>
-      <AppShellInner {...props} />
+      <PageToolsProvider>
+        <AppShellInner {...props} />
+      </PageToolsProvider>
     </ThemeProvider>
   )
 }
@@ -33,6 +36,20 @@ function AppShellInner({ children, orgName, plan }: AppShellProps) {
   const router = useRouter()
   const { dark, setDark } = useTheme()
   const t = tone(dark)
+  const { query, setQuery, searchEnabled, exportEnabled, runExport } = usePageToolsHeader()
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  // Cmd/Ctrl+F focuses the header search (when the page supports it)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && searchEnabled) {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [searchEnabled])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [initials, setInitials] = useState('?')
@@ -131,7 +148,44 @@ function AppShellInner({ children, orgName, plan }: AppShellProps) {
           <span className="text-sm truncate" style={{ color: t.textDim }}>{orgName}</span>
         </div>
 
+        {/* Global search — identical on every page; per-page data filter */}
+        <div
+          className="hidden md:flex items-center gap-2 flex-1 max-w-md rounded-xl px-3.5 h-10"
+          style={{
+            background: dark ? 'rgba(245,245,247,0.06)' : BRAND.cloud,
+            opacity: searchEnabled ? 1 : 0.5,
+          }}
+          title={searchEnabled ? undefined : 'Search is not available on this page'}
+        >
+          <Search size={15} style={{ color: t.textDim }} />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            disabled={!searchEnabled}
+            placeholder="Search"
+            className="flex-1 bg-transparent outline-none text-sm disabled:cursor-not-allowed"
+            style={{ color: t.text }}
+          />
+          <span
+            className="text-[11px] px-1.5 py-0.5 rounded border shrink-0"
+            style={{ color: t.textDim, borderColor: t.border }}
+          >
+            ⌘ + F
+          </span>
+        </div>
+
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* Export CSV — enabled only when the page registers exportable data */}
+          <button
+            onClick={runExport}
+            disabled={!exportEnabled}
+            title={exportEnabled ? 'Export this page as CSV' : 'Nothing to export here yet'}
+            className="hidden sm:flex items-center gap-2 h-10 px-3.5 rounded-xl border text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: t.border, color: t.text }}
+          >
+            <Download size={14} /> Export CSV
+          </button>
           {/* Light/dark toggle pill */}
           <div className="flex gap-1 p-1 rounded-xl border" style={{ borderColor: t.border }}>
             <button

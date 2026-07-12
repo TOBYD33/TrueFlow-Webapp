@@ -276,7 +276,7 @@ export function TeamActions({
           }
           setShowInvite(true)
         }}
-        className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+        className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#6C63FF] text-white hover:bg-[#6C63FF] transition-colors"
       >
         + Invite
       </button>
@@ -351,7 +351,7 @@ export function TeamActions({
                       <button
                         onClick={() => set(!value)}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          value ? 'bg-emerald-500' : 'bg-gray-200'
+                          value ? 'bg-[#6C63FF]' : 'bg-gray-200'
                         }`}
                       >
                         <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
@@ -368,7 +368,7 @@ export function TeamActions({
               <button
                 onClick={sendInvite}
                 disabled={loading}
-                className="flex-1 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg text-sm font-semibold bg-[#6C63FF] text-white hover:bg-[#6C63FF] transition-colors disabled:opacity-50"
               >
                 {loading ? 'Sending…' : 'Send Invite'}
               </button>

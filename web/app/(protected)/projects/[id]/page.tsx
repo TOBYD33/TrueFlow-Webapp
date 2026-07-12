@@ -19,9 +19,9 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 
 const STATUS_COLORS: Record<string, string> = {
-  in_progress: 'bg-blue-100 text-blue-700',
-  delivered: 'bg-purple-100 text-purple-700',
-  completed: 'bg-green-100 text-green-700',
+  in_progress: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  delivered: 'bg-[#6C63FF]/10 text-[#6C63FF]',
+  completed: 'bg-[#00D4AA]/10 text-[#00A88A]',
   cancelled: 'bg-red-100 text-red-700',
   on_hold: 'bg-yellow-100 text-yellow-700',
 }
@@ -138,7 +138,7 @@ export default function ProjectDetailPage() {
   const received = Number(project.amount_received ?? 0)
   const balance = totalFee - received
   const progress = totalFee > 0 ? Math.min(100, Math.round((received / totalFee) * 100)) : 0
-  const progressColor = progress >= 100 ? 'bg-green-500' : progress >= 50 ? 'bg-emerald-500' : 'bg-orange-400'
+  const progressColor = progress >= 100 ? 'bg-green-500' : progress >= 50 ? 'bg-[#6C63FF]' : 'bg-orange-400'
 
   const currentStatusIndex = STATUS_FLOW.indexOf(project.status as typeof STATUS_FLOW[number])
   const nextStatus = currentStatusIndex >= 0 && currentStatusIndex < STATUS_FLOW.length - 1
@@ -156,7 +156,7 @@ export default function ProjectDetailPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
             {client && (
-              <Link href={`/clients/${client.id}`} className="text-sm text-emerald-600 hover:underline flex items-center gap-1 mt-0.5">
+              <Link href={`/clients/${client.id}`} className="text-sm text-[#6C63FF] hover:underline flex items-center gap-1 mt-0.5">
                 {client.name} <ExternalLink size={12} />
               </Link>
             )}
@@ -169,7 +169,7 @@ export default function ProjectDetailPage() {
           {nextStatus && (
             <Button
               size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 capitalize"
+              className="bg-[#6C63FF] hover:bg-[#5A52E0] capitalize"
               onClick={() => updateStatus(nextStatus)}
               disabled={saving}
             >
@@ -183,9 +183,9 @@ export default function ProjectDetailPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Fee', value: totalFee ? formatCurrency(totalFee) : '—', color: 'text-gray-900' },
-          { label: 'Received', value: formatCurrency(received), color: 'text-emerald-600' },
+          { label: 'Received', value: formatCurrency(received), color: 'text-[#00A88A]' },
           { label: 'Balance Due', value: formatCurrency(balance), color: balance > 0 ? 'text-orange-500' : 'text-gray-400' },
-          { label: 'Progress', value: `${progress}%`, color: progress >= 100 ? 'text-green-600' : 'text-blue-600' },
+          { label: 'Progress', value: `${progress}%`, color: progress >= 100 ? 'text-[#00A88A]' : 'text-[#6C63FF]' },
         ].map(({ label, value, color }) => (
           <Card key={label}>
             <CardContent className="p-4">
@@ -238,7 +238,7 @@ export default function ProjectDetailPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-sm">Payment History</CardTitle>
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1" onClick={() => setPaymentOpen(true)}>
+          <Button size="sm" className="bg-[#6C63FF] hover:bg-[#5A52E0] gap-1" onClick={() => setPaymentOpen(true)}>
             <Plus size={14} /> Record Payment
           </Button>
         </CardHeader>
@@ -256,7 +256,7 @@ export default function ProjectDetailPage() {
                       {pay.payment_reference ? ` · Ref: ${pay.payment_reference}` : ''}
                     </p>
                   </div>
-                  <p className="font-semibold text-emerald-600">{formatCurrency(pay.amount, pay.currency)}</p>
+                  <p className="font-semibold text-[#00A88A]">{formatCurrency(pay.amount, pay.currency)}</p>
                 </div>
               ))}
             </div>
@@ -341,7 +341,7 @@ export default function ProjectDetailPage() {
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setPaymentOpen(false)}>Cancel</Button>
               <Button
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]"
                 onClick={addPayment}
                 disabled={saving || !paymentForm.amount}
               >
