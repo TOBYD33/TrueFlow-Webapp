@@ -108,10 +108,13 @@ export async function fireDueReminders() {
       continue // keep status active — retry next minute
     }
 
-    if (reminder.recurrence === 'once') {
-      await supabase.from('reminders').update({ status: 'fired', fired_at: new Date().toISOString() }).eq('id', reminder.id)
+    // Advance recurring reminders; anything else (including malformed
+    // recurrence values) is marked fired so it can never loop every minute.
+    const nextDate = getNextDate(reminder.due_date, reminder.recurrence)
+    if (nextDate !== reminder.due_date) {
+      await supabase.from('reminders').update({ due_date: nextDate }).eq('id', reminder.id)
     } else {
-      await supabase.from('reminders').update({ due_date: getNextDate(reminder.due_date, reminder.recurrence) }).eq('id', reminder.id)
+      await supabase.from('reminders').update({ status: 'fired', fired_at: new Date().toISOString() }).eq('id', reminder.id)
     }
   }
 }
