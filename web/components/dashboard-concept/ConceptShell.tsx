@@ -51,8 +51,22 @@ const navItems = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
+// Human label + one-line summary per plan (mirrors the pricing table)
+const PLAN_INFO: Record<string, { label: string; desc: string }> = {
+  free:        { label: 'Free',        desc: '10 receipts/mo · 1 user' },
+  individual:  { label: 'Individual',  desc: 'Unlimited receipts · 1 user' },
+  family:      { label: 'Family',      desc: 'Unlimited receipts · 6 members' },
+  freelancer:  { label: 'Freelancer',  desc: 'Unlimited receipts · 10 clients' },
+  sme_starter: { label: 'SME Starter', desc: 'Unlimited receipts · 5 staff · accountant sharing' },
+  agency:      { label: 'Agency',      desc: 'Unlimited receipts · 50 clients · 3 staff' },
+  sme_pro:     { label: 'SME Pro',     desc: 'Unlimited receipts · 15 staff · advanced analytics' },
+  studio:      { label: 'Studio',      desc: 'Unlimited everything · 10 staff' },
+  enterprise:  { label: 'Enterprise',  desc: 'Custom limits · unlimited everything' },
+}
+
 export function ConceptShell({ children }: { children: React.ReactNode }) {
-  const { orgName, dark, setDark } = useConcept()
+  const { orgName, plan, dark, setDark } = useConcept()
+  const planInfo = PLAN_INFO[plan] ?? { label: plan, desc: '' }
   // Collapsed icon rail is the default look; session-only state by design
   const [expanded, setExpanded] = useState(false)
 
@@ -100,6 +114,36 @@ export function ConceptShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Light/dark toggle — horizontal pill beside Export CSV */}
+          <div
+            className="flex gap-1 p-1 rounded-xl border"
+            style={{ borderColor: dark ? 'rgba(245,245,247,0.12)' : 'rgba(10,10,15,0.08)' }}
+          >
+            <button
+              onClick={() => setDark(true)}
+              aria-label="Dark mode"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+              style={
+                dark
+                  ? { background: 'rgba(108,99,255,0.22)', color: '#6C63FF' }
+                  : { color: 'rgba(10,10,15,0.35)' }
+              }
+            >
+              <Moon size={15} />
+            </button>
+            <button
+              onClick={() => setDark(false)}
+              aria-label="Light mode"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+              style={
+                !dark
+                  ? { background: 'rgba(108,99,255,0.10)', color: '#6C63FF' }
+                  : { color: 'rgba(245,245,247,0.40)' }
+              }
+            >
+              <Sun size={15} />
+            </button>
+          </div>
           <button
             className="hidden sm:flex items-center gap-2 h-10 px-3.5 rounded-xl border text-sm font-medium transition-colors"
             style={{ borderColor: dark ? 'rgba(245,245,247,0.14)' : 'rgba(10,10,15,0.10)', color: dark ? '#F5F5F7' : '#0A0A0F' }}
@@ -166,38 +210,47 @@ export function ConceptShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* Light/dark toggle — bottom of sidebar in both states.
-              Vertical stack when collapsed, horizontal pill when expanded. */}
-          <div className="px-4 pt-3 shrink-0">
-            <div
-              className={`${expanded ? 'flex-row w-fit' : 'flex-col'} flex gap-1 p-1 rounded-xl border transition-colors`}
-              style={{ borderColor: dark ? 'rgba(245,245,247,0.12)' : 'rgba(10,10,15,0.08)' }}
-            >
-              <button
-                onClick={() => setDark(true)}
-                aria-label="Dark mode"
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                style={
-                  dark
-                    ? { background: 'rgba(108,99,255,0.22)', color: '#6C63FF' }
-                    : { color: 'rgba(10,10,15,0.35)' }
-                }
+          {/* Current plan card — bottom of sidebar. Full card when expanded,
+              compact plan-initial badge when collapsed. */}
+          <div className="px-3 pt-3 shrink-0">
+            {expanded ? (
+              <div
+                className="rounded-2xl p-4 border"
+                style={{
+                  background: dark ? 'rgba(108,99,255,0.08)' : 'rgba(108,99,255,0.05)',
+                  borderColor: dark ? 'rgba(108,99,255,0.25)' : 'rgba(108,99,255,0.18)',
+                }}
               >
-                <Moon size={15} />
-              </button>
-              <button
-                onClick={() => setDark(false)}
-                aria-label="Light mode"
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                style={
-                  !dark
-                    ? { background: 'rgba(108,99,255,0.10)', color: '#6C63FF' }
-                    : { color: 'rgba(245,245,247,0.40)' }
-                }
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: '#6C63FF' }}>
+                    Current Plan
+                  </span>
+                  <span className="text-xs font-semibold" style={{ color: '#6C63FF' }}>
+                    Active
+                  </span>
+                </div>
+                <p className="text-lg font-bold mt-1" style={{ color: dark ? '#F5F5F7' : '#0A0A0F' }}>
+                  {planInfo.label}
+                </p>
+                {planInfo.desc && (
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: dark ? 'rgba(245,245,247,0.50)' : 'rgba(10,10,15,0.50)' }}>
+                    {planInfo.desc}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div
+                title={`Current plan: ${planInfo.label} · Active`}
+                className="w-12 h-12 mx-auto rounded-2xl border flex items-center justify-center text-sm font-bold"
+                style={{
+                  background: dark ? 'rgba(108,99,255,0.10)' : 'rgba(108,99,255,0.06)',
+                  borderColor: dark ? 'rgba(108,99,255,0.25)' : 'rgba(108,99,255,0.18)',
+                  color: '#6C63FF',
+                }}
               >
-                <Sun size={15} />
-              </button>
-            </div>
+                {planInfo.label.charAt(0)}
+              </div>
+            )}
           </div>
         </aside>
 
