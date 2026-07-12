@@ -10,6 +10,9 @@ import {
   Bar,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -41,6 +44,95 @@ function LegendDot({ color, label }: { color: string; label: string }) {
       <span className="w-2.5 h-2.5 rounded-[4px]" style={{ background: color }} />
       {label}
     </span>
+  )
+}
+
+// ── Spending donut: categories this month with center total ────────────
+const DONUT_COLORS = ['#6C63FF', '#00D4AA', '#FFB545', '#5B8DEF', '#9E9EA5']
+
+function compactNaira(n: number): string {
+  if (n >= 1_000_000) return `₦${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
+  if (n >= 1_000) return `₦${Math.round(n / 1_000)}K`
+  return `₦${Math.round(n)}`
+}
+
+export function ConceptSpendDonut({
+  data,
+  monthLabel,
+}: {
+  data: { category: string; total: number }[]
+  monthLabel: string
+}) {
+  const t = useChartTheme()
+  const { dark } = useConcept()
+
+  // Top 4 categories + everything else grouped as "Other"
+  const sorted = [...data].sort((a, b) => b.total - a.total)
+  const top = sorted.slice(0, 4)
+  const otherTotal = sorted.slice(4).reduce((s, d) => s + d.total, 0)
+  const slices = [...top, ...(otherTotal > 0 ? [{ category: 'Other', total: otherTotal }] : [])]
+  const grand = slices.reduce((s, d) => s + d.total, 0)
+
+  if (grand === 0) {
+    return (
+      <div className="h-56 flex items-center justify-center text-sm" style={{ color: t.tick }}>
+        No spending recorded for {monthLabel} yet.
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <p className="text-xs -mt-3 mb-1" style={{ color: t.tick }}>{monthLabel} · money out</p>
+      <div className="relative">
+        <ResponsiveContainer width="100%" height={210}>
+          <PieChart>
+            <Pie
+              data={slices}
+              dataKey="total"
+              nameKey="category"
+              innerRadius={64}
+              outerRadius={90}
+              paddingAngle={2}
+              cornerRadius={4}
+              strokeWidth={0}
+            >
+              {slices.map((s, i) => (
+                <Cell key={s.category} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{ background: t.tooltipBg, border: 'none', borderRadius: 12, color: t.tooltipText, fontSize: 13 }}
+              formatter={(value) => [formatCurrency(Number(value ?? 0)), '']}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-2xl font-bold tracking-tight" style={{ color: dark ? '#F5F5F7' : '#0A0A0F' }}>
+            {compactNaira(grand)}
+          </span>
+          <span className="text-xs" style={{ color: t.tick }}>total out</span>
+        </div>
+      </div>
+
+      {/* Legend list: dot · category · % · amount */}
+      <div className="mt-3 space-y-2.5">
+        {slices.map((s, i) => (
+          <div key={s.category} className="flex items-center gap-2.5 text-[13px]">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+            <span className="flex-1 truncate" style={{ color: dark ? 'rgba(245,245,247,0.75)' : 'rgba(10,10,15,0.70)' }}>
+              {s.category}
+            </span>
+            <span className="w-10 text-right" style={{ color: t.tick }}>
+              {Math.round((s.total / grand) * 100)}%
+            </span>
+            <span className="w-24 text-right font-semibold" style={{ color: dark ? '#F5F5F7' : '#0A0A0F' }}>
+              {formatCurrency(s.total)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 

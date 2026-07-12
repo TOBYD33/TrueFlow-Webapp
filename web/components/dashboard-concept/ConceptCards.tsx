@@ -6,7 +6,7 @@
 
 import { useConcept } from './ConceptProvider'
 import { formatCurrency } from '@/lib/utils'
-import { ArrowUpRight, ArrowDownRight, Sparkles } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, Sparkles, Receipt as ReceiptIcon } from 'lucide-react'
 
 // ── Base card ───────────────────────────────────────────────────────────
 export function ConceptCard({
@@ -191,6 +191,96 @@ export function ConceptClientBars({
           </span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Recent activity feed: money in & out, all channels ──────────────────
+export interface ActivityItem {
+  direction: 'in' | 'out'
+  title: string       // "Adunni Okafor · Brand Identity" / "Shoprite Lekki · Groceries"
+  subtitle: string    // "Payment received" / "Receipt scanned"
+  channel: 'whatsapp' | 'web' | 'mobile' | 'transfer'
+  amount: number
+  createdAt: string
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hr${hrs > 1 ? 's' : ''} ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days} days ago`
+  return new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })
+}
+
+const CHANNEL_STYLES: Record<ActivityItem['channel'], { label: string; bg: string; color: string }> = {
+  whatsapp: { label: 'WhatsApp', bg: 'rgba(37,211,102,0.10)', color: '#25D366' },
+  web:      { label: 'Web',      bg: 'rgba(108,99,255,0.10)', color: '#6C63FF' },
+  mobile:   { label: 'App',      bg: 'rgba(255,181,69,0.10)', color: '#FFB545' },
+  transfer: { label: 'Transfer In', bg: 'rgba(0,212,170,0.10)', color: '#00D4AA' },
+}
+
+export function ConceptActivity({ items }: { items: ActivityItem[] }) {
+  const { dark } = useConcept()
+  return (
+    <div>
+      {items.length === 0 && (
+        <p className="text-sm py-8 text-center" style={{ color: dark ? 'rgba(245,245,247,0.40)' : 'rgba(10,10,15,0.40)' }}>
+          No activity yet — scan a receipt or log a client payment to see it here.
+        </p>
+      )}
+      <div className="divide-y" style={{ borderColor: dark ? 'rgba(245,245,247,0.06)' : 'rgba(10,10,15,0.05)' }}>
+        {items.map((item, i) => {
+          const ch = CHANNEL_STYLES[item.channel]
+          return (
+            <div key={i} className="flex items-center gap-3.5 py-3.5 first:pt-1 last:pb-1">
+              {/* Direction icon */}
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={
+                  item.direction === 'in'
+                    ? { background: 'rgba(0,212,170,0.14)', color: '#00A88A' }
+                    : { background: dark ? 'rgba(245,245,247,0.06)' : 'rgba(10,10,15,0.05)', color: dark ? 'rgba(245,245,247,0.55)' : 'rgba(10,10,15,0.45)' }
+                }
+              >
+                {item.direction === 'in' ? <ArrowUpRight size={17} /> : <ReceiptIcon size={16} />}
+              </div>
+
+              {/* Title + subtitle */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate" style={{ color: dark ? '#F5F5F7' : '#0A0A0F' }}>
+                  {item.title}
+                </p>
+                <p className="text-xs mt-0.5 truncate" style={{ color: dark ? 'rgba(245,245,247,0.45)' : 'rgba(10,10,15,0.45)' }}>
+                  {item.subtitle} · {timeAgo(item.createdAt)}
+                </p>
+              </div>
+
+              {/* Channel badge */}
+              <span
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full shrink-0"
+                style={{ background: ch.bg, color: ch.color }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: ch.color }} />
+                {ch.label}
+              </span>
+
+              {/* Signed amount */}
+              <span
+                className="text-sm font-bold shrink-0 w-28 text-right tabular-nums"
+                style={{ color: item.direction === 'in' ? '#00A88A' : dark ? '#F5F5F7' : '#0A0A0F' }}
+              >
+                {item.direction === 'in' ? '+' : '-'}{formatCurrency(item.amount)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

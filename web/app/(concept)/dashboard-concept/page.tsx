@@ -17,10 +17,12 @@ import {
   ConceptClientBars,
   ConceptTelloCard,
   ConceptLeaderboard,
+  ConceptActivity,
+  ActivityItem,
   LeaderboardMember,
 } from '@/components/dashboard-concept/ConceptCards'
 import {
-  ConceptSpendBars,
+  ConceptSpendDonut,
   ConceptIncomeExpenseLines,
 } from '@/components/dashboard-concept/ConceptCharts'
 import { useConcept } from '@/components/dashboard-concept/ConceptProvider'
@@ -31,6 +33,9 @@ interface ReceiptRow {
   date: string
   category: string
   uploaded_by: string | null
+  vendor_name: string | null
+  uploaded_via: string | null
+  created_at: string
 }
 
 export default function DashboardConceptPage() {
@@ -39,6 +44,7 @@ export default function DashboardConceptPage() {
 
   const [receipts, setReceipts] = useState<ReceiptRow[]>([])
   const [payments, setPayments] = useState<{ amount: number; payment_date: string }[]>([])
+  const [activity, setActivity] = useState<ActivityItem[]>([])
   const [budgetTotal, setBudgetTotal] = useState(0)
   const [clients, setClients] = useState<{ name: string; balance: number }[]>([])
   const [outstandingTotal, setOutstandingTotal] = useState(0)
@@ -55,8 +61,8 @@ export default function DashboardConceptPage() {
       const now = new Date()
 
       const [receiptsRes, paymentsRes, budgetsRes, clientsRes, remindersRes, membersRes] = await Promise.all([
-        supabase.from('receipts').select('amount, date, category, uploaded_by').eq('org_id', orgId).gte('date', sinceStr),
-        supabase.from('client_payments').select('amount, payment_date').eq('org_id', orgId).gte('payment_date', sinceStr),
+        supabase.from('receipts').select('amount, date, category, uploaded_by, vendor_name, uploaded_via, created_at').eq('org_id', orgId).gte('date', sinceStr),
+        supabase.from('client_payments').select('amount, payment_date, created_at, notes, clients(name)').eq('org_id', orgId).gte('payment_date', sinceStr),
         supabase.from('budgets').select('amount, month, year').eq('org_id', orgId),
         supabase.from('clients').select('name, outstanding_balance').eq('org_id', orgId).eq('status', 'active').order('outstanding_balance', { ascending: false }),
         supabase.from('reminders').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', 'active'),
@@ -65,7 +71,40 @@ export default function DashboardConceptPage() {
 
       const receiptRows = (receiptsRes.data ?? []) as ReceiptRow[]
       setReceipts(receiptRows)
-      setPayments((paymentsRes.data ?? []) as { amount: number; payment_date: string }[])
+      const paymentRows = ((paymentsRes.data ?? []) as unknown) as {
+        amount: number
+        payment_date: string
+        created_at: string
+        notes: string | null
+        clients: { name: string } | { name: string }[] | null
+      }[]
+      setPayments(paymentRows)
+
+      // Merged activity feed: payments in + receipts out, newest first
+      const activityIn: ActivityItem[] = paymentRows.map(p => {
+        const client = Array.isArray(p.clients) ? p.clients[0] : p.clients
+        return {
+          direction: 'in',
+          title: client?.name ? `${client.name}${p.notes ? ` · ${p.notes}` : ''}` : 'Client payment',
+          subtitle: 'Payment received',
+          channel: 'transfer',
+          amount: Number(p.amount),
+          createdAt: p.created_at,
+        }
+      })
+      const activityOut: ActivityItem[] = receiptRows.map(r => ({
+        direction: 'out',
+        title: `${r.vendor_name ?? 'Receipt'} · ${r.category}`,
+        subtitle: r.uploaded_via === 'whatsapp' ? 'Receipt forwarded' : 'Receipt scanned',
+        channel: (r.uploaded_via === 'whatsapp' || r.uploaded_via === 'mobile' ? r.uploaded_via : 'web') as ActivityItem['channel'],
+        amount: Number(r.amount),
+        createdAt: r.created_at,
+      }))
+      setActivity(
+        [...activityIn, ...activityOut]
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 6)
+      )
 
       // Budget for the current month (or budgets with no month = general monthly)
       const budgets = (budgetsRes.data ?? []) as { amount: number; month: number | null; year: number | null }[]
@@ -126,19 +165,14 @@ export default function DashboardConceptPage() {
     return { m: d.getMonth(), y: d.getFullYear(), label: d.toLocaleString('default', { month: 'short' }) }
   })
 
-  // Top spending category across the window
-  const catTotals = receipts.reduce<Record<string, number>>((acc, r) => {
-    acc[r.category] = (acc[r.category] ?? 0) + Number(r.amount)
-    return acc
-  }, {})
-  const topCategory = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0]?.[0]
-
-  const barData = months.map(({ m, y, label }) => {
-    const rows = receipts.filter(r => { const d = new Date(r.date); return d.getMonth() === m && d.getFullYear() === y })
-    const top = rows.filter(r => r.category === topCategory).reduce((s, r) => s + Number(r.amount), 0)
-    const rest = rows.filter(r => r.category !== topCategory).reduce((s, r) => s + Number(r.amount), 0)
-    return { month: label, top, rest }
-  })
+  // This month's spending grouped by category (donut)
+  const donutData = Object.entries(
+    receipts.filter(r => inMonth(r.date)).reduce<Record<string, number>>((acc, r) => {
+      acc[r.category] = (acc[r.category] ?? 0) + Number(r.amount)
+      return acc
+    }, {})
+  ).map(([category, total]) => ({ category, total }))
+  const monthLabel = now.toLocaleString('default', { month: 'long' })
 
   const lineData = months.map(({ m, y, label }) => {
     const expenses = receipts.filter(r => { const d = new Date(r.date); return d.getMonth() === m && d.getFullYear() === y }).reduce((s, r) => s + Number(r.amount), 0)
@@ -190,16 +224,24 @@ export default function DashboardConceptPage() {
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             {/* Left 2/3: charts + gauge/bars row */}
             <div className="xl:col-span-2 space-y-5">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                <ConceptCard title="Spending by Category">
-                  <ConceptSpendBars data={barData} />
+              {/* Donut + activity feed, reference layout proportions */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                <ConceptCard title="Spending by Category" className="lg:col-span-2">
+                  <ConceptSpendDonut data={donutData} monthLabel={monthLabel} />
                 </ConceptCard>
-                <ConceptCard title="Income vs Expenses">
-                  <ConceptIncomeExpenseLines data={lineData} />
+                <ConceptCard
+                  title="Recent Activity"
+                  className="lg:col-span-3"
+                  action={<span className="text-xs" style={subtle}>money in &amp; out · all channels</span>}
+                >
+                  <ConceptActivity items={activity} />
                 </ConceptCard>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <ConceptCard title="Income vs Expenses">
+                  <ConceptIncomeExpenseLines data={lineData} />
+                </ConceptCard>
                 <ConceptCard title="Budget Health">
                   {budgetTotal > 0 ? (
                     <ConceptGauge pctUsed={budgetPctUsed} target={budgetTotal} />
@@ -210,10 +252,11 @@ export default function DashboardConceptPage() {
                     </div>
                   )}
                 </ConceptCard>
-                <ConceptCard title="Top Clients by Outstanding Balance">
-                  <ConceptClientBars clients={clients} />
-                </ConceptCard>
               </div>
+
+              <ConceptCard title="Top Clients by Outstanding Balance">
+                <ConceptClientBars clients={clients} />
+              </ConceptCard>
             </div>
 
             {/* Right 1/3: promo + leaderboard */}
