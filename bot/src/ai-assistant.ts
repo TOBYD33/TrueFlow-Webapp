@@ -53,7 +53,12 @@ ACTION:SET_BUDGET:{category}:{amount}
 ACTION:SET_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}:{HHMM}
   (HHMM = optional time as 4 digits, 24-hour WAT, e.g. 2030 for 8:30 PM.
    ALWAYS include it when the user gives a time. Omit only when no time
-   is given — those reminders deliver at 8:00 AM on the due date.)
+   is given — those reminders deliver at 8:00 AM on the due date.
+   Emit SET_REMINDER ONLY when the user is creating or changing a reminder.
+   Never emit it when they are merely asking about one — e.g. "did you set
+   the reminder?" is a question, answer it without any ACTION tag. To change
+   an existing reminder's time, emit SET_REMINDER with the SAME title and
+   date and the new time — it updates in place, it does not duplicate.)
 ACTION:EXPORT_PDF
 ACTION:SHOW_BUDGETS
 ACTION:UPDATE_INVENTORY:{itemName}:{quantityChange}:{changeType}

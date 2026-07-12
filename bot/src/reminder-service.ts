@@ -31,6 +31,34 @@ export async function setReminder(params: {
   category?: string
   dueTime?: string // 'HH:MM' 24h WAT
 }) {
+  // Upsert-by-intent: if an active reminder with the same title and date
+  // already exists, update it instead of creating a duplicate. The AI can
+  // emit SET_REMINDER repeatedly for one conversation ("set it" / "did you
+  // set it?" / "change it to 11:40") — that must never mean three rows.
+  const { data: existing } = await supabase
+    .from('reminders')
+    .select('id')
+    .eq('org_id', params.orgId)
+    .eq('due_date', params.dueDate)
+    .eq('status', 'active')
+    .ilike('title', params.title)
+    .maybeSingle()
+
+  if (existing) {
+    const { data: updated, error: updErr } = await supabase
+      .from('reminders')
+      .update({
+        due_time: params.dueTime || null,
+        recurrence: params.recurrence,
+        category: params.category || 'custom'
+      })
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (updErr) throw new Error(updErr.message)
+    return updated
+  }
+
   const { data, error } = await supabase
     .from('reminders')
     .insert({
