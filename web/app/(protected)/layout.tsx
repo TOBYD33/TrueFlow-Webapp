@@ -72,18 +72,28 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   let plan = 'free'
 
   if (!impersonationSessionId) {
+    // Identity merge: if this profile was merged into a primary profile,
+    // resolve through merged_into_id so the user sees the merged account.
+    let effectiveUserId = user.id
+    const { data: ownRow } = await admin
+      .from('profiles')
+      .select('merged_into_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (ownRow?.merged_into_id) effectiveUserId = ownRow.merged_into_id
+
     // Use admin client so this works regardless of org_members RLS policy state
     const { data: member } = await admin
       .from('org_members')
       .select('org_id')
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
       .maybeSingle()
     orgId = member?.org_id ?? null
-    viewingUserId = user.id
+    viewingUserId = effectiveUserId
     const { data: ownProfile } = await admin
       .from('profiles')
       .select('phone')
-      .eq('id', user.id)
+      .eq('id', effectiveUserId)
       .maybeSingle()
     viewingPhone = ownProfile?.phone ?? null
   }

@@ -13,7 +13,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     .select(`
       *,
       organizations(id, name, plan, currency, receipt_limit, default_tax_country, status),
-      profiles(id, full_name)
+      profiles(id, full_name, merged_into_id)
     `)
     .eq('phone_number', phoneNumber)
     .single()
@@ -25,18 +25,36 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
       .eq('phone_number', phoneNumber)
 
     const org = session.organizations as any
-    const profile = session.profiles as any
+    let profile = session.profiles as any
+
+    // Identity merge: if this profile was merged into another, transparently
+    // resolve to the primary profile on every message, and self-heal the
+    // session row so future lookups are direct.
+    let resolvedUserId = session.user_id
+    if (profile?.merged_into_id) {
+      resolvedUserId = profile.merged_into_id
+      const { data: primaryProfile } = await supabase
+        .from('profiles')
+        .select('id, full_name, merged_into_id')
+        .eq('id', resolvedUserId)
+        .maybeSingle()
+      if (primaryProfile) profile = primaryProfile
+      await supabase
+        .from('whatsapp_sessions')
+        .update({ user_id: resolvedUserId })
+        .eq('phone_number', phoneNumber)
+    }
 
     const { data: member } = await supabase
       .from('org_members')
       .select('role, whatsapp_active, can_see_clients, can_see_income, can_export')
       .eq('org_id', session.org_id)
-      .eq('user_id', session.user_id)
+      .eq('user_id', resolvedUserId)
       .is('removed_at', null)
       .single()
 
     return {
-      user_id: session.user_id,
+      user_id: resolvedUserId,
       org_id: session.org_id,
       org_name: org?.name || 'My Business',
       org_status: org?.status || 'active',

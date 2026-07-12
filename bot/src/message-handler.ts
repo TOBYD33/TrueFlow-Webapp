@@ -17,6 +17,7 @@ import { getAIResponse, getWelcomeMessage } from './ai-assistant'
 import { executeActions } from './action-executor'
 import { buildTextResponse } from './twiml-builder'
 import { getSetupState, continueGuidedSetup } from './client-setup-service'
+import { maybeGetLinkPrompt, handleMergeReply } from './merge-service'
 import { supabase } from './supabase'
 import { TwilioWebhookBody } from '../types'
 
@@ -128,8 +129,17 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     return buildTextResponse(welcome)
   }
 
+  // ── Step 2b: Identity-merge conversation (post-onboarding, optional) ─────
+  // Watches for an email reply to the one-time link offer, or the 6-digit
+  // verification code. Anything else falls through to normal routing.
+  if (!hasImage && messageText) {
+    const mergeReply = await handleMergeReply(phoneNumber, messageText, user)
+    if (mergeReply) return buildTextResponse(mergeReply)
+  }
+
   // ── Step 3: Handle image — SINGLE Claude Vision call ─────────────────────
   let scannedReceipt: any = null
+  let pendingLinkPrompt: string | null = null
 
   if (hasImage && imageUrl) {
     if (imageType && !imageType.startsWith('image/')) {
@@ -175,6 +185,10 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     scannedReceipt = await saveFromAnalysis(analysis, user.org_id, user.user_id, user.currency)
 
     if (scannedReceipt) {
+      // Optional account-link offer — fires exactly once, only after the
+      // FIRST receipt scan (the onboarding aha moment), per identity spec
+      const linkPrompt = await maybeGetLinkPrompt(user, phoneNumber)
+
       const missingNote = buildMissingFieldsNote(analysis)
       if (missingNote) {
         const vendor = analysis.vendor_name || 'Unknown vendor'
@@ -184,8 +198,13 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
         return buildTextResponse(
           `✅ *Receipt logged!*\n\n` +
           `Vendor: ${vendor}\nAmount: ${amount}\nCategory: ${analysis.category}` +
-          missingNote
+          missingNote +
+          (linkPrompt ? `\n\n${linkPrompt}` : '')
         )
+      }
+      if (linkPrompt) {
+        // Attach the one-time offer to the scan confirmation the AI sends
+        pendingLinkPrompt = linkPrompt
       }
     } else {
       return buildTextResponse(
@@ -225,10 +244,10 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   if (actions.length > 0) {
     const notifications = await executeActions(actions, user)
     if (notifications.length > 0) {
-      const combined = [reply, ...notifications].filter(Boolean).join('\n\n')
+      const combined = [reply, ...notifications, pendingLinkPrompt].filter(Boolean).join('\n\n')
       return buildTextResponse(combined)
     }
   }
 
-  return buildTextResponse(reply)
+  return buildTextResponse(pendingLinkPrompt ? `${reply}\n\n${pendingLinkPrompt}` : reply)
 }
