@@ -10,10 +10,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
-import { Menu, Settings, User, LogOut, Sun, Moon, Search, Download } from 'lucide-react'
+import { Menu, Settings, User, LogOut, Sun, Moon, Download } from 'lucide-react'
 import { ThemeProvider, useTheme, tone, BRAND } from './shared/theme'
 import { AppSidebar } from './shared/AppSidebar'
 import { PageToolsProvider, usePageToolsHeader } from './shared/PageTools'
+import { GlobalSearch } from './shared/GlobalSearch'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -36,20 +37,20 @@ function AppShellInner({ children, orgName, plan }: AppShellProps) {
   const router = useRouter()
   const { dark, setDark } = useTheme()
   const t = tone(dark)
-  const { query, setQuery, searchEnabled, exportEnabled, runExport } = usePageToolsHeader()
+  const { exportEnabled, runExport } = usePageToolsHeader()
   const searchRef = useRef<HTMLInputElement>(null)
 
-  // Cmd/Ctrl+F focuses the header search (when the page supports it)
+  // Cmd/Ctrl+F focuses the global search from any page
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && searchEnabled) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         searchRef.current?.focus()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [searchEnabled])
+  }, [])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [initials, setInitials] = useState('?')
@@ -148,32 +149,8 @@ function AppShellInner({ children, orgName, plan }: AppShellProps) {
           <span className="text-sm truncate" style={{ color: t.textDim }}>{orgName}</span>
         </div>
 
-        {/* Global search — identical on every page; per-page data filter */}
-        <div
-          className="hidden md:flex items-center gap-2 flex-1 max-w-md rounded-xl px-3.5 h-10"
-          style={{
-            background: dark ? 'rgba(245,245,247,0.06)' : BRAND.cloud,
-            opacity: searchEnabled ? 1 : 0.5,
-          }}
-          title={searchEnabled ? undefined : 'Search is not available on this page'}
-        >
-          <Search size={15} style={{ color: t.textDim }} />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            disabled={!searchEnabled}
-            placeholder="Search"
-            className="flex-1 bg-transparent outline-none text-sm disabled:cursor-not-allowed"
-            style={{ color: t.text }}
-          />
-          <span
-            className="text-[11px] px-1.5 py-0.5 rounded border shrink-0"
-            style={{ color: t.textDim, borderColor: t.border }}
-          >
-            ⌘ + F
-          </span>
-        </div>
+        {/* Global cross-app search — identical on every page */}
+        <GlobalSearch ref={searchRef} />
 
         <div className="flex items-center gap-2.5 shrink-0">
           {/* Light/dark toggle pill — before Export CSV, matching the approved concept order */}
