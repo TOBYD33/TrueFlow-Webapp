@@ -58,7 +58,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'TrueFlow <hello@gettrueflow.com>',
+        from: 'TrueFlow <hello@verify.gettrueflow.com>',
         to,
         subject,
         html,

@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'TrueFlow <hello@gettrueflow.com>',
+          from: 'TrueFlow <hello@verify.gettrueflow.com>',
           to: [contact],
           subject: `${inviterName} invited you to join ${orgName} on TrueFlow`,
           html: `<p>Hi there,</p><p><strong>${inviterName}</strong> has invited you to join <strong>${orgName}</strong> on TrueFlow as <strong>${role}</strong>.</p><p><a href="${acceptLink}" style="background:#6C63FF;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0;">Accept Invitation</a></p><p>This link expires in 7 days.</p><p>— The TrueFlow Team</p>`,
