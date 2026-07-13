@@ -9,6 +9,7 @@ import axios from 'axios'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export interface ImageAnalysis {
+  content_type: 'financial' | 'business_card'
   direction: 'incoming' | 'outgoing' | 'unknown'
   image_type: 'vendor_receipt' | 'bank_transfer_receipt' | 'sms_credit' | 'sms_debit' | 'other'
   // Incoming payment (client paid you)
@@ -25,27 +26,41 @@ export interface ImageAnalysis {
   reference: string | null
   narration: string | null
   confidence: 'high' | 'medium' | 'low'
+  // Business card fields (content_type === 'business_card' only)
+  contact_name: string | null
+  contact_company: string | null
+  contact_role: string | null
+  contact_phone: string | null
+  contact_email: string | null
   // Raw image buffer passed through — no re-download needed downstream
   buffer: Buffer
   contentType: string
 }
 
-const ANALYSIS_PROMPT = `You are analyzing a financial image for TrueFlow, a Nigerian business finance app.
+const ANALYSIS_PROMPT = `You are analyzing an image sent to TrueFlow, a Nigerian business finance app.
 
-The image may be any of these:
-1. A vendor/shop receipt (food, transport, airtime, services, POS)
-2. A bank transfer receipt PDF (FirstBank, GTBank, Zenith Bank, etc.)
-3. A bank SMS credit alert screenshot (money received — has "CR Amt" or "NIP/ABN/")
-4. A bank SMS debit alert screenshot (money sent — has "DR Amt")
-5. Something else
+FIRST, decide the content_type:
+- "business_card" = a business card or contact card: a person's name, job title,
+  company, and contact details (phone/email), no monetary amounts, laid out like
+  a printed or digital business card.
+- "financial" = anything else relevant to money: a vendor/shop receipt, a bank
+  transfer receipt PDF, a bank SMS credit/debit alert screenshot, etc.
 
-DIRECTION RULES:
+IF content_type is "business_card", extract the contact fields and set every
+financial field (direction, image_type, sender_name, vendor_name, category,
+amount, date, bank, reference, narration, tax_amount) to null, "unknown", or
+"other" as appropriate — do NOT guess financial data from a business card.
+
+IF content_type is "financial", apply these DIRECTION RULES:
 - "incoming" = money came TO the user (client paid them). Signals: "CR Amt", "NIP/ABN/", "Credit Alert", "You have received", "Inflow", page shows the user as Beneficiary
 - "outgoing" = user paid someone (an expense). Signals: "DR Amt", "NIP CR//", "Debit Alert", "Debit Account", "You have paid", "POS", "Airtime", shop/vendor receipt
 - "unknown" = truly cannot determine direction
+And set every business card field (contact_name, contact_company, contact_role,
+contact_phone, contact_email) to null.
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
+  "content_type": "financial or business_card",
   "direction": "incoming or outgoing or unknown",
   "image_type": "vendor_receipt or bank_transfer_receipt or sms_credit or sms_debit or other",
   "sender_name": "name of person who sent money to user (incoming only) or null",
@@ -58,7 +73,12 @@ Return ONLY valid JSON, no markdown, no explanation:
   "reference": "transaction reference number or null",
   "narration": "transaction description/narration or null",
   "tax_amount": number or null,
-  "confidence": "high or medium or low"
+  "confidence": "high or medium or low",
+  "contact_name": "full name on the business card, or null",
+  "contact_company": "company name on the business card, or null",
+  "contact_role": "job title on the business card, or null",
+  "contact_phone": "phone number on the business card, or null",
+  "contact_email": "email on the business card, or null"
 }
 
 Nigerian banks to recognise: GTBank, Access Bank, Zenith Bank, UBA, First Bank, Opay, PalmPay, Moniepoint, Kuda, Stanbic, Sterling, Wema, FCMB, Polaris, Union Bank, Providus, Jaiz.
@@ -113,6 +133,7 @@ export async function analyzeImage(imageUrl: string): Promise<ImageAnalysis | nu
 
     if (!parsed.currency) parsed.currency = 'NGN'
     if (!parsed.category) parsed.category = 'Other'
+    if (!parsed.content_type) parsed.content_type = 'financial'
 
     return { ...parsed, buffer, contentType }
   } catch (err) {

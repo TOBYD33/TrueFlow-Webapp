@@ -13,11 +13,13 @@ import { getOrCreateUser, isNewUser, markUserNotNew, getMonthlyReceiptCount, fin
 import { analyzeImage, buildMissingFieldsNote } from './image-analyzer'
 import { handleIncomingPayment } from './smart-transfer'
 import { saveFromAnalysis } from './receipt-scanner'
-import { getAIResponse, getWelcomeMessage } from './ai-assistant'
+import { getAIResponse } from './ai-assistant'
 import { executeActions } from './action-executor'
 import { buildTextResponse } from './twiml-builder'
 import { getSetupState, continueGuidedSetup } from './client-setup-service'
-import { maybeGetLinkPrompt, handleMergeReply } from './merge-service'
+import { maybeGetLinkPrompt, maybeGetOnboardingLinkPrompt, handleMergeReply } from './merge-service'
+import { startOnboarding, handleOnboardingReply, completeOnboarding } from './onboarding-service'
+import { saveBusinessCardLead } from './business-card-service'
 import { supabase } from './supabase'
 import { TwilioWebhookBody } from '../types'
 
@@ -121,13 +123,24 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     isOwnerOrAdmin: ['owner', 'admin'].includes(user.role),
   }
 
-  // ── Step 2: Welcome new users ─────────────────────────────────────────────
+  // ── Step 2: Start conversational onboarding for brand-new users ─────────
+  // Exactly 2 questions (name, then business/family/personal), never more,
+  // never before this point — see the Seamless Onboarding Flow business
+  // rules in CLAUDE.md.
   const newUser = await isNewUser(phoneNumber)
   if (newUser) {
     await markUserNotNew(phoneNumber)
-    const welcome = await getWelcomeMessage(user.full_name)
-    return buildTextResponse(welcome)
+    const firstMessage = await startOnboarding(phoneNumber)
+    return buildTextResponse(firstMessage)
   }
+
+  // ── Step 2a: Mid-onboarding name/type questions ──────────────────────────
+  // Only short-circuits while awaiting the name or type answer. Once
+  // onboarding reaches awaiting_first_action, this is a no-op and the
+  // message falls through to the real image/AI handling below.
+  const onboardingResult = await handleOnboardingReply(phoneNumber, messageText, hasImage, user.org_id, user.user_id)
+  if (onboardingResult.handled) return buildTextResponse(onboardingResult.reply!)
+  const onboardingStepBefore = onboardingResult.step
 
   // ── Step 2b: Identity-merge conversation (post-onboarding, optional) ─────
   // Watches for an email reply to the one-time link offer, or the 6-digit
@@ -151,6 +164,32 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     if (!analysis) {
       return buildTextResponse(
         `I had trouble reading that image. Try a clearer photo, or add the details manually at *${APP_URL}/receipts*`
+      )
+    }
+
+    if (analysis.content_type === 'business_card') {
+      const lead = await saveBusinessCardLead(user.org_id, {
+        contact_name: analysis.contact_name,
+        contact_company: analysis.contact_company,
+        contact_role: analysis.contact_role,
+        contact_phone: analysis.contact_phone,
+        contact_email: analysis.contact_email,
+      })
+
+      if (!lead) {
+        return buildTextResponse(
+          `I can see a business card but couldn't read a name clearly. Try a clearer photo, or add the contact manually at *${APP_URL}/clients*`
+        )
+      }
+
+      const wasOnboarding = onboardingStepBefore === 'awaiting_first_action'
+      if (wasOnboarding) await completeOnboarding(phoneNumber)
+      const cardLinkPrompt = wasOnboarding ? await maybeGetOnboardingLinkPrompt(phoneNumber) : null
+
+      return buildTextResponse(
+        `Got it! Saved *${lead.name}*${lead.company ? ` from *${lead.company}*` : ''} as a new lead 🪪\n\n` +
+        `Want me to set a follow-up reminder? Just say when, like 'remind me in 3 days.'` +
+        (cardLinkPrompt ? `\n\n${cardLinkPrompt}` : '')
       )
     }
 
@@ -185,6 +224,8 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     scannedReceipt = await saveFromAnalysis(analysis, user.org_id, user.user_id, user.currency)
 
     if (scannedReceipt) {
+      if (onboardingStepBefore === 'awaiting_first_action') await completeOnboarding(phoneNumber)
+
       // Optional account-link offer — fires exactly once, only after the
       // FIRST receipt scan (the onboarding aha moment), per identity spec
       const linkPrompt = await maybeGetLinkPrompt(user, phoneNumber)
@@ -240,14 +281,24 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     userPermissions,
   })
 
+  // Onboarding's first real action wasn't a receipt or business card (most
+  // commonly a reminder) — this AI turn is the aha moment, so close out
+  // onboarding and offer the one-time account-link prompt here too.
+  let onboardingLinkPrompt: string | null = null
+  if (onboardingStepBefore === 'awaiting_first_action') {
+    await completeOnboarding(phoneNumber)
+    onboardingLinkPrompt = await maybeGetOnboardingLinkPrompt(phoneNumber)
+  }
+
   // ── Step 5: Execute any actions Claude detected ───────────────────────────
   if (actions.length > 0) {
     const notifications = await executeActions(actions, user)
     if (notifications.length > 0) {
-      const combined = [reply, ...notifications, pendingLinkPrompt].filter(Boolean).join('\n\n')
+      const combined = [reply, ...notifications, pendingLinkPrompt, onboardingLinkPrompt].filter(Boolean).join('\n\n')
       return buildTextResponse(combined)
     }
   }
 
-  return buildTextResponse(pendingLinkPrompt ? `${reply}\n\n${pendingLinkPrompt}` : reply)
+  const finalReply = [reply, pendingLinkPrompt, onboardingLinkPrompt].filter(Boolean).join('\n\n')
+  return buildTextResponse(finalReply)
 }

@@ -5,6 +5,13 @@
 > Do not delete it. Keep it updated as the project evolves.
 > Last updated: June 2025
 
+> 🔔 OPEN REMINDER, BEFORE MVP/PUBLIC LAUNCH: the Permanently Erase
+> admin action currently deletes immediately with no cooling-off
+> period, intentionally simplified during Ambassador testing. This
+> MUST be turned back into a 24-hour delayed, cancellable erasure
+> before real users' data is on the line. Search "cooling-off" in
+> this file for the full context.
+
 ---
 
 ## What Is TrueFlow
@@ -1061,7 +1068,26 @@ Primary: #TrueFlow #Tello #AIAssistant #Nigeria
 Secondary: #PersonalFinance #SmallBusiness #AfricanFintech
 Avoid leading with: #SME #B2B #Fintech (too corporate for first impression)
 
-### Logo
+### Logo — Current Status
+
+**TEMPORARY LOGO IN USE**: gradient orb, off-center radial glow,
+Electric Violet core blending into Mint Verify edge, asymmetric
+composition (glow shifted up-left of center for a more dynamic,
+less static feel). Transparent background, 1024x1024px PNG.
+File: trueflow_logo_concept3_offcenter.png
+
+This is a placeholder logo for early Founders Edition launch,
+social media profiles, and WhatsApp Business Profile photo. It is
+NOT the final brand mark. Use this exact file everywhere a logo is
+needed right now: Instagram, TikTok, X profile photos, WhatsApp
+Business Profile, favicon, app icon placeholder, Tello's avatar in
+the chat bubble.
+
+The final logo concept below (interlocking TF letterform) remains
+the long-term design direction to revisit and properly vectorize
+once the brand is ready for a permanent identity.
+
+### Logo — Final Concept (Not Yet Built, Future Direction)
 - Mark: Geometric interlocking TF letterform inside a rounded square
 - T shape: vertical stem + crossbar (white on violet)
 - F shape: offset below T, sharing the crossbar as its top bar (white, slightly transparent)
@@ -1414,48 +1440,104 @@ WhatsApp bot. Web and mobile login use OTP sent to the same WhatsApp number.
 
 ### Exact Conversation Script
 
+Note: the bot identifies itself as "TrueFlow" here, never "Tello" — the
+Tello persona is web/mobile-only per the Platform Compliance section
+below and the Tello business rules; WhatsApp keeps the plain TrueFlow
+identity for Meta compliance reasons.
+
 ```
 User: Hi, I want to start with TrueFlow
 
-Bot: 👋 Welcome to TrueFlow!
+Bot: Hey! I'm TrueFlow 👋
+     What should I call you?
 
-     I'm your AI assistant for tracking money,
-     in and out. Before we start, what should
-     I call your business? (Or just your name
-     if this is personal.)
+User: Marcus
 
-User: Marcus Ventures
+Bot: Nice to meet you, Marcus! Quick one, is
+     this for your business, your family, or
+     just you?
 
-Bot: Got it, Marcus Ventures ✅
+User: business
 
-     Quick one, is this for:
-     1️⃣ My business
-     2️⃣ My family
-     3️⃣ Just me, personal
+Bot: Here's what we can do together:
+     📷 Scan receipts, just send a photo
+     💰 Track client payments
+     📊 Set budgets by category, like a
+        Budget for Family Trip
+     ⏰ Reminders for bills, deadlines,
+        even birthdays
+     🗂️ Manage clients and projects
+     🪪 Scan a business card to save a new
+        lead automatically
 
-User: 1
+     Let's try it. Got a receipt handy?
+     Send a photo.
 
-Bot: Perfect. Last thing, send me a photo of
-     any receipt, or a payment screenshot a
-     client sent you. I'll show you exactly
-     what I can do.
+     No receipt nearby? Tell me something to
+     remind you about instead, like 'remind
+     me to pay rent Friday.'
 
 [User sends a receipt photo]
 
-Bot: ✅ Got it!
+Bot: ✅ Receipt logged!
 
-     🏪 Shoprite Lekki
-     💰 ₦24,500
-     📂 Food & Supplies
-     📅 14 June 2025
+     Vendor: Shoprite Lekki
+     Amount: NGN 24,500
+     Category: Food & Drink
 
-     That's it. Every receipt from now on
-     works the same way.
-
-     Want to see this on a full dashboard too?
-     👉 app.gettrueflow.com/login?phone=234XXX
-     (Tap, no password needed)
+     Already using TrueFlow on the web? Reply
+     with your email to link your accounts, or
+     just keep chatting to get started here.
 ```
+
+If the user answers "family" or "just me" instead of "business" at the
+second question, the 🪪 business card line is skipped entirely from the
+capability list — the rest of the list stays focused on personal/family
+use cases, and organizations.type is stored as 'family' or 'individual'
+accordingly (never guessed — if the reply is ambiguous, the bot asks
+again rather than picking one).
+
+**Business card as the first action** (business orgs only, but the bot
+never blocks trying it either way):
+
+```
+[User sends a business card photo instead of a receipt]
+
+Bot: Got it! Saved Adaeze Okoye from Okoye
+     Designs as a new lead 🪪
+
+     Want me to set a follow-up reminder? Just
+     say when, like 'remind me in 3 days.'
+
+     Already using TrueFlow on the web? Reply
+     with your email to link your accounts, or
+     just keep chatting to get started here.
+```
+
+A business-card scan creates a row in `clients` with `status = 'lead'`
+and `lead_source = 'business_card'` — never a project, invoice, or
+budget. It shows up in `/clients` ready to be converted once real work
+is agreed, exactly like any other lead source.
+
+**Reminder as the first action** (no receipt, no business card handy):
+
+```
+[User sends: "remind me to pay rent Friday"]
+
+Bot: Done! I'll remind you to pay rent this
+     Friday.
+
+     Already using TrueFlow on the web? Reply
+     with your email to link your accounts, or
+     just keep chatting to get started here.
+```
+
+In every case — receipt, business card, or reminder — that first real
+action is the AHA MOMENT. Onboarding is marked complete at that exact
+point, and the same optional web-account-link offer from the
+Cross-Channel Identity Merge section above appends to that one
+confirmation message, never before it, and never more than once per
+new WhatsApp number.
 
 ### Web/Mobile Passwordless Login Flow
 
@@ -1523,6 +1605,12 @@ form. Productive in two messages.
 Add to `/bot/src`:
 - `onboarding-service.ts` — tracks onboarding state, asks the right next
   question, marks completion
+- `business-card-service.ts` — saves a scanned business card as a
+  `clients` row with `status = 'lead'`, `lead_source = 'business_card'`
+- Update `image-analyzer.ts` — the single Claude Vision call also
+  classifies `content_type: 'financial' | 'business_card'` up front, so
+  a business card never gets forced through the receipt/payment
+  direction logic (still one call per image, per the Twilio 15s limit)
 - Update `user-service.ts` — `getOrCreateUser()` must create the placeholder
   organization on first contact, not wait for the name
 - Update `message-handler.ts` — check onboarding state before routing to
@@ -4115,3 +4203,444 @@ Always write: the feeling first, the features second.
 The feeling is "I will never lose track of anything important again."
 The features are receipts, clients, budgets, reminders, Tax Hub.
 Lead with the feeling. Let the features be discovered.
+
+---
+
+## Cross-Channel Identity Merge — Phone and Email Linking
+
+### Why This Exists
+
+A user may discover TrueFlow through WhatsApp first, or through the web
+app first (via Gmail sign-up). Right now these create two completely
+unrelated accounts with no way to recognize they belong to the same
+person. This section specifies how to let a user voluntarily link their
+phone-based WhatsApp identity and their email-based web identity into
+one account, without adding friction to the 95%+ of users who only ever
+use one channel, and without opening an account-takeover vector.
+
+### The Two Rules This Design Must Never Break
+
+1. The Seamless Onboarding Flow (see above) must stay exactly as fast
+   as it is today. Nothing in this spec adds a required question to
+   first-contact onboarding. Any request to link accounts is optional
+   and appears only after the existing aha moment, never before it.
+2. No account merge may ever happen from an unverified claim. A person
+   typing an email address, or a phone number, into a chat window is
+   not proof they own it. Every merge requires a verification code sent
+   TO the channel being claimed, entered back on the channel making the
+   claim, before any data is combined.
+
+### Flow 1 — WhatsApp User Optionally Links a Web Account
+
+This appends to the END of the existing Seamless Onboarding Flow,
+after the first receipt scan aha moment, never before it.
+
+```
+[existing onboarding completes as already specced]
+        ↓
+Bot sends ONE additional, clearly optional message:
+"Already using TrueFlow on the web? Reply with your
+ email to link your accounts, or just keep chatting
+ to get started here."
+        ↓
+User ignores this / keeps chatting normally
+  → nothing happens, this is the expected outcome
+  → for most users
+        ↓
+User replies with an email address
+        ↓
+Bot checks: does a profiles row exist with this email?
+        ↓
+NOT FOUND → "I couldn't find an account with that
+             email, no problem, you can always link
+             one later from Settings on the web app."
+             (do not create anything, do not merge
+             anything)
+        ↓
+FOUND → bot generates a 6-digit code, sends it to
+        THAT EMAIL ADDRESS (via Resend or existing
+        email service), NOT to WhatsApp
+        ↓
+Bot replies: "I found an account with that email.
+             I've sent a code there to confirm it's
+             really you. What's the code?"
+        ↓
+User checks their email, replies with the code
+        ↓
+Code correct → merge proceeds (see Merge Logic below)
+Code incorrect (3 attempts) → "That didn't match,
+  you can try again later from Settings on the web
+  app." Do not lock the account, just stop the flow.
+```
+
+### Flow 2 — Web User Optionally Links a WhatsApp Number
+
+Symmetric to Flow 1, initiated from the web app, likely from
+`/settings/profile` or a dashboard prompt shown once after signup.
+
+```
+Web user, signed up via Gmail, sees an optional card:
+"Also use TrueFlow on WhatsApp? Link your number to
+ sync everything in one place."
+        ↓
+User enters their phone number
+        ↓
+System checks: does an org_members or profiles row
+exist with this phone number?
+        ↓
+NOT FOUND → "No WhatsApp account found with that
+             number yet. Message us on WhatsApp to
+             get started there, then come back to
+             link it." (do not create anything)
+        ↓
+FOUND → system sends a 6-digit code to that phone
+        number VIA THE WHATSAPP BOT, not SMS
+        ↓
+Web UI shows: "We've sent a code to that number on
+              WhatsApp, enter it below to confirm."
+        ↓
+User checks WhatsApp, enters the code on the web form
+        ↓
+Code correct → merge proceeds (see Merge Logic below)
+Code incorrect (3 attempts) → clear the field, allow
+  retry, no lockout
+```
+
+### Merge Logic — What Actually Happens on a Successful Merge
+
+```sql
+-- Both records must resolve to a single profiles.id going forward.
+-- The general pattern:
+
+1. Identify which profile is "primary" (the one with more history,
+   or simply the one that existed first, created_at earlier wins)
+
+2. Update the secondary profile's associated org_members rows to
+   point to the primary profile's user_id instead
+
+3. Copy the missing identity field onto the primary profile:
+   - if primary had phone but no email, add the verified email
+   - if primary had email but no phone, add the verified phone
+
+4. Mark the secondary profile as merged, do not hard delete it:
+   alter table profiles add column if not exists merged_into_id uuid
+   references profiles(id);
+   update profiles set merged_into_id = <primary_id>, status = 'merged'
+   where id = <secondary_id>;
+
+5. Any future login attempt (OTP via phone, or Gmail via email) on
+   the secondary identity should resolve through merged_into_id to
+   the primary account transparently, the user never notices two
+   accounts ever existed.
+
+6. Send a confirmation on BOTH channels:
+   WhatsApp: "✅ Your accounts are linked! You can now log in on
+             web with this number's OTP or your email."
+   Email: "Your TrueFlow accounts have been linked. You can now
+          access your data from WhatsApp or the web with either
+          method."
+```
+
+### Business Rules
+
+1. Never ask for email during first-contact onboarding, the merge
+   offer only appears after the existing aha moment completes
+2. Never merge accounts based on an unverified claim, a verification
+   code sent to the actual channel being claimed is mandatory every
+   time, no exceptions
+3. Failed verification attempts never lock or suspend an account,
+   they simply end that merge attempt, the user can try again later
+4. A merged (secondary) profile is soft-marked via `merged_into_id`,
+   never hard-deleted, for audit and data-integrity purposes
+5. The optional merge prompt only fires once per new WhatsApp
+   onboarding, if the user skips it, do not repeat the offer on
+   every subsequent message, it can be resurfaced later from
+   Settings on the web app instead
+6. This entire flow is additive to the existing OTP-via-WhatsApp
+   login system already specced above, it does not replace or
+   change how OTP login itself works
+
+### New Database Fields Needed
+
+```sql
+alter table profiles add column if not exists merged_into_id uuid
+  references profiles(id);
+alter table profiles add column if not exists status text default 'active';
+-- status: 'active' | 'merged'
+
+create table if not exists identity_merge_codes (
+  id uuid primary key default gen_random_uuid(),
+  target_profile_id uuid references profiles(id),
+  code text not null,
+  channel text not null, -- 'email' | 'whatsapp'
+  requested_by_profile_id uuid references profiles(id),
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz default now()
+);
+```
+
+---
+
+## Super Admin Panel — Expanded Capabilities Spec
+
+### Why This Section Exists
+
+This extends the existing "Backend Admin Panel" and "Two-Layer
+Permission System" sections above with a complete, opinionated set
+of Super Admin capabilities, styled with the same visual theme
+already approved on /dashboard-concept. Read both earlier sections
+first, this section assumes that foundation (admin_role on profiles,
+admin_audit_log, impersonation_sessions, /admin route group) already
+exists and builds on top of it, it does not replace it.
+
+### The Complete Capability List
+
+```
+Already specced/built earlier, confirm working before extending:
+  Impersonation (with mandatory banner and audit log)
+  Role assignment: Super / Support / Finance / Readonly
+  Suspend / Reactivate organizations
+  admin_audit_log covering every admin action
+
+New in this section:
+  Edit user profile fields directly
+  Two-tier deletion: Suspend (soft, reversible, default) and
+    Permanently Erase (hard, requires typed confirmation, rare)
+  Activity monitoring feed across all users
+  Leaderboard: most active users, most active admins
+  Revenue reporting: weekly / monthly / quarterly / yearly
+  Broadcast/announcement tool to all users or a filtered segment
+  Visual theme matching /dashboard-concept exactly
+```
+
+### Deliberately NOT Building Right Now
+
+Dynamic, admin-defined custom roles beyond the existing fixed set
+(Super/Support/Finance/Readonly) are out of scope. The fixed role
+set is easier to reason about and audit at TrueFlow's current scale.
+Revisit only if a specific, real need for a role outside these four
+emerges later.
+
+### Two-Tier Deletion — The Critical Business Rule
+
+TrueFlow's entire data model deliberately avoids hard deletes
+everywhere (clients get archived, org_members get removed_at, merged
+profiles get merged_into_id). User deletion follows the exact same
+philosophy, with two genuinely different actions, never one combined
+"Delete" button.
+
+**Tier 1, Suspend, already built:**
+One click, immediately reversible, sets `organizations.status =
+'suspended'`, blocks WhatsApp bot access with a polite message, does
+not touch any data. This remains the default action for almost every
+real situation, abuse, non-payment, a support dispute pending
+investigation.
+
+**Tier 2, Permanently Erase, new, rare, deliberately heavy:**
+Only for genuine data-erasure requests (NDPR/GDPR right to erasure)
+or confirmed fraudulent accounts. This must never be a single click.
+
+> ⚠️ TEMPORARY, TESTING-PHASE SIMPLIFICATION, READ BEFORE MVP LAUNCH
+> The cooling-off period described in the original design (a 24 hour
+> delay before actual erasure, with a cancellable "Pending Erasures"
+> queue) is INTENTIONALLY DISABLED right now, during active Ambassador
+> testing, so test accounts can be deleted and recreated immediately
+> without waiting a day between test runs.
+>
+> Erasure currently executes IMMEDIATELY after the typed "Delete"
+> confirmation, there is no pending_erasures queue step active, no
+> cancellation window, no scheduled job delay. The pending_erasures
+> table and scheduled job described below should still be BUILT so the
+> pattern exists in the codebase, but the erasure logic should call the
+> hard-delete step directly and immediately after confirmation, skipping
+> the wait, rather than actually queuing and waiting.
+>
+> REMINDER FOR LATER: before TrueFlow moves from testing into a real
+> MVP or public launch with real paying users, this section must be
+> revisited and the 24 hour cooling-off period must be turned back on,
+> since the risk of an irreversible accidental deletion becomes far
+> more serious once real user data, not test data, is on the line.
+> Whoever picks this up later, search this file for "cooling-off" to
+> find this note again.
+
+```
+Permanently Erase flow, CURRENT TESTING-PHASE VERSION:
+
+1. Admin clicks "Permanently Erase" on a user's detail page
+2. A modal opens explaining exactly what will be destroyed:
+   receipts, client records, project history, payment history,
+   this action cannot be undone, note this explicitly
+3. Admin must TYPE the exact word "Delete" into a confirmation
+   input field, matching case-sensitively, before the action
+   button becomes clickable at all
+4. On confirming, the hard delete runs IMMEDIATELY, across all
+   related tables (receipts, clients, projects, client_payments,
+   reminders, budgets, org_members, profiles), in a single
+   transaction, no waiting period
+5. Log the full action to admin_audit_log at the moment of
+   deletion, including who requested it, when, and the exact
+   typed confirmation string, this record is the one thing that
+   survives the erasure itself
+
+FUTURE MVP VERSION, once reinstated:
+Same as above through step 3, then instead of immediate deletion,
+insert into pending_erasures with scheduled_for = now + 24 hours,
+show it on a cancellable "Pending Erasures" list, and only run the
+actual hard delete via a scheduled job once that time passes.
+```
+
+```sql
+create table pending_erasures (
+  id uuid primary key default gen_random_uuid(),
+  target_org_id uuid references organizations(id),
+  requested_by_admin_id uuid references profiles(id),
+  requested_at timestamptz default now(),
+  scheduled_for timestamptz not null, -- requested_at + 24 hours
+  status text default 'pending', -- 'pending' | 'cancelled' | 'completed'
+  cancelled_by_admin_id uuid references profiles(id),
+  cancelled_at timestamptz
+);
+```
+
+### Edit User Profile Fields
+
+On a user's detail page, Super Admin and Support Admin (per existing
+role permissions) can directly edit: full_name, phone, email,
+organization name, plan. Every edit writes to admin_audit_log with
+old and new values in the details field, exactly matching the
+pattern already established for plan changes in the earlier admin
+panel spec.
+
+### Activity Monitoring Feed
+
+A new `/admin/activity` page showing a real-time-ish feed (refresh
+every 30-60 seconds, no need for websockets at this scale) of recent
+platform activity: new signups, receipts scanned, payments received,
+subscription changes, pulled from existing tables (receipts,
+client_payments, organizations) filtered to recent timestamps, not a
+new logging table, reuse what already exists.
+
+### Leaderboard
+
+A new `/admin/leaderboard` page, two panels:
+```
+Most Active Users (by org)
+  ranked by receipt count + login frequency over 
+  the last 30 days, shows org name, plan, activity 
+  score
+
+Most Active Admins
+  ranked by admin_audit_log entry count over the 
+  last 30 days, shows admin name, role, action count
+```
+
+### Revenue Reporting
+
+A new `/admin/revenue` page, using the same chart and card visual
+language as /dashboard-concept (light mode base, Electric Violet and
+Mint Verify accents, card-based layout).
+
+```
+Top row stat cards: This Week, This Month, This 
+  Quarter, This Year, each showing total revenue 
+  and percent change vs the prior equivalent period
+
+Main chart: revenue over time, switchable between 
+  weekly/monthly/quarterly/yearly views, same line 
+  chart style as the Income vs Expenses card on 
+  the user dashboard
+
+Plan distribution: how many orgs on each plan tier, 
+  contributing how much revenue each, donut or bar 
+  chart
+
+Andrea Aid running total: pull directly from the 
+  existing andrea_contributions table, shown 
+  alongside revenue since it is calculated from 
+  the same subscription data
+```
+
+Data source: `organizations.plan`, Paystack webhook payment history
+(wherever that is currently logged), and `andrea_contributions`,
+already existing tables, no new payment tracking table needed.
+
+### Broadcast / Announcement Tool
+
+A new `/admin/broadcast` page, Super Admin only (not Support or
+Finance, this is a powerful, platform-wide action).
+
+```
+Compose a message
+Select audience:
+  All users
+  Filtered by plan (e.g. only Free plan users)
+  Filtered by activity (e.g. inactive 30+ days)
+  Filtered by country (using default_tax_country 
+    or org's registered country)
+Select channel:
+  WhatsApp (via existing bot sending infrastructure)
+  Email (via existing email service)
+  Both
+
+Preview before sending, showing exact recipient 
+  count based on the selected filter
+
+Send confirmation, typed "Send" required for any 
+  broadcast to more than 50 recipients, same 
+  friction-on-purpose pattern as Permanently Erase, 
+  since a mistaken broadcast to every user is a 
+  real reputational risk
+
+Log every broadcast sent to a new table:
+```
+
+```sql
+create table admin_broadcasts (
+  id uuid primary key default gen_random_uuid(),
+  sent_by_admin_id uuid references profiles(id),
+  message text not null,
+  audience_filter jsonb, -- the filter criteria used
+  channel text not null, -- 'whatsapp' | 'email' | 'both'
+  recipient_count int not null,
+  sent_at timestamptz default now()
+);
+```
+
+Never build this to send instantly on every keystroke or allow
+accidental double-sends, the send button should disable immediately
+after click and show a sending progress state.
+
+### Visual Theme Requirement
+
+Every new admin page in this spec (`/admin/activity`,
+`/admin/leaderboard`, `/admin/revenue`, `/admin/broadcast`, and the
+updated user detail page with Edit and Permanently Erase) must use
+the exact same visual design system already approved and built on
+`/dashboard-concept`: light mode base, collapsible icon-rail sidebar,
+Electric Violet primary actions, Mint Verify success states, card-
+based layout with rounded corners and soft shadows, the same
+light/dark toggle behavior. Do not introduce a separate visual style
+for the admin panel, it should feel like the same product, not a
+bolted-on separate tool.
+
+### Business Rules
+
+1. Suspend remains the default, one-click, reversible action for
+   almost every real situation, Permanently Erase is reserved for
+   genuine erasure requests or confirmed fraud
+2. Permanently Erase always requires the typed word "Delete",
+   case-sensitive, before the action button activates
+3. Permanently Erase always has a mandatory cooling-off period
+   before executing, and is always cancellable during that window
+4. Every edit, suspend, erase, broadcast, and role change writes to
+   admin_audit_log without exception
+5. Broadcast is Super Admin only, never available to Support or
+   Finance roles
+6. Broadcasts over 50 recipients require typed confirmation before
+   sending, exactly like Permanently Erase
+7. All new admin pages reuse existing data tables wherever possible,
+   do not create parallel logging systems for data that already
+   exists in receipts, client_payments, or admin_audit_log
+8. Every new admin page matches the /dashboard-concept visual system
+   exactly, no separate admin-only visual language

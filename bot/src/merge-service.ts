@@ -47,6 +47,32 @@ export async function maybeGetLinkPrompt(user: UserContext, phoneNumber: string)
   }
 }
 
+// ── Generalized one-time prompt for onboarding completions that are NOT a
+// receipt scan (business card lead, reminder set, etc). Same one-time gate
+// (merge_prompted) as the receipt-triggered version above — whichever
+// completion happens first is the only one that ever prompts.
+export async function maybeGetOnboardingLinkPrompt(phoneNumber: string): Promise<string | null> {
+  try {
+    const { data: session } = await supabase
+      .from('whatsapp_sessions')
+      .select('merge_prompted')
+      .eq('phone_number', phoneNumber)
+      .maybeSingle()
+
+    if (!session || session.merge_prompted) return null
+
+    await supabase
+      .from('whatsapp_sessions')
+      .update({ merge_prompted: true, merge_state: 'offered' })
+      .eq('phone_number', phoneNumber)
+
+    return LINK_PROMPT
+  } catch (err) {
+    console.error('maybeGetOnboardingLinkPrompt failed:', err)
+    return null
+  }
+}
+
 // ── Email sending (Resend — same service the web app uses for invites) ───
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   if (!process.env.RESEND_API_KEY) {
