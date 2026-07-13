@@ -62,13 +62,10 @@ function WhatsAppSignIn() {
       return
     }
 
-    if (json.isNewUser) {
-      setVerifying(false)
-      setError("This WhatsApp number isn't linked to an account yet. Sign in with your email below, or sign up to create a new account.")
-      return
-    }
-
-    // Existing user — sign them in via magic link
+    // Success means the number is linked — the API rejects unknown numbers
+    // with a clear error. WhatsApp-first users get their auth account
+    // created server-side on first web login, so isNewUser is NOT a
+    // "no account" signal here.
     setStep('loading')
     window.location.href = json.redirect
   }

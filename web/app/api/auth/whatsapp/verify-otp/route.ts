@@ -92,13 +92,20 @@ export async function POST(req: NextRequest) {
       if (mergeCheck?.merged_into_id) matchedUserId = mergeCheck.merged_into_id
     }
 
-    if (matchedUserId) {
-      const { data: { user: existingAuthUser } } = await getSupabaseAdmin().auth.admin.getUserById(matchedUserId)
+    // A phone with NO profile and NO WhatsApp session has no TrueFlow data
+    // to log into — reject clearly instead of creating an orphan account.
+    if (!matchedUserId) {
+      return NextResponse.json(
+        { error: "This WhatsApp number isn't linked to a TrueFlow account yet. Message the TrueFlow bot on WhatsApp to get started, or sign in with your email." },
+        { status: 404 }
+      )
+    }
 
-      if (existingAuthUser?.email) {
-        authEmail = existingAuthUser.email
-        isNewUser = false
-      }
+    const { data: { user: existingAuthUser } } = await getSupabaseAdmin().auth.admin.getUserById(matchedUserId)
+
+    if (existingAuthUser?.email) {
+      authEmail = existingAuthUser.email
+      isNewUser = false
     }
 
     if (isNewUser) {
@@ -119,17 +126,27 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Failed to create account. Please try again.' }, { status: 500 })
       }
 
-      // If a new auth user was created, link them to the existing org
-      if (newUser && matchedUserId) {
-        await getSupabaseAdmin()
-          .from('org_members')
-          .update({ user_id: newUser.id })
-          .eq('user_id', matchedUserId)
+      // If a new auth user was created, link them to the existing org and
+      // fold the old bot-created profile into the new auth-backed one using
+      // the same merged_into_id mechanism as the identity-merge feature, so
+      // every future lookup (bot, web, OTP) resolves consistently.
+      if (newUser && matchedUserId && newUser.id !== matchedUserId) {
+        const adminDb = getSupabaseAdmin()
+        await adminDb.from('org_members').update({ user_id: newUser.id }).eq('user_id', matchedUserId)
+        await adminDb.from('whatsapp_sessions').update({ user_id: newUser.id }).eq('user_id', matchedUserId)
 
-        await getSupabaseAdmin()
-          .from('whatsapp_sessions')
-          .update({ user_id: newUser.id })
-          .eq('user_id', matchedUserId)
+        // Move phone + name onto the new profile (create it if no trigger did)
+        const oldName = profile?.full_name ?? null
+        await adminDb.from('profiles').update({ phone: null }).eq('id', matchedUserId)
+        const { data: newProfile } = await adminDb.from('profiles').select('id').eq('id', newUser.id).maybeSingle()
+        if (newProfile) {
+          await adminDb.from('profiles').update({ phone, full_name: oldName }).eq('id', newUser.id)
+        } else {
+          await adminDb.from('profiles').insert({ id: newUser.id, phone, full_name: oldName })
+        }
+        await adminDb.from('profiles')
+          .update({ merged_into_id: newUser.id, status: 'merged' })
+          .eq('id', matchedUserId)
       }
     }
 
