@@ -17,7 +17,10 @@ export function normalisePhone(raw: string): string {
 export async function sendWhatsAppMessage(to: string, body: string): Promise<boolean> {
   const twilioSid = process.env.TWILIO_ACCOUNT_SID
   const twilioToken = process.env.TWILIO_AUTH_TOKEN
-  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886'
+  const rawFrom = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886'
+  // Twilio requires the whatsapp: channel prefix on BOTH sides — a bare
+  // "+234..." From fails with error 21910, so normalise defensively.
+  const fromNumber = rawFrom.startsWith('whatsapp:') ? rawFrom : `whatsapp:${rawFrom}`
 
   if (!twilioSid || !twilioToken) {
     console.error('sendWhatsAppMessage: Twilio credentials not configured')

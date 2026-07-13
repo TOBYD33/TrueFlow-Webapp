@@ -16,7 +16,9 @@ function getClient() {
 export async function sendWhatsAppMessage(to: string, body: string): Promise<void> {
   try {
     const toNumber = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`
-    const from = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886'
+    const rawFrom = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886'
+    // Twilio needs the whatsapp: prefix — a bare "+234..." fails with 21910
+    const from = rawFrom.startsWith('whatsapp:') ? rawFrom : `whatsapp:${rawFrom}`
 
     await getClient().messages.create({ from, to: toNumber, body })
   } catch (err) {
