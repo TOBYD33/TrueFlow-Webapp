@@ -78,34 +78,42 @@ export async function POST(req: NextRequest) {
     let authEmail = derivedEmail
     let isNewUser = true
 
-    // Check profile match first
-    let matchedUserId = profile?.id ?? waSession?.user_id ?? null
-
-    // Identity merge: if this phone's profile was merged into a primary
-    // profile, log the user into the PRIMARY account — never a duplicate.
-    if (matchedUserId) {
-      const { data: mergeCheck } = await getSupabaseAdmin()
+    // Candidate identities for this phone: the profile that holds the
+    // phone, and the user the bot session points at. Resolve each through
+    // merged_into_id, then PREFER whichever already has a real auth
+    // account — this logs a WhatsApp+web user into their existing web
+    // account instead of minting a duplicate wa_...@trueflow.app one.
+    const admin = getSupabaseAdmin()
+    const rawCandidates = [profile?.id, waSession?.user_id].filter(Boolean) as string[]
+    const candidates: string[] = []
+    for (const cand of rawCandidates) {
+      const { data: mergeCheck } = await admin
         .from('profiles')
         .select('merged_into_id')
-        .eq('id', matchedUserId)
+        .eq('id', cand)
         .maybeSingle()
-      if (mergeCheck?.merged_into_id) matchedUserId = mergeCheck.merged_into_id
+      const resolved = mergeCheck?.merged_into_id ?? cand
+      if (!candidates.includes(resolved)) candidates.push(resolved)
     }
 
     // A phone with NO profile and NO WhatsApp session has no TrueFlow data
     // to log into — reject clearly instead of creating an orphan account.
-    if (!matchedUserId) {
+    if (candidates.length === 0) {
       return NextResponse.json(
         { error: "This WhatsApp number isn't linked to a TrueFlow account yet. Message the TrueFlow bot on WhatsApp to get started, or sign in with your email." },
         { status: 404 }
       )
     }
 
-    const { data: { user: existingAuthUser } } = await getSupabaseAdmin().auth.admin.getUserById(matchedUserId)
-
-    if (existingAuthUser?.email) {
-      authEmail = existingAuthUser.email
-      isNewUser = false
+    let matchedUserId: string = candidates[0]
+    for (const cand of candidates) {
+      const { data: { user: candAuth } } = await admin.auth.admin.getUserById(cand)
+      if (candAuth?.email) {
+        matchedUserId = cand
+        authEmail = candAuth.email
+        isNewUser = false
+        break
+      }
     }
 
     if (isNewUser) {
