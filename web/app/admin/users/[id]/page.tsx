@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { AdminUserActions } from './AdminUserActions'
+import { AdminEditErase } from './AdminEditErase'
 import { ImpersonateButton } from './ImpersonateButton'
 
 function getAdmin() {
@@ -50,6 +51,8 @@ export default async function AdminUserDetailPage({
     callerAdminRole = callerProfile?.admin_role ?? (callerProfile?.is_super_admin ? 'super' : null)
   }
   const canImpersonate = callerAdminRole === 'super' || callerAdminRole === 'support'
+  const canEdit = callerAdminRole === 'super' || callerAdminRole === 'support'
+  const canErase = callerAdminRole === 'super'
 
   // Fetch profile
   const { data: profile } = await admin
@@ -59,6 +62,11 @@ export default async function AdminUserDetailPage({
     .single()
 
   if (!profile) redirect('/admin/users')
+
+  // Email lives in Supabase Auth (WhatsApp-only users may have none)
+  const { data: authUserRes } = await admin.auth.admin.getUserById(id)
+  const rawEmail = authUserRes?.user?.email ?? null
+  const userEmail = rawEmail && !rawEmail.endsWith('@trueflow.app') ? rawEmail : null
 
   // Find their org membership
   const { data: memberships } = await admin
@@ -164,6 +172,22 @@ export default async function AdminUserDetailPage({
           currentPlan={org.plan}
         />
       )}
+
+      {/* Edit fields + Permanently Erase (role-gated) */}
+      <AdminEditErase
+        userId={id}
+        orgId={org?.id ?? null}
+        orgName={org?.name ?? 'this organisation'}
+        canEdit={canEdit}
+        canErase={canErase}
+        initial={{
+          full_name: profile.full_name ?? '',
+          phone: profile.phone ?? '',
+          email: userEmail ?? '',
+          org_name: org?.name ?? '',
+          plan: org?.plan ?? 'free',
+        }}
+      />
 
       {/* Impersonate — visible to Super + Support Admin only */}
       {canImpersonate && (
