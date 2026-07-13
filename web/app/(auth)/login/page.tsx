@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 // ── WhatsApp Sign In ─────────────────────────────────────────────────────────
 
 function WhatsAppSignIn() {
+  const supabase = createClient()
   const [step, setStep] = useState<'phone' | 'otp' | 'loading'>('phone')
   const [phone, setPhone] = useState('')
   const [normalisedPhone, setNormalisedPhone] = useState('')
@@ -63,11 +64,21 @@ function WhatsAppSignIn() {
     }
 
     // Success means the number is linked — the API rejects unknown numbers
-    // with a clear error. WhatsApp-first users get their auth account
-    // created server-side on first web login, so isNewUser is NOT a
-    // "no account" signal here.
+    // with a clear error. Exchange the one-time token hash for a session
+    // right here in the browser (no redirect through Supabase's Site URL).
     setStep('loading')
-    window.location.href = json.redirect
+    const { error: sessionError } = await supabase.auth.verifyOtp({
+      type: 'email',
+      token_hash: json.token_hash,
+    })
+    if (sessionError) {
+      setStep('otp')
+      setVerifying(false)
+      setError('Could not complete sign-in. Please request a new code and try again.')
+      return
+    }
+    // Full navigation so the server layout picks up the new session cookies
+    window.location.href = '/dashboard'
   }
 
   return (

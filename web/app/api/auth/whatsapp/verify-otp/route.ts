@@ -150,21 +150,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Generate a one-time magic link for immediate sign-in
+    // Generate a one-time token and return its hash — the login page
+    // exchanges it for a session directly via supabase.auth.verifyOtp,
+    // with no redirect through Supabase's Site URL (which previously
+    // bounced users to the stale true-flio.vercel.app domain).
     const { data: linkData, error: linkError } = await getSupabaseAdmin().auth.admin.generateLink({
       type: 'magiclink',
       email: authEmail,
       options: { redirectTo: CALLBACK_URL }
     })
 
-    if (linkError || !linkData?.properties?.action_link) {
+    if (linkError || !linkData?.properties?.hashed_token) {
       console.error('verify-otp: generateLink failed:', linkError)
       return NextResponse.json({ error: 'Could not create sign-in link. Please try again.' }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      redirect: linkData.properties.action_link,
+      token_hash: linkData.properties.hashed_token,
       isNewUser,
       name: profile?.full_name || null
     })
