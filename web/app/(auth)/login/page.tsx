@@ -37,7 +37,7 @@ function MagicLinkHandler() {
         if (!res.ok) throw new Error(json.error || 'This link is invalid.')
         const { error: sessionError } = await supabase.auth.verifyOtp({ type: 'email', token_hash: json.token_hash })
         if (sessionError) throw sessionError
-        window.location.href = '/dashboard'
+        window.location.href = '/home'
       })
       .catch(err => {
         setState('error')
@@ -128,7 +128,7 @@ function WhatsAppSignIn() {
       return
     }
     // Full navigation so the server layout picks up the new session cookies
-    window.location.href = '/dashboard'
+    window.location.href = '/home'
   }
 
   return (
@@ -244,7 +244,7 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/dashboard')
+    router.push('/home')
     router.refresh()
   }
 

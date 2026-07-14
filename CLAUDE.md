@@ -4845,3 +4845,129 @@ record, not just as a generic standalone reminder.
    update must run through the same plan-limit check every other
    active-client creation already runs through, since this is the
    moment the lead actually starts counting.
+
+---
+
+## Home Page — Landing Page Above the Dashboard
+
+### Why This Exists, Separate From Dashboard
+
+Dashboard stays data-dense, charts, stats, activity feed, the "here's
+what's happening with your money" view. Home is a softer, faster
+entry point, the "here's what you probably want to do right now"
+view. This is a new page, /home, positioned as the first thing a
+user lands on after login, with Dashboard remaining a distinct,
+separate nav item for the deeper data view. Reference design
+inspiration: a teal-gradient greeting banner with time-aware copy,
+and a filterable grid of shortcut cards, adapted here to TrueFlow's
+actual brand colors and actual features.
+
+### The Greeting Banner
+
+```
+Gradient background: Electric Violet #6C63FF fading to a
+  deep violet/near-black, same gradient language already
+  used on the "Meet Tello" promo card on the dashboard
+Icon: Tello's sparkle mark (not a generic icon), small
+  rounded square, top-left of the banner
+Top row: real current date, real current local time,
+  and a greeting badge (see Time-of-Day Logic below)
+Main line: "Welcome back, [First Name]" pulling the
+  real logged-in user's actual first name
+Subtitle: "Everything you need, right where you left it."
+```
+
+### Time-of-Day Logic
+
+Exactly three greeting states, computed from the user's own local
+browser time, never the server's time, so a user in Lagos and a
+user in Houston each see their own correct greeting:
+
+```
+5:00am – 11:59am   → "Good morning"
+12:00pm – 4:59pm   → "Good afternoon"
+5:00pm – 4:59am    → "Good evening"
+```
+
+Note: "Good evening" deliberately covers the full late-night stretch
+through 5:00am rather than introducing a fourth "Good night" state,
+keeping this simple and avoiding an awkward greeting showing at 2am.
+
+```typescript
+function getGreeting(): string {
+  const hour = new Date().getHours() // local browser time
+  if (hour >= 5 && hour < 12) return 'Good morning'
+  if (hour >= 12 && hour < 17) return 'Good afternoon'
+  return 'Good evening' // covers 17:00–4:59
+}
+```
+
+Date and time displayed in the banner must also update live if the
+page stays open across a boundary (e.g. open at 11:58am, still open
+at 12:01pm), re-check on an interval (once per minute is sufficient)
+rather than computing once on page load and never again.
+
+### Shortcuts Section
+
+Filter pills matching TrueFlow's actual feature areas, fewer and
+more focused than a generic ERP's categories:
+
+```
+All | Money | Clients | Team | Tello
+```
+
+Shortcut cards per category, using the existing card visual style
+from /dashboard-concept (white background in light mode, rounded
+corners, soft shadow, icon top-left in a small colored square):
+
+```
+MONEY
+  📷 Log a receipt — Scan or upload an expense
+  📊 View reports — See your spending breakdown
+
+CLIENTS
+  👤 Add a client — Save a new client or lead
+  📄 Create an invoice — Bill a client
+
+TEAM
+  (label reads "Family" instead of "Team" if the
+  organization type is family, not business, pull
+  this from the organization's existing type field)
+  👥 Invite a team member — Add staff access
+
+TELLO
+  💬 Ask Tello — Jump straight into chat
+  ⏰ Set a reminder — Never forget a deadline
+```
+
+A fifth card, Tax Hub, sits outside the four filter categories or
+under a relevant one (Money makes sense), showing a small red
+notification badge with a live count of pending tax items (upcoming
+filing deadlines, unreviewed estimates), matching the reference's
+notification-badge pattern exactly, pulling the real count from the
+existing Tax Hub data, never a hardcoded number.
+
+### Layout and Navigation
+
+/home becomes the default landing route after login, replacing
+whatever currently loads first. Dashboard remains accessible as its
+own separate sidebar item, unchanged, still showing the full
+data-dense view already built. Both pages share the same header,
+sidebar, and light/dark mode system already established.
+
+### Business Rules
+
+1. Greeting and time must be computed from the user's own local
+   browser time, never hardcoded or server-time-based
+2. The greeting must re-check at least once per minute while the
+   page is open, not only once on load
+3. The user's real first name must be pulled from their actual
+   profile, never a placeholder
+4. The Team/Family label and the shortcut cards shown must adapt
+   based on the organization's actual type, not be identical for
+   every account type
+5. Any notification badge shown on a shortcut card (like Tax Hub)
+   must reflect a real, live count from the underlying data, never
+   a static or example number
+6. This page must use the exact same visual design system already
+   approved on /dashboard-concept, no separate visual language

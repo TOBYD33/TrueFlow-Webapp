@@ -27,7 +27,7 @@ export function AcceptInviteButton({ token, userId, userEmail }: Props) {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to accept invite')
-      router.push('/dashboard')
+      router.push('/home')
     } catch (err: any) {
       setError(err.message)
       setLoading(false)

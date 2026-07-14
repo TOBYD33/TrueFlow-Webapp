@@ -9,6 +9,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
+  Home,
   LayoutDashboard,
   Receipt,
   BarChart3,
@@ -30,6 +31,7 @@ import {
 import { useTheme, tone, BRAND } from './theme'
 
 const navItems = [
+  { href: '/home', label: 'Home', icon: Home },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/whatsapp', label: 'True Assistant', icon: Sparkles },
   { href: '/receipts', label: 'Receipts', icon: Receipt },
