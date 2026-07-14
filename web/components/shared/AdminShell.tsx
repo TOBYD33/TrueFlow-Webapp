@@ -11,7 +11,7 @@ import { usePathname } from 'next/navigation'
 import {
   BarChart3, Users, ScrollText, Shield, UserCog, Activity,
   Trophy, LineChart, Megaphone, ChevronLeft, ChevronRight,
-  Sun, Moon, ArrowLeft,
+  Sun, Moon, ArrowLeft, Radio,
 } from 'lucide-react'
 import { ThemeProvider, useTheme, tone, BRAND } from './theme'
 
@@ -38,6 +38,7 @@ function AdminShellInner({ role, adminName, children }: { role: string; adminNam
 
   const nav = [
     { href: '/admin/stats', label: 'Stats', icon: BarChart3 },
+    { href: '/admin/live', label: 'Live Now', icon: Radio },
     { href: '/admin/users', label: 'Users', icon: Users },
     { href: '/admin/activity', label: 'Activity', icon: Activity },
     { href: '/admin/leaderboard', label: 'Leaderboard', icon: Trophy },
