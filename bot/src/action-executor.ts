@@ -13,8 +13,18 @@ import { recordClientPayment } from './client-payment-service'
 import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
 import { supabase } from './supabase'
 
-export async function executeActions(actions: string[], user: any): Promise<string[]> {
+export interface ActionExecutionResult {
+  notifications: string[]
+  // Honest, user-facing failure messages — one per action that threw.
+  // Never empty silently: every catch block below must push here, since a
+  // write that fails with no trace is exactly what let the bot confirm
+  // reminders that were never saved.
+  failures: string[]
+}
+
+export async function executeActions(actions: string[], user: any): Promise<ActionExecutionResult> {
   const notifications: string[] = []
+  const failures: string[] = []
 
   for (const action of actions) {
     const parts = action.split(':')
@@ -26,6 +36,8 @@ export async function executeActions(actions: string[], user: any): Promise<stri
           // SET_BUDGET:Transport:120000
           const [, category, amount] = parts
           await setBudget({ orgId: user.org_id, category, amount: parseFloat(amount) })
+          const currency = user.currency || 'NGN'
+          notifications.push(`✅ *Budget set!* ${category} — ${currency} ${parseFloat(amount).toLocaleString()}`)
           break
         }
         case 'SET_REMINDER': {
@@ -50,11 +62,17 @@ export async function executeActions(actions: string[], user: any): Promise<stri
             .maybeSingle()
           const clientId = sessionRow?.pending_lead_id ?? undefined
 
-          await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', dueTime, clientId })
+          const saved = await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', dueTime, clientId })
 
           if (clientId) {
             await supabase.from('whatsapp_sessions').update({ pending_lead_id: null }).eq('phone_number', user.whatsapp_number)
           }
+
+          // Confirmation is built from the row Supabase actually returned,
+          // not from the AI's own text — this is the fix: the bot can now
+          // only claim a reminder was set once the write is verified.
+          const timeLabel = saved?.due_time ? ` at ${saved.due_time.slice(0, 5)}` : ''
+          notifications.push(`✅ *Reminder set!* ${title} — ${date}${timeLabel}`)
           break
         }
         case 'EXPORT_PDF': {
@@ -192,6 +210,7 @@ export async function executeActions(actions: string[], user: any): Promise<stri
           // SET_TAX_REMINDER:{title}:{date}:{recurrence}
           const [, title, date, recurrence] = parts
           await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', category: 'tax' })
+          notifications.push(`✅ *Reminder set!* ${title} — ${date}`)
           break
         }
 
@@ -207,10 +226,31 @@ export async function executeActions(actions: string[], user: any): Promise<stri
         default:
           break
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(`executeAction ${type} failed:`, err)
+      failures.push(actionFailureMessage(type))
     }
   }
 
-  return notifications
+  return { notifications, failures }
+}
+
+// User-facing failure text per action type — never expose the raw error,
+// but always tell the truth that the write did not happen.
+function actionFailureMessage(type: string): string {
+  switch (type) {
+    case 'SET_BUDGET':
+      return "⚠️ I couldn't save that budget — please try again in a moment."
+    case 'SET_REMINDER':
+    case 'SET_TAX_REMINDER':
+      return "⚠️ I couldn't save that reminder — please try again in a moment."
+    case 'UPDATE_INVENTORY':
+      return "⚠️ I couldn't update your inventory — please try again in a moment."
+    case 'LOG_PAYMENT':
+      return "⚠️ I couldn't log that payment — please try again in a moment."
+    case 'START_CLIENT_SETUP':
+      return "⚠️ I couldn't start that client setup — please try again in a moment."
+    default:
+      return "⚠️ Something went wrong completing that action — please try again in a moment."
+  }
 }

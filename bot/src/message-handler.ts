@@ -321,7 +321,18 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
 
   // ── Step 5: Execute any actions Claude detected ───────────────────────────
   if (actions.length > 0) {
-    const notifications = await executeActions(actions, user)
+    const { notifications, failures } = await executeActions(actions, user)
+
+    // Claude's own reply text is generated BEFORE any write happens, so it
+    // can (and did) claim success for actions that actually failed. Once
+    // any action fails this turn, that free-text reply can no longer be
+    // trusted for what it says about the action — send the honest,
+    // execution-verified result instead of compounding a false confirmation.
+    if (failures.length > 0) {
+      const honest = [...failures, ...notifications].filter(Boolean).join('\n\n')
+      return buildTextResponse(honest)
+    }
+
     if (notifications.length > 0) {
       const combined = [reply, ...notifications].filter(Boolean).join('\n\n')
       return buildTextResponse(combined)
