@@ -17,9 +17,16 @@ import { getAIResponse } from './ai-assistant'
 import { executeActions } from './action-executor'
 import { buildTextResponse } from './twiml-builder'
 import { getSetupState, continueGuidedSetup } from './client-setup-service'
-import { maybeGetLinkPrompt, maybeGetOnboardingLinkPrompt, handleMergeReply } from './merge-service'
-import { startOnboarding, handleOnboardingReply, completeOnboarding } from './onboarding-service'
-import { saveBusinessCardLead } from './business-card-service'
+import { handleMergeReply } from './merge-service'
+import { startOnboarding, handleOnboardingReply, completeOnboarding, sendPostOnboardingFollowUps } from './onboarding-service'
+import {
+  saveBusinessCardLead,
+  findDuplicateLead,
+  startDuplicateCheck,
+  getPendingDuplicateCheck,
+  resolveDuplicateCheck,
+  markPendingLeadFollowUp,
+} from './business-card-service'
 import { supabase } from './supabase'
 import { TwilioWebhookBody } from '../types'
 
@@ -125,8 +132,8 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
 
   // ── Step 2: Start conversational onboarding for brand-new users ─────────
   // Exactly 2 questions (name, then business/family/personal), never more,
-  // never before this point — see the Seamless Onboarding Flow business
-  // rules in CLAUDE.md.
+  // never before this point — see the Refined First-Contact Onboarding
+  // Flow (Finalized) section in CLAUDE.md.
   const newUser = await isNewUser(phoneNumber)
   if (newUser) {
     await markUserNotNew(phoneNumber)
@@ -141,10 +148,32 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   const onboardingResult = await handleOnboardingReply(phoneNumber, messageText, hasImage, user.org_id, user.user_id)
   if (onboardingResult.handled) return buildTextResponse(onboardingResult.reply!)
   const onboardingStepBefore = onboardingResult.step
+  const wasOnboarding = onboardingStepBefore === 'awaiting_first_action'
 
-  // ── Step 2b: Identity-merge conversation (post-onboarding, optional) ─────
-  // Watches for an email reply to the one-time link offer, or the 6-digit
-  // verification code. Anything else falls through to normal routing.
+  // Fires the magic-link + separate email-offer sequence once, only when
+  // this message is the aha moment that just closed out onboarding.
+  async function closeOutOnboardingIfNeeded(): Promise<void> {
+    if (!wasOnboarding) return
+    await completeOnboarding(phoneNumber)
+    await sendPostOnboardingFollowUps(phoneNumber, user!.user_id)
+  }
+
+  // ── Step 2b: Business-card duplicate confirmation (pending from a prior
+  // card scan) — must be checked before the identity-merge/setup routing
+  // below since it's also a plain-text reply with no special prefix.
+  if (!hasImage && messageText) {
+    const pendingDup = await getPendingDuplicateCheck(phoneNumber)
+    if (pendingDup) {
+      const reply = await resolveDuplicateCheck(phoneNumber, messageText, pendingDup)
+      await closeOutOnboardingIfNeeded()
+      return buildTextResponse(reply)
+    }
+  }
+
+  // ── Step 2c: Identity-merge conversation (post-onboarding, optional) ─────
+  // Watches for an email reply to the link offer (either the standalone
+  // 'offered' prompt or the finalized onboarding's 'onboarding_email'
+  // step), or the 6-digit verification code. Anything else falls through.
   if (!hasImage && messageText) {
     const mergeReply = await handleMergeReply(phoneNumber, messageText, user)
     if (mergeReply) return buildTextResponse(mergeReply)
@@ -152,7 +181,6 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
 
   // ── Step 3: Handle image — SINGLE Claude Vision call ─────────────────────
   let scannedReceipt: any = null
-  let pendingLinkPrompt: string | null = null
 
   if (hasImage && imageUrl) {
     if (imageType && !imageType.startsWith('image/')) {
@@ -168,28 +196,43 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     }
 
     if (analysis.content_type === 'business_card') {
-      const lead = await saveBusinessCardLead(user.org_id, {
-        contact_name: analysis.contact_name,
-        contact_company: analysis.contact_company,
-        contact_role: analysis.contact_role,
-        contact_phone: analysis.contact_phone,
-        contact_email: analysis.contact_email,
-      })
-
-      if (!lead) {
+      const name = analysis.contact_name?.trim()
+      if (!name) {
         return buildTextResponse(
           `I can see a business card but couldn't read a name clearly. Try a clearer photo, or add the contact manually at *${APP_URL}/clients*`
         )
       }
 
-      const wasOnboarding = onboardingStepBefore === 'awaiting_first_action'
-      if (wasOnboarding) await completeOnboarding(phoneNumber)
-      const cardLinkPrompt = wasOnboarding ? await maybeGetOnboardingLinkPrompt(phoneNumber) : null
+      const company = analysis.contact_company?.trim() || null
+      const cardFields = {
+        contact_name: analysis.contact_name,
+        contact_company: analysis.contact_company,
+        contact_role: analysis.contact_role,
+        contact_phone: analysis.contact_phone,
+        contact_email: analysis.contact_email,
+      }
+
+      // Never silently double-save the same person — confirm first.
+      const duplicate = await findDuplicateLead(user.org_id, name, company)
+      if (duplicate) {
+        await startDuplicateCheck(phoneNumber, { existing_client_id: duplicate.id, org_id: user.org_id, pending_fields: cardFields })
+        return buildTextResponse(
+          `Looks like *${name}*${company ? ` from *${company}*` : ''} might already be saved, update their info or is this someone new?`
+        )
+      }
+
+      const lead = await saveBusinessCardLead(user.org_id, cardFields)
+      if (!lead) {
+        return buildTextResponse(
+          `I had trouble saving that contact. Please try again or add it manually at *${APP_URL}/clients*`
+        )
+      }
+      await markPendingLeadFollowUp(phoneNumber, lead.id)
+      await closeOutOnboardingIfNeeded()
 
       return buildTextResponse(
         `Got it! Saved *${lead.name}*${lead.company ? ` from *${lead.company}*` : ''} as a new lead 🪪\n\n` +
-        `Want me to set a follow-up reminder? Just say when, like 'remind me in 3 days.'` +
-        (cardLinkPrompt ? `\n\n${cardLinkPrompt}` : '')
+        `Want me to set a follow-up reminder? Just say when, like 'remind me in 3 days.'`
       )
     }
 
@@ -224,11 +267,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     scannedReceipt = await saveFromAnalysis(analysis, user.org_id, user.user_id, user.currency)
 
     if (scannedReceipt) {
-      if (onboardingStepBefore === 'awaiting_first_action') await completeOnboarding(phoneNumber)
-
-      // Optional account-link offer — fires exactly once, only after the
-      // FIRST receipt scan (the onboarding aha moment), per identity spec
-      const linkPrompt = await maybeGetLinkPrompt(user, phoneNumber)
+      await closeOutOnboardingIfNeeded()
 
       const missingNote = buildMissingFieldsNote(analysis)
       if (missingNote) {
@@ -239,13 +278,8 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
         return buildTextResponse(
           `✅ *Receipt logged!*\n\n` +
           `Vendor: ${vendor}\nAmount: ${amount}\nCategory: ${analysis.category}` +
-          missingNote +
-          (linkPrompt ? `\n\n${linkPrompt}` : '')
+          missingNote
         )
-      }
-      if (linkPrompt) {
-        // Attach the one-time offer to the scan confirmation the AI sends
-        pendingLinkPrompt = linkPrompt
       }
     } else {
       return buildTextResponse(
@@ -282,23 +316,17 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   })
 
   // Onboarding's first real action wasn't a receipt or business card (most
-  // commonly a reminder) — this AI turn is the aha moment, so close out
-  // onboarding and offer the one-time account-link prompt here too.
-  let onboardingLinkPrompt: string | null = null
-  if (onboardingStepBefore === 'awaiting_first_action') {
-    await completeOnboarding(phoneNumber)
-    onboardingLinkPrompt = await maybeGetOnboardingLinkPrompt(phoneNumber)
-  }
+  // commonly a reminder) — this AI turn is the aha moment.
+  await closeOutOnboardingIfNeeded()
 
   // ── Step 5: Execute any actions Claude detected ───────────────────────────
   if (actions.length > 0) {
     const notifications = await executeActions(actions, user)
     if (notifications.length > 0) {
-      const combined = [reply, ...notifications, pendingLinkPrompt, onboardingLinkPrompt].filter(Boolean).join('\n\n')
+      const combined = [reply, ...notifications].filter(Boolean).join('\n\n')
       return buildTextResponse(combined)
     }
   }
 
-  const finalReply = [reply, pendingLinkPrompt, onboardingLinkPrompt].filter(Boolean).join('\n\n')
-  return buildTextResponse(finalReply)
+  return buildTextResponse(reply)
 }

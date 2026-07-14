@@ -5,6 +5,7 @@
 
 import { supabase } from './supabase'
 import { setReminder } from './reminder-service'
+import { checkActiveClientLimit, upgradeBlockedMessage } from './client-service'
 
 export type SetupStep = 'contact_info' | 'project' | 'deposit' | 'invoice'
 
@@ -17,11 +18,20 @@ interface SetupState {
   project_id?: string | null
 }
 
+// Returns a blocked-upgrade message if the org is already at its plan's
+// active-client limit, otherwise starts the flow and returns null. New
+// clients created here are active immediately (not leads), so this runs
+// the same check convertLeadToActive() runs at the lead->active moment.
 export async function startGuidedClientSetup(
   orgId: string,
   phoneNumber: string,
   clientName: string
-): Promise<void> {
+): Promise<string | null> {
+  const check = await checkActiveClientLimit(orgId)
+  if (!check.ok) {
+    return upgradeBlockedMessage(check.limit)
+  }
+
   const { data: client, error } = await supabase
     .from('clients')
     .insert({ org_id: orgId, name: clientName, created_via: 'whatsapp' })
@@ -41,6 +51,7 @@ export async function startGuidedClientSetup(
     .update({ setup_state: state })
     .eq('phone_number', phoneNumber)
   if (updateErr) throw new Error(updateErr.message)
+  return null
 }
 
 export async function getSetupState(phoneNumber: string): Promise<SetupState | null> {

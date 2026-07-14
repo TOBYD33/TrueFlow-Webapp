@@ -2,13 +2,63 @@
 // login/page.tsx
 // Login page with WhatsApp Sign In (OTP via WhatsApp) above the regular email/password form.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+
+// ── Onboarding magic link (app.gettrueflow.com/login?token=xyz) ─────────────
+// Consumes the token from send-post-onboarding-follow-ups, exchanges it for
+// a session in-browser (same pattern as OTP login — no redirect through
+// Supabase's Site URL), then sends the user straight to the dashboard.
+
+function MagicLinkHandler() {
+  const supabase = createClient()
+  const [state, setState] = useState<'idle' | 'working' | 'error'>('idle')
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('token')
+    if (!token) return
+
+    setState('working')
+    window.history.replaceState({}, '', '/login')
+
+    fetch('/api/auth/whatsapp/magic-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(async res => {
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || 'This link is invalid.')
+        const { error: sessionError } = await supabase.auth.verifyOtp({ type: 'email', token_hash: json.token_hash })
+        if (sessionError) throw sessionError
+        window.location.href = '/dashboard'
+      })
+      .catch(err => {
+        setState('error')
+        setError(err.message || 'Could not sign you in with that link.')
+      })
+  }, [])
+
+  if (state === 'idle') return null
+
+  return (
+    <Card className="border-[#6C63FF]/30 bg-[#6C63FF]/5">
+      <CardContent className="pt-6 text-sm">
+        {state === 'working' ? (
+          <p className="text-gray-600">Signing you in…</p>
+        ) : (
+          <p className="text-red-600">{error} Use WhatsApp Sign In or your email below.</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 // ── WhatsApp Sign In ─────────────────────────────────────────────────────────
 
@@ -200,6 +250,9 @@ export default function LoginPage() {
 
   return (
     <div className="space-y-4">
+      {/* Onboarding magic-link handler — silent unless ?token= is present */}
+      <MagicLinkHandler />
+
       {/* WhatsApp Sign In — shown first */}
       <WhatsAppSignIn />
 

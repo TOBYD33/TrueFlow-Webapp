@@ -11,6 +11,7 @@ import { startGuidedClientSetup } from './client-setup-service'
 import { findClientByName } from './client-service'
 import { recordClientPayment } from './client-payment-service'
 import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
+import { supabase } from './supabase'
 
 export async function executeActions(actions: string[], user: any): Promise<string[]> {
   const notifications: string[] = []
@@ -39,7 +40,21 @@ export async function executeActions(actions: string[], user: any): Promise<stri
               dueTime = `${digits.slice(0, 2)}:${digits.slice(2, 4)}`
             }
           }
-          await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', dueTime })
+          // If a business card was just scanned and this reply looks like
+          // the follow-up ("remind me in 3 days"), link the reminder to
+          // that lead's client record instead of leaving it standalone.
+          const { data: sessionRow } = await supabase
+            .from('whatsapp_sessions')
+            .select('pending_lead_id')
+            .eq('phone_number', user.whatsapp_number)
+            .maybeSingle()
+          const clientId = sessionRow?.pending_lead_id ?? undefined
+
+          await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', dueTime, clientId })
+
+          if (clientId) {
+            await supabase.from('whatsapp_sessions').update({ pending_lead_id: null }).eq('phone_number', user.whatsapp_number)
+          }
           break
         }
         case 'EXPORT_PDF': {
@@ -149,7 +164,8 @@ export async function executeActions(actions: string[], user: any): Promise<stri
           // START_CLIENT_SETUP:{clientName}
           const clientName = parts.slice(1).join(':').trim()
           if (clientName) {
-            await startGuidedClientSetup(user.org_id, user.whatsapp_number, clientName)
+            const blocked = await startGuidedClientSetup(user.org_id, user.whatsapp_number, clientName)
+            if (blocked) notifications.push(blocked)
           }
           break
         }

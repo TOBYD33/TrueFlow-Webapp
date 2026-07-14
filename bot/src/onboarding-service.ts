@@ -7,7 +7,9 @@
 // State lives on whatsapp_sessions.onboarding_step:
 //   'awaiting_name' -> 'awaiting_type' -> 'awaiting_first_action' -> null (done)
 
+import crypto from 'crypto'
 import { supabase } from './supabase'
+import { sendWhatsAppMessage } from './twilio-sender'
 
 export type OnboardingStep = 'awaiting_name' | 'awaiting_type' | 'awaiting_first_action'
 
@@ -115,4 +117,49 @@ export async function completeOnboarding(phoneNumber: string): Promise<void> {
     .from('whatsapp_sessions')
     .update({ onboarding_step: null })
     .eq('phone_number', phoneNumber)
+}
+
+// ── Post-aha-moment follow-ups: magic link, THEN a separate email offer ──
+// Two distinct WhatsApp messages, sent via the REST API (not appended to
+// the aha-moment confirmation), exactly per the finalized onboarding spec's
+// business rule 3. Fires once per new onboarding — call this only right
+// after completeOnboarding(), from whichever of the three first-action
+// paths got there first.
+async function generateMagicToken(userId: string): Promise<string> {
+  const token = crypto.randomBytes(24).toString('hex')
+  await supabase.from('magic_login_tokens').insert({
+    token,
+    user_id: userId,
+    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+  })
+  return token
+}
+
+export async function sendPostOnboardingFollowUps(phoneNumber: string, userId: string): Promise<void> {
+  try {
+    const appUrl = process.env.WEBAPP_URL || 'app.gettrueflow.com'
+    const token = await generateMagicToken(userId)
+
+    await sendWhatsAppMessage(
+      phoneNumber,
+      `Want to see all this on the web too? Tap below, no password needed, this link logs you straight in:\n` +
+      `${appUrl}/login?token=${token}\n(Expires in 15 minutes for your security.)\n\n` +
+      `Everything we just did here is already waiting for you there.`
+    )
+
+    // Separate message, separate state — the finalized onboarding email
+    // step (save directly if new, verify-and-merge if it matches an
+    // existing account), distinct from the standalone 'offered' prompt.
+    await supabase
+      .from('whatsapp_sessions')
+      .update({ merge_state: 'onboarding_email' })
+      .eq('phone_number', phoneNumber)
+
+    await sendWhatsAppMessage(
+      phoneNumber,
+      `One more thing, want to add your email? It helps if you ever want your invoices or monthly summaries sent there. Totally optional, just reply with it or skip.`
+    )
+  } catch (err) {
+    console.error('sendPostOnboardingFollowUps failed:', err)
+  }
 }

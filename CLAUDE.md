@@ -1440,104 +1440,48 @@ WhatsApp bot. Web and mobile login use OTP sent to the same WhatsApp number.
 
 ### Exact Conversation Script
 
-Note: the bot identifies itself as "TrueFlow" here, never "Tello" — the
-Tello persona is web/mobile-only per the Platform Compliance section
-below and the Tello business rules; WhatsApp keeps the plain TrueFlow
-identity for Meta compliance reasons.
-
 ```
 User: Hi, I want to start with TrueFlow
 
-Bot: Hey! I'm TrueFlow 👋
-     What should I call you?
+Bot: 👋 Welcome to TrueFlow!
 
-User: Marcus
+     I'm your AI assistant for tracking money,
+     in and out. Before we start, what should
+     I call your business? (Or just your name
+     if this is personal.)
 
-Bot: Nice to meet you, Marcus! Quick one, is
-     this for your business, your family, or
-     just you?
+User: Marcus Ventures
 
-User: business
+Bot: Got it, Marcus Ventures ✅
 
-Bot: Here's what we can do together:
-     📷 Scan receipts, just send a photo
-     💰 Track client payments
-     📊 Set budgets by category, like a
-        Budget for Family Trip
-     ⏰ Reminders for bills, deadlines,
-        even birthdays
-     🗂️ Manage clients and projects
-     🪪 Scan a business card to save a new
-        lead automatically
+     Quick one, is this for:
+     1️⃣ My business
+     2️⃣ My family
+     3️⃣ Just me, personal
 
-     Let's try it. Got a receipt handy?
-     Send a photo.
+User: 1
 
-     No receipt nearby? Tell me something to
-     remind you about instead, like 'remind
-     me to pay rent Friday.'
+Bot: Perfect. Last thing, send me a photo of
+     any receipt, or a payment screenshot a
+     client sent you. I'll show you exactly
+     what I can do.
 
 [User sends a receipt photo]
 
-Bot: ✅ Receipt logged!
+Bot: ✅ Got it!
 
-     Vendor: Shoprite Lekki
-     Amount: NGN 24,500
-     Category: Food & Drink
+     🏪 Shoprite Lekki
+     💰 ₦24,500
+     📂 Food & Supplies
+     📅 14 June 2025
 
-     Already using TrueFlow on the web? Reply
-     with your email to link your accounts, or
-     just keep chatting to get started here.
+     That's it. Every receipt from now on
+     works the same way.
+
+     Want to see this on a full dashboard too?
+     👉 app.gettrueflow.com/login?phone=234XXX
+     (Tap, no password needed)
 ```
-
-If the user answers "family" or "just me" instead of "business" at the
-second question, the 🪪 business card line is skipped entirely from the
-capability list — the rest of the list stays focused on personal/family
-use cases, and organizations.type is stored as 'family' or 'individual'
-accordingly (never guessed — if the reply is ambiguous, the bot asks
-again rather than picking one).
-
-**Business card as the first action** (business orgs only, but the bot
-never blocks trying it either way):
-
-```
-[User sends a business card photo instead of a receipt]
-
-Bot: Got it! Saved Adaeze Okoye from Okoye
-     Designs as a new lead 🪪
-
-     Want me to set a follow-up reminder? Just
-     say when, like 'remind me in 3 days.'
-
-     Already using TrueFlow on the web? Reply
-     with your email to link your accounts, or
-     just keep chatting to get started here.
-```
-
-A business-card scan creates a row in `clients` with `status = 'lead'`
-and `lead_source = 'business_card'` — never a project, invoice, or
-budget. It shows up in `/clients` ready to be converted once real work
-is agreed, exactly like any other lead source.
-
-**Reminder as the first action** (no receipt, no business card handy):
-
-```
-[User sends: "remind me to pay rent Friday"]
-
-Bot: Done! I'll remind you to pay rent this
-     Friday.
-
-     Already using TrueFlow on the web? Reply
-     with your email to link your accounts, or
-     just keep chatting to get started here.
-```
-
-In every case — receipt, business card, or reminder — that first real
-action is the AHA MOMENT. Onboarding is marked complete at that exact
-point, and the same optional web-account-link offer from the
-Cross-Channel Identity Merge section above appends to that one
-confirmation message, never before it, and never more than once per
-new WhatsApp number.
 
 ### Web/Mobile Passwordless Login Flow
 
@@ -1605,12 +1549,6 @@ form. Productive in two messages.
 Add to `/bot/src`:
 - `onboarding-service.ts` — tracks onboarding state, asks the right next
   question, marks completion
-- `business-card-service.ts` — saves a scanned business card as a
-  `clients` row with `status = 'lead'`, `lead_source = 'business_card'`
-- Update `image-analyzer.ts` — the single Claude Vision call also
-  classifies `content_type: 'financial' | 'business_card'` up front, so
-  a business card never gets forced through the receipt/payment
-  direction logic (still one call per image, per the Twilio 15s limit)
 - Update `user-service.ts` — `getOrCreateUser()` must create the placeholder
   organization on first contact, not wait for the name
 - Update `message-handler.ts` — check onboarding state before routing to
@@ -4644,3 +4582,266 @@ bolted-on separate tool.
    exists in receipts, client_payments, or admin_audit_log
 8. Every new admin page matches the /dashboard-concept visual system
    exactly, no separate admin-only visual language
+
+---
+
+## Refined First-Contact Onboarding Flow (Finalized)
+
+### Why This Replaces the Earlier Version
+
+This is the current, final version of the Seamless Onboarding Flow
+first specced earlier in this document. It supersedes that version
+with three refinements developed later: a fallback path for users
+without a receipt handy, an optional email-add step after the aha
+moment (reusing the Cross-Channel Identity Merge logic), and business
+card scanning for lead capture on business accounts. The original
+Seamless Onboarding Flow section above still describes the correct
+underlying architecture (phone-number identity, two-question setup),
+this section is the up-to-date conversational script that should
+actually ship.
+
+### The Full Script
+
+```
+User opens the wa.me link, sends "Hi"
+        ↓
+Bot silently captures the phone number
+        ↓
+"Hey! I'm Tello, from TrueFlow 👋
+ What should I call you?"
+        ↓
+User replies with their name
+        ↓
+"Nice to meet you, [Name]! Quick one, is
+ this for your business, your family, or
+ just you?"
+        ↓
+User answers
+        ↓
+"Here's what we can do together:
+ 📷 Scan receipts, just send a photo
+ 💰 Track client payments
+ 📊 Set budgets by category, like a
+    Budget for Family Trip
+ ⏰ Reminders for bills, deadlines,
+    even birthdays
+ 🗂️ Manage clients and projects
+ 🪪 Scan a business card to save a new
+    lead automatically
+ [the 🪪 line above ONLY appears if the
+ user answered "business" in the previous
+ step, never shown for family or personal
+ accounts]
+
+ Let's try it. Got a receipt handy?
+ Send a photo.
+
+ No receipt nearby? Tell me something to
+ remind you about instead, like 'remind
+ me to pay rent Friday.'"
+        ↓
+User sends ONE of: a receipt photo, a
+reminder request, OR (business accounts
+only) a business card photo
+        ↓
+IF receipt photo:
+  → Bot extracts and confirms the data
+  → "Got it! [Vendor], ₦[amount], logged
+     under [category] ✅"
+
+IF reminder request:
+  → Bot parses and confirms the reminder
+  → "Got it! I'll remind you: '[reminder
+     text]' on [date] ✅"
+
+IF business card photo (business accounts
+only, see "Business Card Scanning" section
+below for full spec):
+  → Bot extracts name, company, role,
+    phone, email
+  → "Got it! Saved [Name] from [Company]
+     as a new lead 🪪
+     Want me to set a follow-up reminder?
+     Just say when, like 'remind me in
+     3 days.'"
+
+[AHA MOMENT COMPLETE either way, target
+under 60 seconds total from first "Hi"]
+        ↓
+"Want to see all this on the web too? Tap
+ below, no password needed, this link logs
+ you straight in:
+ app.gettrueflow.com/login?token=xyz123
+ (Expires in 15 minutes for your security.)
+
+ Everything we just did here is already
+ waiting for you there."
+        ↓
+"One more thing, want to add your email?
+ It helps if you ever want your invoices
+ or monthly summaries sent there. Totally
+ optional, just reply with it or skip."
+        ↓
+User replies with email OR skips
+        ↓
+IF email given and does NOT match an
+existing profile:
+  → save directly to profiles.email,
+    no verification needed, this is a
+    brand new person adding their own
+    contact info, not claiming an
+    existing account
+  → "Got it, saved to your profile ✅"
+
+IF email given and DOES match an existing
+profile:
+  → do not save directly, this could be
+    a genuine returning user's existing
+    web account, or someone typing an
+    email that is not actually theirs
+  → trigger the exact verification-code
+    merge flow already specced in
+    "Cross-Channel Identity Merge" above,
+    Flow 1
+  → "I found an account with that email,
+     sending a code there to confirm
+     it's you"
+```
+
+### Business Rules for This Flow
+
+1. The 🪪 business card capability line and the ability to scan a
+   business card at all only apply to accounts where the user
+   answered "business" to the account-type question, never shown
+   or offered to family or personal accounts
+2. The receipt-or-reminder fallback choice must always be presented
+   together in the same message, never sequentially, so a user
+   without a receipt handy never feels stuck waiting to be asked
+3. The web login offer and the optional email offer are two
+   separate messages, never combined into one, so each is easy to
+   read and respond to independently
+4. The magic link token expires in 15 minutes; after expiry, direct
+   the user to app.gettrueflow.com/login where they can use the
+   standard OTP-via-WhatsApp login instead, the magic link is a
+   first-session convenience, OTP is the permanent, repeatable
+   login method
+5. Never ask for email before the aha moment completes, this rule
+   from the original onboarding spec still applies without exception
+
+---
+
+## Business Card Scanning — Lead Capture
+
+### Why This Exists
+
+Extends the existing image classification system (already
+distinguishing expense receipts from incoming payment screenshots
+in Smart Transfer Recognition) with a third category, business
+cards, for capturing potential clients or leads met in person, at
+networking events, meetings, or anywhere else a business owner
+collects contact information.
+
+### The Lead vs Client Distinction
+
+A business card scan does NOT create a fully active client record
+identical to a paying client. It creates the same underlying
+`clients` table row, but tagged as a lead, so it never clutters
+views meant for real, active business relationships.
+
+```sql
+-- New columns on the existing clients table
+alter table clients add column if not exists
+  source text default 'manual';
+  -- 'manual' | 'business_card' | 'smart_transfer'
+alter table clients add column if not exists
+  status text default 'active';
+  -- 'lead' | 'active' | 'archived'
+  -- NOTE: if clients.status already has other values in
+  -- use elsewhere in the codebase, extend that existing
+  -- enum/check constraint rather than creating a
+  -- conflicting one
+```
+
+A business card scan inserts a `clients` row with `status = 'lead'`,
+`source = 'business_card'`. The moment that lead actually pays
+something or a real project starts, the SAME row's status updates to
+`'active'`, no new record, no data migration, no duplicate client.
+
+### Where Leads Appear in the UI
+
+Leads appear in the existing `/clients` list (the badge approach,
+not a separate page), shown with a small "Lead" badge distinguishing
+them from active clients. Dashboard views that aggregate real
+business activity, "Top Clients by Outstanding Balance," any revenue
+or balance totals, must filter to `status = 'active'` only, so leads
+never inflate or pollute those numbers.
+
+### Image Classification Update
+
+Extend the existing `detectImageType()` function (already built for
+Smart Transfer Recognition) to recognize a third category:
+
+```typescript
+// detectImageType() return type becomes:
+type ImageType = 'expense_receipt' | 'incoming_payment' |
+                  'business_card' | 'unknown'
+
+// Business card detection signals: presence of a personal
+// name, a job title, a company name, and contact details
+// (phone/email) in a compact card-like layout, distinct from
+// the itemized line-item structure of a receipt or the bank
+// transfer confirmation structure of a payment screenshot
+```
+
+### Data Extracted From a Business Card
+
+```
+name          — the person's full name
+company       — organization/business name
+role          — job title, if present
+phone         — extracted phone number, if present
+email         — extracted email, if present
+```
+
+### The Bot Reply and Follow-Up Offer
+
+```
+"Got it! Saved [Name] from [Company] as a new lead 🪪
+
+Want me to set a follow-up reminder? Just say when,
+like 'remind me in 3 days.'"
+```
+
+If the user responds with a follow-up time, create a standard
+reminder row (reusing `reminder-service.ts`) linked to this new
+client's id, so the reminder shows contextually on that client's
+record, not just as a generic standalone reminder.
+
+### Business Rules
+
+1. Business card scanning is only offered and only functions for
+   accounts where the organization type is business, never surfaced
+   for family or personal accounts
+2. A business card scan never creates a duplicate if the same
+   person's name and company already exist as a lead or active
+   client, ask for confirmation instead: "Looks like [Name] from
+   [Company] might already be saved, update their info or is this
+   someone new?"
+3. RESOLVED: Leads do NOT count toward plan-based client limits.
+   Only clients with status = 'active' count against a plan's client
+   cap (e.g. SME Starter's 10-client limit). Leads are unlimited on
+   every plan, regardless of tier. Rationale: the client limit gates
+   ongoing managed business relationships (project tracking, income,
+   invoicing), not contact capture. Penalizing business card scanning
+   with the same limit as active clients would discourage the exact
+   networking behavior this feature is meant to encourage. The limit
+   correctly applies at the moment a lead converts to active, status
+   flips from 'lead' to 'active', that update must check the plan's
+   client limit at that moment, exactly as any other new active
+   client creation already does, but the lead itself, however many
+   are scanned, never counts before that point.
+4. A lead converting to an active client is always a status update
+   on the existing row, never a new client record. This status
+   update must run through the same plan-limit check every other
+   active-client creation already runs through, since this is the
+   moment the lead actually starts counting.

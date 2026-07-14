@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ArrowLeft, Plus, FolderOpen } from 'lucide-react'
+import { ArrowLeft, Plus, FolderOpen, IdCard } from 'lucide-react'
 import { toast } from 'sonner'
 
 const PROJECT_STATUS_COLORS: Record<string, string> = {
@@ -40,6 +40,7 @@ export default function ClientDetailPage() {
   const [projectOpen, setProjectOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [converting, setConverting] = useState(false)
 
   const [projectForm, setProjectForm] = useState({ name: '', description: '', total_fee: '', deadline: '', notes: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', payment_type: 'part_payment', payment_date: new Date().toISOString().split('T')[0], payment_reference: '', project_id: '', notes: '' })
@@ -68,6 +69,27 @@ export default function ClientDetailPage() {
     }
     load()
   }, [clientId])
+
+  // A lead converting to active is the moment it starts counting against
+  // the plan's client limit — runs the same check new active-client
+  // creation goes through, never bypassed just because no new row is made.
+  async function convertLead() {
+    if (!client) return
+    setConverting(true)
+    try {
+      const res = await fetch('/api/clients/convert-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: client.id }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Could not convert this lead.'); return }
+      setClient(prev => prev ? { ...prev, status: 'active' } : prev)
+      toast.success('Converted to an active client')
+    } finally {
+      setConverting(false)
+    }
+  }
 
   async function addProject() {
     if (!orgId || !projectForm.name.trim()) return
@@ -137,18 +159,36 @@ export default function ClientDetailPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-600">
           <ArrowLeft size={20} />
         </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
+            {client.status === 'lead' && (
+              <Badge variant="outline" className="gap-1 bg-[#6C63FF]/10 text-[#6C63FF]">
+                <IdCard size={11} /> Lead
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-gray-500">
+            {client.company && `${client.company} · `}
             {client.phone && `${client.phone} · `}
             {client.email && `${client.email} · `}
             Client since {formatDate(client.created_at)}
           </p>
         </div>
+        {client.status === 'lead' && (
+          <Button
+            variant="outline"
+            className="border-[#6C63FF]/40 text-[#6C63FF] hover:bg-[#6C63FF]/5"
+            onClick={convertLead}
+            disabled={converting}
+          >
+            {converting ? 'Converting…' : 'Convert to Active Client'}
+          </Button>
+        )}
       </div>
 
       {/* Summary */}

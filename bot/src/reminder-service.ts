@@ -30,6 +30,7 @@ export async function setReminder(params: {
   recurrence: string
   category?: string
   dueTime?: string // 'HH:MM' 24h WAT
+  clientId?: string // links a follow-up reminder to a lead/client record
 }) {
   // Upsert-by-intent: if an active reminder with the same title and date
   // already exists, update it instead of creating a duplicate. The AI can
@@ -50,7 +51,8 @@ export async function setReminder(params: {
       .update({
         due_time: params.dueTime || null,
         recurrence: params.recurrence,
-        category: params.category || 'custom'
+        category: params.category || 'custom',
+        ...(params.clientId ? { client_id: params.clientId } : {}),
       })
       .eq('id', existing.id)
       .select()
@@ -67,7 +69,8 @@ export async function setReminder(params: {
       due_date: params.dueDate,
       due_time: params.dueTime || null,
       recurrence: params.recurrence,
-      category: params.category || 'custom'
+      category: params.category || 'custom',
+      client_id: params.clientId || null,
     })
     .select()
     .single()

@@ -106,9 +106,12 @@ export interface Client {
   email: string | null
   address: string | null
   notes: string | null
+  company: string | null
+  role: string | null
   total_earned: number
   outstanding_balance: number
-  status: 'active' | 'inactive' | 'archived'
+  status: 'active' | 'inactive' | 'archived' | 'lead'
+  source: 'manual' | 'business_card' | 'smart_transfer' | null
   created_via: string
   created_at: string
 }

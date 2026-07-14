@@ -16,62 +16,11 @@ const MAX_ATTEMPTS = 3
 const LINK_PROMPT =
   'Already using TrueFlow on the web? Reply with your email to link your accounts, or just keep chatting to get started here.'
 
-// ── Optional one-time prompt after the first receipt scan ────────────────
-// Fires only when this org just logged its FIRST receipt and this session
-// has never been prompted. Returns the prompt text or null.
-export async function maybeGetLinkPrompt(user: UserContext, phoneNumber: string): Promise<string | null> {
-  try {
-    const { data: session } = await supabase
-      .from('whatsapp_sessions')
-      .select('merge_prompted')
-      .eq('phone_number', phoneNumber)
-      .maybeSingle()
-
-    if (!session || session.merge_prompted) return null
-
-    const { count } = await supabase
-      .from('receipts')
-      .select('id', { count: 'exact', head: true })
-      .eq('org_id', user.org_id)
-    if ((count ?? 0) !== 1) return null // only right after the FIRST scan
-
-    await supabase
-      .from('whatsapp_sessions')
-      .update({ merge_prompted: true, merge_state: 'offered' })
-      .eq('phone_number', phoneNumber)
-
-    return LINK_PROMPT
-  } catch (err) {
-    console.error('maybeGetLinkPrompt failed:', err)
-    return null
-  }
-}
-
-// ── Generalized one-time prompt for onboarding completions that are NOT a
-// receipt scan (business card lead, reminder set, etc). Same one-time gate
-// (merge_prompted) as the receipt-triggered version above — whichever
-// completion happens first is the only one that ever prompts.
-export async function maybeGetOnboardingLinkPrompt(phoneNumber: string): Promise<string | null> {
-  try {
-    const { data: session } = await supabase
-      .from('whatsapp_sessions')
-      .select('merge_prompted')
-      .eq('phone_number', phoneNumber)
-      .maybeSingle()
-
-    if (!session || session.merge_prompted) return null
-
-    await supabase
-      .from('whatsapp_sessions')
-      .update({ merge_prompted: true, merge_state: 'offered' })
-      .eq('phone_number', phoneNumber)
-
-    return LINK_PROMPT
-  } catch (err) {
-    console.error('maybeGetOnboardingLinkPrompt failed:', err)
-    return null
-  }
-}
+// Note: the finalized onboarding flow now sends its own magic-link + email
+// offer sequence (onboarding-service.ts's sendPostOnboardingFollowUps),
+// which sets merge_state to 'onboarding_email' directly. The standalone
+// 'offered' state below still exists for LINK_PROMPT to be resurfaced
+// later (e.g. from Settings on the web app), just not auto-triggered here.
 
 // ── Email sending (Resend — same service the web app uses for invites) ───
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
@@ -118,6 +67,67 @@ async function findAuthUserByEmail(email: string): Promise<{ id: string; email: 
   return null
 }
 
+// ── Shared: found a matching web account by email — send the verification
+// code and move to awaiting_code. Used by both the standalone 'offered'
+// prompt and the onboarding 'onboarding_email' step so the actual
+// verify-and-merge logic never diverges between the two entry points.
+async function initiateEmailVerification(
+  phoneNumber: string,
+  email: string,
+  user: UserContext,
+  opts: { notFoundMessage: string; preResolved?: { id: string; email: string } }
+): Promise<string> {
+  const authUser = opts.preResolved ?? (await findAuthUserByEmail(email))
+  if (!authUser) {
+    await clearMergeState(phoneNumber)
+    return opts.notFoundMessage
+  }
+
+  const { data: targetProfile } = await supabase
+    .from('profiles')
+    .select('id, merged_into_id, status')
+    .eq('id', authUser.id)
+    .maybeSingle()
+
+  if (!targetProfile || targetProfile.status === 'merged' || targetProfile.id === user.user_id) {
+    await clearMergeState(phoneNumber)
+    return opts.notFoundMessage
+  }
+
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  const { error: codeErr } = await supabase.from('identity_merge_codes').insert({
+    target_profile_id: targetProfile.id,
+    code,
+    channel: 'email',
+    requested_by_profile_id: user.user_id,
+    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+  })
+  if (codeErr) {
+    console.error('merge-service: code insert failed:', codeErr)
+    await clearMergeState(phoneNumber)
+    return 'Something went wrong setting up the link. Please try again later from Settings on the web app.'
+  }
+
+  const sent = await sendEmail(
+    authUser.email,
+    'Your TrueFlow account link code',
+    `<p>Someone (hopefully you) asked to link this TrueFlow web account with a WhatsApp number.</p>
+     <p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p>
+     <p>This code expires in 10 minutes. If this wasn't you, you can ignore this email — nothing changes without the code.</p>`
+  )
+  if (!sent) {
+    await clearMergeState(phoneNumber)
+    return "I couldn't send a verification email right now. Please try again later from Settings on the web app."
+  }
+
+  await supabase
+    .from('whatsapp_sessions')
+    .update({ merge_state: 'awaiting_code', merge_target_profile_id: targetProfile.id, merge_attempts: 0 })
+    .eq('phone_number', phoneNumber)
+
+  return "I found an account with that email. I've sent a code there to confirm it's really you. What's the code?"
+}
+
 // ── Main conversational entry: handle replies while a merge is pending ───
 // Returns a reply string to send, or null to let normal routing continue.
 export async function handleMergeReply(
@@ -134,64 +144,41 @@ export async function handleMergeReply(
   if (!session?.merge_state) return null
   const text = messageText.trim()
 
-  // ── State: offered — watching for an email reply ───────────────────────
+  // ── State: offered — the standalone "Already using TrueFlow on web?"
+  // prompt. Not found -> graceful decline (never save an unverified claim).
   if (session.merge_state === 'offered') {
     if (!EMAIL_RE.test(text)) {
-      // User ignored the offer — close it silently, never re-prompt
+      await clearMergeState(phoneNumber)
+      return null
+    }
+    return initiateEmailVerification(phoneNumber, text, user, {
+      notFoundMessage: "I couldn't find an account with that email, no problem, you can always link one later from Settings on the web app.",
+    })
+  }
+
+  // ── State: onboarding_email — the finalized onboarding flow's "want to
+  // add your email?" step. Not found -> save it directly as contact info
+  // (this is a brand-new person adding their own email, not claiming
+  // someone else's account, so no verification is needed). Found -> the
+  // exact same verification-code merge flow as the 'offered' state above.
+  if (session.merge_state === 'onboarding_email') {
+    if (!EMAIL_RE.test(text)) {
+      // Skip / anything else — close silently, never re-prompt
       await clearMergeState(phoneNumber)
       return null
     }
 
-    const authUser = await findAuthUserByEmail(text)
-    if (!authUser) {
+    const existing = await findAuthUserByEmail(text)
+    if (!existing) {
+      await supabase.from('profiles').update({ email: text }).eq('id', user.user_id)
       await clearMergeState(phoneNumber)
-      return "I couldn't find an account with that email, no problem, you can always link one later from Settings on the web app."
+      return 'Got it, saved to your profile ✅'
     }
 
-    // The web profile id equals the auth user id
-    const { data: targetProfile } = await supabase
-      .from('profiles')
-      .select('id, merged_into_id, status')
-      .eq('id', authUser.id)
-      .maybeSingle()
-
-    if (!targetProfile || targetProfile.status === 'merged' || targetProfile.id === user.user_id) {
-      await clearMergeState(phoneNumber)
-      return "I couldn't find an account with that email, no problem, you can always link one later from Settings on the web app."
-    }
-
-    const code = String(Math.floor(100000 + Math.random() * 900000))
-    const { error: codeErr } = await supabase.from('identity_merge_codes').insert({
-      target_profile_id: targetProfile.id,
-      code,
-      channel: 'email',
-      requested_by_profile_id: user.user_id,
-      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    return initiateEmailVerification(phoneNumber, text, user, {
+      notFoundMessage: "I couldn't find an account with that email, no problem, you can always link one later from Settings on the web app.",
+      preResolved: existing,
     })
-    if (codeErr) {
-      console.error('merge-service: code insert failed:', codeErr)
-      await clearMergeState(phoneNumber)
-      return 'Something went wrong setting up the link. Please try again later from Settings on the web app.'
-    }
-
-    const sent = await sendEmail(
-      authUser.email,
-      'Your TrueFlow account link code',
-      `<p>Someone (hopefully you) asked to link this TrueFlow web account with a WhatsApp number.</p>
-       <p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p>
-       <p>This code expires in 10 minutes. If this wasn't you, you can ignore this email — nothing changes without the code.</p>`
-    )
-    if (!sent) {
-      await clearMergeState(phoneNumber)
-      return "I couldn't send a verification email right now. Please try again later from Settings on the web app."
-    }
-
-    await supabase
-      .from('whatsapp_sessions')
-      .update({ merge_state: 'awaiting_code', merge_target_profile_id: targetProfile.id, merge_attempts: 0 })
-      .eq('phone_number', phoneNumber)
-
-    return "I found an account with that email. I've sent a code there to confirm it's really you. What's the code?"
   }
 
   // ── State: awaiting_code — watching for the 6-digit code ──────────────

@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { UserPlus, Search, Phone, Mail, ChevronRight } from 'lucide-react'
+import { UserPlus, Search, Phone, Mail, ChevronRight, IdCard } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePageTools } from '@/components/shared/PageTools'
 
@@ -65,9 +65,11 @@ export default function ClientsPage() {
     (c.email ?? '').toLowerCase().includes(effectiveSearch.toLowerCase())
   )
 
-  const totalEarned = clients.reduce((s, c) => s + Number(c.total_earned), 0)
-  const totalOutstanding = clients.reduce((s, c) => s + Number(c.outstanding_balance), 0)
-  const activeCount = clients.filter(c => c.status === 'active').length
+  // Leads never inflate real business totals — active clients only
+  const activeClients = clients.filter(c => c.status === 'active')
+  const totalEarned = activeClients.reduce((s, c) => s + Number(c.total_earned), 0)
+  const totalOutstanding = activeClients.reduce((s, c) => s + Number(c.outstanding_balance), 0)
+  const activeCount = activeClients.length
 
   async function handleAdd() {
     if (!orgId || !form.name.trim()) return
@@ -89,7 +91,11 @@ export default function ClientsPage() {
     toast.success('Client added')
   }
 
-  const statusColor = (s: string) => s === 'active' ? 'bg-[#00D4AA]/10 text-[#00A88A]' : s === 'inactive' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+  const statusColor = (s: string) =>
+    s === 'active' ? 'bg-[#00D4AA]/10 text-[#00A88A]'
+    : s === 'lead' ? 'bg-[#6C63FF]/10 text-[#6C63FF]'
+    : s === 'inactive' ? 'bg-amber-100 text-amber-700'
+    : 'bg-gray-100 text-gray-500'
 
   return (
     <div className="space-y-6">
@@ -169,7 +175,10 @@ export default function ClientsPage() {
                       <p className="text-xs text-orange-500">₦{Number(client.outstanding_balance).toLocaleString()} due</p>
                     )}
                   </div>
-                  <Badge variant="outline" className={statusColor(client.status)}>{client.status}</Badge>
+                  <Badge variant="outline" className={`gap-1 ${statusColor(client.status)}`}>
+                    {client.status === 'lead' && <IdCard size={11} />}
+                    {client.status === 'lead' ? 'Lead' : client.status}
+                  </Badge>
                   <ChevronRight size={16} className="text-gray-300" />
                 </div>
               ))}
