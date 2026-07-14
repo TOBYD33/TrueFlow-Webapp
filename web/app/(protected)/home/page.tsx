@@ -21,6 +21,8 @@ import {
   MessageSquare,
   Bell,
   Landmark,
+  Calendar,
+  Clock,
 } from 'lucide-react'
 
 type FilterKey = 'All' | 'Money' | 'Clients' | 'Team' | 'Tello'
@@ -114,7 +116,8 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      {/* Gradient greeting banner — same gradient language as the Meet Tello promo card */}
+      {/* Gradient greeting banner — same gradient language as the Meet Tello promo card.
+          Everything left-justified: icon, then a single left-aligned text stack. */}
       <div
         className="rounded-2xl p-6 sm:p-8 relative overflow-hidden"
         style={{ background: 'linear-gradient(120deg, #6C63FF 0%, #3D37A6 45%, #0A0A0F 100%)' }}
@@ -123,27 +126,32 @@ export default function HomePage() {
           className="absolute inset-0 opacity-20 pointer-events-none"
           style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.35) 1px, transparent 1px)', backgroundSize: '18px 18px' }}
         />
-        <div className="relative">
-          <div className="flex items-center justify-between mb-6">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.16)' }}>
-              <Sparkles size={20} className="text-white" />
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-white/80">{dateStr}</p>
-              <div className="flex items-center justify-end gap-2 mt-0.5">
-                <span className="text-sm text-white/60">{timeStr}</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,212,170,0.25)', color: '#00D4AA' }}>
-                  {greeting}
-                </span>
-              </div>
-            </div>
+        <div className="relative flex items-start gap-4">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.16)' }}>
+            <Sparkles size={24} className="text-white" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            {greeting}{firstName ? `, ${firstName}` : ''}
-          </h1>
-          <p className="text-sm mt-1.5" style={{ color: 'rgba(245,245,247,0.75)' }}>
-            Everything you need, right where you left it.
-          </p>
+          <div className="text-left min-w-0">
+            <div className="flex items-center gap-3 flex-wrap text-sm">
+              <span className="flex items-center gap-1.5 text-white/80">
+                <Calendar size={14} /> {dateStr}
+              </span>
+              <span className="flex items-center gap-1.5 text-white/60">
+                <Clock size={14} /> {timeStr}
+              </span>
+              <span
+                className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full"
+                style={{ background: 'rgba(255,255,255,0.14)', color: 'rgba(245,245,247,0.85)' }}
+              >
+                {greeting}
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mt-3">
+              Welcome back{firstName ? `, ${firstName}` : ''}
+            </h1>
+            <p className="text-sm mt-1.5" style={{ color: 'rgba(245,245,247,0.75)' }}>
+              Your workspace overview and shortcuts at a glance.
+            </p>
+          </div>
         </div>
       </div>
 
