@@ -24,6 +24,7 @@ export default function ClientsPage() {
   const { orgId } = useViewingContext()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -31,17 +32,42 @@ export default function ClientsPage() {
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
 
   useEffect(() => {
-    if (!orgId) return
+    if (!orgId) {
+      // orgId resolves once, server-side, before this page ever renders —
+      // null here means no organization was found for this account, not
+      // "still loading", so show a clear message instead of spinning forever.
+      setLoading(false)
+      setLoadError('We could not find your organization. Try logging out and back in, or contact support@gettrueflow.com if this keeps happening.')
+      return
+    }
+
+    let cancelled = false
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        setLoading(false)
+        setLoadError('This is taking longer than expected. Please refresh the page.')
+      }
+    }, 15000)
+
     async function load() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('clients')
         .select('*')
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
+      if (cancelled) return
+      clearTimeout(timeout)
+      if (error) {
+        setLoadError(error.message || 'Could not load clients. Please try again.')
+        setLoading(false)
+        return
+      }
       setClients((data as Client[]) ?? [])
       setLoading(false)
     }
     load()
+
+    return () => { cancelled = true; clearTimeout(timeout) }
   }, [orgId])
 
   const { query: headerQuery } = usePageTools({
@@ -147,6 +173,8 @@ export default function ClientsPage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="p-8 text-center text-sm text-gray-400">Loading…</div>
+          ) : loadError ? (
+            <div className="p-8 text-center text-sm text-red-500">{loadError}</div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-sm text-gray-400">
               {search ? 'No clients match your search' : 'No clients yet — add your first client'}

@@ -15,7 +15,8 @@ import { handleIncomingPayment } from './smart-transfer'
 import { saveFromAnalysis } from './receipt-scanner'
 import { getAIResponse } from './ai-assistant'
 import { executeActions } from './action-executor'
-import { buildTextResponse } from './twiml-builder'
+import { buildTextResponse, buildEmptyResponse } from './twiml-builder'
+import { sendWhatsAppMessage } from './twilio-sender'
 import { getSetupState, continueGuidedSetup } from './client-setup-service'
 import { handleMergeReply } from './merge-service'
 import { startOnboarding, handleOnboardingReply, completeOnboarding, sendPostOnboardingFollowUps } from './onboarding-service'
@@ -32,6 +33,45 @@ import { TwilioWebhookBody } from '../types'
 
 const FREE_TIER_LIMIT = 10
 const APP_URL = process.env.WEBAPP_URL || 'app.trueflow.com'
+
+// A message with an image also carries a text Body when the user attaches
+// a caption/instruction alongside the photo (e.g. a business card forwarded
+// with "remind me in 2 min to call this person"). The image-handling paths
+// below only ever looked at the image and returned immediately, so any
+// accompanying instruction was silently discarded — never parsed, never
+// executed, never confirmed, and never mentioned as failed either. Run the
+// accompanying text through the same AI + action pipeline used for normal
+// messages, and only report an action as done if it actually wrote to the
+// database (executeActions already tracks and reports failures honestly —
+// reused here rather than duplicated).
+async function processAccompanyingText(
+  phoneNumber: string,
+  messageText: string,
+  user: any,
+  userPermissions: any
+): Promise<string | null> {
+  const text = messageText.trim()
+  if (!text) return null
+
+  const { actions } = await getAIResponse({
+    phoneNumber,
+    orgId: user.org_id,
+    orgName: user.org_name,
+    userName: user.full_name,
+    userMessage: text,
+    currency: user.currency,
+    plan: user.plan,
+    defaultTaxCountry: user.default_tax_country,
+    userPermissions,
+  })
+
+  if (actions.length === 0) return null
+
+  const { notifications, failures } = await executeActions(actions, user)
+  if (failures.length > 0) return failures.join('\n\n')
+  if (notifications.length > 0) return notifications.join('\n\n')
+  return null
+}
 
 export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   const phoneNumber = body.From.replace('whatsapp:', '')
@@ -158,6 +198,23 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     await sendPostOnboardingFollowUps(phoneNumber, user!.user_id)
   }
 
+  // The onboarding follow-ups above (web link, email ask) are sent via
+  // direct Twilio API calls, same as webhook.ts's own background relay for
+  // image messages. Both of those can race ahead of a reply that's simply
+  // returned as TwiML, which is exactly what caused the reported bug (the
+  // "want to see this on the web" / "add your email" messages arriving
+  // before "saved as a new lead"). Only the aha-moment turn actually risks
+  // this race, so only that turn needs to change delivery mechanism — every
+  // other reply keeps returning plain TwiML as before.
+  async function deliverAndCloseOut(text: string): Promise<string> {
+    if (wasOnboarding) {
+      await sendWhatsAppMessage(phoneNumber, text)
+      await closeOutOnboardingIfNeeded()
+      return buildEmptyResponse()
+    }
+    return buildTextResponse(text)
+  }
+
   // ── Step 2b: Business-card duplicate confirmation (pending from a prior
   // card scan) — must be checked before the identity-merge/setup routing
   // below since it's also a plain-text reply with no special prefix.
@@ -165,8 +222,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     const pendingDup = await getPendingDuplicateCheck(phoneNumber)
     if (pendingDup) {
       const reply = await resolveDuplicateCheck(phoneNumber, messageText, pendingDup)
-      await closeOutOnboardingIfNeeded()
-      return buildTextResponse(reply)
+      return await deliverAndCloseOut(reply)
     }
   }
 
@@ -228,12 +284,20 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
         )
       }
       await markPendingLeadFollowUp(phoneNumber, lead.id)
-      await closeOutOnboardingIfNeeded()
 
-      return buildTextResponse(
-        `Got it! Saved *${lead.name}*${lead.company ? ` from *${lead.company}*` : ''} as a new lead 🪪\n\n` +
-        `Want me to set a follow-up reminder? Just say when, like 'remind me in 3 days.'`
-      )
+      const leadLine = `Got it! Saved *${lead.name}*${lead.company ? ` from *${lead.company}*` : ''} as a new lead 🪪`
+
+      // Anything the user said alongside the card (e.g. "remind me in 2 min
+      // to call this person") was previously discarded — this message
+      // branch always returned before ever looking at messageText. Run it
+      // through the same action pipeline as a normal message now.
+      const extra = await processAccompanyingText(phoneNumber, messageText, user, userPermissions)
+
+      const confirmation = extra
+        ? `${leadLine}\n\n${extra}`
+        : `${leadLine}\n\nWant me to set a follow-up reminder? Just say when, like 'remind me in 3 days.'`
+
+      return await deliverAndCloseOut(confirmation)
     }
 
     if (analysis.direction === 'incoming') {
@@ -267,19 +331,26 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     scannedReceipt = await saveFromAnalysis(analysis, user.org_id, user.user_id, user.currency)
 
     if (scannedReceipt) {
-      await closeOutOnboardingIfNeeded()
-
       const missingNote = buildMissingFieldsNote(analysis)
       if (missingNote) {
         const vendor = analysis.vendor_name || 'Unknown vendor'
         const amount = analysis.amount
           ? `${user.currency} ${Number(analysis.amount).toLocaleString()}`
           : 'unknown amount'
-        return buildTextResponse(
+
+        // Same ordering fix as the business-card branch above: send the
+        // scan confirmation directly, before any onboarding follow-ups,
+        // and pick up anything the user said alongside the photo instead
+        // of silently dropping it.
+        let confirmation =
           `✅ *Receipt logged!*\n\n` +
           `Vendor: ${vendor}\nAmount: ${amount}\nCategory: ${analysis.category}` +
           missingNote
-        )
+
+        const extra = await processAccompanyingText(phoneNumber, messageText, user, userPermissions)
+        if (extra) confirmation = `${confirmation}\n\n${extra}`
+
+        return await deliverAndCloseOut(confirmation)
       }
     } else {
       return buildTextResponse(
@@ -315,11 +386,8 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     userPermissions,
   })
 
-  // Onboarding's first real action wasn't a receipt or business card (most
-  // commonly a reminder) — this AI turn is the aha moment.
-  await closeOutOnboardingIfNeeded()
-
   // ── Step 5: Execute any actions Claude detected ───────────────────────────
+  let finalReply = reply
   if (actions.length > 0) {
     const { notifications, failures } = await executeActions(actions, user)
 
@@ -329,15 +397,11 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     // trusted for what it says about the action — send the honest,
     // execution-verified result instead of compounding a false confirmation.
     if (failures.length > 0) {
-      const honest = [...failures, ...notifications].filter(Boolean).join('\n\n')
-      return buildTextResponse(honest)
-    }
-
-    if (notifications.length > 0) {
-      const combined = [reply, ...notifications].filter(Boolean).join('\n\n')
-      return buildTextResponse(combined)
+      finalReply = [...failures, ...notifications].filter(Boolean).join('\n\n')
+    } else if (notifications.length > 0) {
+      finalReply = [reply, ...notifications].filter(Boolean).join('\n\n')
     }
   }
 
-  return buildTextResponse(reply)
+  return await deliverAndCloseOut(finalReply)
 }

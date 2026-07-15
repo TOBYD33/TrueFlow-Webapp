@@ -32,22 +32,48 @@ export default function IncomePage() {
   const { orgId } = useViewingContext()
   const [payments, setPayments] = useState<PaymentWithClient[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
 
   useEffect(() => {
-    if (!orgId) return
+    if (!orgId) {
+      // orgId resolves once, server-side, before this page ever renders —
+      // null here means no organization was found for this account, not
+      // "still loading", so show a clear message instead of spinning forever.
+      setLoading(false)
+      setLoadError('We could not find your organization. Try logging out and back in, or contact support@gettrueflow.com if this keeps happening.')
+      return
+    }
+
+    let cancelled = false
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        setLoading(false)
+        setLoadError('This is taking longer than expected. Please refresh the page.')
+      }
+    }, 15000)
+
     async function load() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('client_payments')
         .select('*, clients(name), projects(name)')
         .eq('org_id', orgId)
         .order('payment_date', { ascending: false })
 
+      if (cancelled) return
+      clearTimeout(timeout)
+      if (error) {
+        setLoadError(error.message || 'Could not load income. Please try again.')
+        setLoading(false)
+        return
+      }
       setPayments((data as unknown as PaymentWithClient[]) ?? [])
       setLoading(false)
     }
     load()
+
+    return () => { cancelled = true; clearTimeout(timeout) }
   }, [orgId])
 
   const { query: headerQuery } = usePageTools({
@@ -144,6 +170,8 @@ export default function IncomePage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="p-8 text-center text-sm text-gray-400">Loading…</div>
+          ) : loadError ? (
+            <div className="p-8 text-center text-sm text-red-500">{loadError}</div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-sm text-gray-400">
               {search || typeFilter !== 'all' ? 'No payments match your filters' : 'No payments yet — record a payment from a client page'}

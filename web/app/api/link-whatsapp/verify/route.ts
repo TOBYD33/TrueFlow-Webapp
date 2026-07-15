@@ -68,6 +68,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Verification worked but the merge failed. Contact support@gettrueflow.com.' }, { status: 500 })
     }
 
+    // Safety net: a stale/incomplete version of perform_identity_merge was
+    // found to reassign profiles and whatsapp_sessions correctly but skip
+    // org_members entirely, silently stranding the merged-away user's org
+    // data behind an identity nothing resolves to anymore. Verify and
+    // self-heal here too, independent of whether the RPC's SQL is fixed.
+    const secondaryId = primaryId === user.id ? codeRow.target_profile_id : user.id
+    const { data: stranded } = await admin
+      .from('org_members')
+      .select('id, org_id')
+      .eq('user_id', secondaryId)
+    for (const m of stranded ?? []) {
+      const { data: existing } = await admin
+        .from('org_members')
+        .select('id')
+        .eq('org_id', m.org_id)
+        .eq('user_id', primaryId as string)
+        .maybeSingle()
+      if (existing) {
+        await admin.from('org_members').update({ removed_at: new Date().toISOString() }).eq('id', m.id)
+      } else {
+        const { error } = await admin.from('org_members').update({ user_id: primaryId as string }).eq('id', m.id)
+        if (error) console.error('link-whatsapp/verify: org_members reassign failed:', error)
+      }
+    }
+
     // Confirm on WhatsApp (the claimed channel) — best-effort
     const { data: waProfile } = await admin
       .from('profiles').select('phone').eq('id', codeRow.target_profile_id).maybeSingle()

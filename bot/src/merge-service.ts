@@ -259,6 +259,37 @@ async function clearMergeState(phoneNumber: string) {
 // function (also used by the web app's Flow 2), so the two channels can
 // never diverge. The local TS logic below is kept only as a fallback for
 // environments where the SQL function has not been created yet.
+// Safety net: perform_identity_merge is supposed to reassign every one of
+// the secondary profile's org_members rows to the primary itself, but a
+// stale/incomplete version of that function was found to skip org_members
+// entirely (profiles and whatsapp_sessions were reassigned correctly, only
+// org_members was left pointing at the merged-away id — which silently
+// stranded the user's own org data behind an identity nothing resolves to
+// anymore). Verify and self-heal here on every merge, independent of
+// whether the RPC's own SQL has been fixed, so this can never recur.
+async function reassignStrandedOrgMembers(secondaryId: string, primaryId: string) {
+  const { data: stranded } = await supabase
+    .from('org_members')
+    .select('id, org_id')
+    .eq('user_id', secondaryId)
+
+  for (const m of stranded ?? []) {
+    const { data: existing } = await supabase
+      .from('org_members')
+      .select('id')
+      .eq('org_id', m.org_id)
+      .eq('user_id', primaryId)
+      .maybeSingle()
+
+    if (existing) {
+      await supabase.from('org_members').update({ removed_at: new Date().toISOString() }).eq('id', m.id)
+    } else {
+      const { error } = await supabase.from('org_members').update({ user_id: primaryId }).eq('id', m.id)
+      if (error) console.error('reassignStrandedOrgMembers: reassign failed:', error)
+    }
+  }
+}
+
 async function performMerge(waProfileId: string, webProfileId: string, phoneNumber: string): Promise<boolean> {
   const { error: rpcError } = await supabase.rpc('perform_identity_merge', {
     profile_a: waProfileId,
@@ -272,10 +303,12 @@ async function performMerge(waProfileId: string, webProfileId: string, phoneNumb
       .eq('id', waProfileId)
       .maybeSingle()
     const primaryId = me?.merged_into_id ?? waProfileId
+    const secondaryId = primaryId === waProfileId ? webProfileId : waProfileId
     await supabase
       .from('whatsapp_sessions')
       .update({ user_id: primaryId })
       .eq('phone_number', phoneNumber)
+    await reassignStrandedOrgMembers(secondaryId, primaryId)
     return true
   }
   console.warn('performMerge: shared RPC unavailable, using local fallback:', rpcError.message)

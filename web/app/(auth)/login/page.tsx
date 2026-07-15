@@ -2,8 +2,8 @@
 // login/page.tsx
 // Login page with WhatsApp Sign In (OTP via WhatsApp) above the regular email/password form.
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -14,17 +14,22 @@ import { Input } from '@/components/ui/input'
 // Consumes the token from send-post-onboarding-follow-ups, exchanges it for
 // a session in-browser (same pattern as OTP login — no redirect through
 // Supabase's Site URL), then sends the user straight to the dashboard.
+//
+// This must never render the full login form (WhatsApp card, email/password
+// form) even for an instant — that was the actual bug: the page used to
+// render everything on first paint and only hide/show a status card via a
+// useEffect, so a magic-link tap visibly flashed the full login page before
+// redirecting. useSearchParams() resolves the token synchronously (no
+// effect needed to know whether one is present), so LoginPageInner can
+// decide which screen to show before anything unwanted ever paints.
 
-function MagicLinkHandler() {
+function MagicLinkScreen({ token }: { token: string }) {
   const supabase = createClient()
-  const [state, setState] = useState<'idle' | 'working' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get('token')
-    if (!token) return
-
-    setState('working')
+    // Strip the token from the URL bar immediately so a refresh or back
+    // navigation mid-flight can't resubmit an already-used one-time token.
     window.history.replaceState({}, '', '/login')
 
     fetch('/api/auth/whatsapp/magic-login', {
@@ -39,24 +44,32 @@ function MagicLinkHandler() {
         if (sessionError) throw sessionError
         window.location.href = '/home'
       })
-      .catch(err => {
-        setState('error')
-        setError(err.message || 'Could not sign you in with that link.')
-      })
-  }, [])
+      .catch(err => setError(err.message || 'Could not sign you in with that link.'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
-  if (state === 'idle') return null
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="max-w-sm w-full border-red-200 bg-red-50">
+          <CardContent className="pt-6 text-sm space-y-3">
+            <p className="text-red-600">{error}</p>
+            <a href="/login" className="block text-emerald-600 font-medium hover:underline">
+              Continue to login
+            </a>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
-    <Card className="border-[#6C63FF]/30 bg-[#6C63FF]/5">
-      <CardContent className="pt-6 text-sm">
-        {state === 'working' ? (
-          <p className="text-gray-600">Signing you in…</p>
-        ) : (
-          <p className="text-red-600">{error} Use WhatsApp Sign In or your email below.</p>
-        )}
-      </CardContent>
-    </Card>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-[#6C63FF] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm text-gray-500">Signing you in…</p>
+      </div>
+    </div>
   )
 }
 
@@ -222,7 +235,7 @@ function WhatsAppSignIn() {
 
 // ── Email / Password Sign In ─────────────────────────────────────────────────
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
   const supabase = createClient()
 
@@ -250,9 +263,6 @@ export default function LoginPage() {
 
   return (
     <div className="space-y-4">
-      {/* Onboarding magic-link handler — silent unless ?token= is present */}
-      <MagicLinkHandler />
-
       {/* WhatsApp Sign In — shown first */}
       <WhatsAppSignIn />
 
@@ -310,5 +320,30 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function LoginPageInner() {
+  const searchParams = useSearchParams()
+  const token = searchParams.get('token')
+
+  // A magic-link tap must never render the full login form, not even for
+  // an instant — decided synchronously here, before anything paints.
+  if (token) return <MagicLinkScreen token={token} />
+
+  return <LoginForm />
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-[#6C63FF] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <LoginPageInner />
+    </Suspense>
   )
 }
