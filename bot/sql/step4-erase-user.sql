@@ -58,6 +58,8 @@ begin
   update pending_erasures set requested_by_admin_id = null where requested_by_admin_id in (select user_id from _erase_users);
   update pending_erasures set cancelled_by_admin_id = null where cancelled_by_admin_id in (select user_id from _erase_users);
   update profiles set merged_into_id = null where merged_into_id in (select user_id from _erase_users);
+  update inventory_movements set created_by = null where created_by in (select user_id from _erase_users);
+  update receipts set uploaded_by = null where uploaded_by in (select user_id from _erase_users);
 
   delete from whatsapp_conversations where phone_number in
     (select phone from profiles where id in (select user_id from _erase_users) and phone is not null);
@@ -65,6 +67,7 @@ begin
     or user_id in (select user_id from _erase_users);
   delete from identity_merge_codes where target_profile_id in (select user_id from _erase_users)
     or requested_by_profile_id in (select user_id from _erase_users);
+  delete from magic_login_tokens where user_id in (select user_id from _erase_users);
   delete from subscription_events where org_id = p_org_id;
   delete from andrea_contributions where org_id = p_org_id;
 
@@ -111,12 +114,15 @@ begin
   update pending_erasures set requested_by_admin_id = null where requested_by_admin_id = p_profile_id;
   update pending_erasures set cancelled_by_admin_id = null where cancelled_by_admin_id = p_profile_id;
   update profiles set merged_into_id = null where merged_into_id = p_profile_id;
+  update inventory_movements set created_by = null where created_by = p_profile_id;
+  update receipts set uploaded_by = null where uploaded_by = p_profile_id;
 
   if v_phone is not null then
     delete from whatsapp_conversations where phone_number = v_phone;
   end if;
   delete from whatsapp_sessions where user_id = p_profile_id;
   delete from identity_merge_codes where target_profile_id = p_profile_id or requested_by_profile_id = p_profile_id;
+  delete from magic_login_tokens where user_id = p_profile_id;
 
   -- Safety net: removes any remaining org_members rows (e.g. staff/family
   -- memberships in orgs this person does NOT own — those orgs and their
