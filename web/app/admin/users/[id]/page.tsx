@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { AdminUserActions } from './AdminUserActions'
 import { AdminEditErase } from './AdminEditErase'
+import { AdminEraseUser } from './AdminEraseUser'
 import { ImpersonateButton } from './ImpersonateButton'
 
 function getAdmin() {
@@ -187,6 +188,16 @@ export default async function AdminUserDetailPage({
           org_name: org?.name ?? '',
           plan: org?.plan ?? 'free',
         }}
+      />
+
+      {/* Permanently Erase User — separate from erasing a single org above.
+          Finds and destroys every organisation this profile OWNS, then
+          wipes the identity itself (profile, auth login, WhatsApp state). */}
+      <AdminEraseUser
+        profileId={id}
+        fullName={profile.full_name}
+        phone={profile.phone}
+        canErase={canErase}
       />
 
       {/* Impersonate — visible to Super + Support Admin only */}
