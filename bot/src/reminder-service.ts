@@ -23,6 +23,15 @@ function lagosTimeStr(d: Date): string {
   return d.toISOString().split('T')[1].slice(0, 5) // HH:MM
 }
 
+// Thrown when a one-off reminder resolves to a date/time already in the
+// past at the moment it's being created — defense-in-depth against the bug
+// where a bad date from upstream parsing got silently inserted and then
+// fired instantly with a false "sorry for the delay" apology. Recurring
+// reminders are exempt: their first occurrence legitimately CAN look "past"
+// relative to today (e.g. "every 5th of the month" set on the 20th), and
+// the scheduler already advances those correctly.
+export class PastDueReminderError extends Error {}
+
 export async function setReminder(params: {
   orgId: string
   title: string
@@ -32,6 +41,19 @@ export async function setReminder(params: {
   dueTime?: string // 'HH:MM' 24h WAT
   clientId?: string // links a follow-up reminder to a lead/client record
 }) {
+  if (params.recurrence === 'once') {
+    const nowD = lagosNow()
+    const today = lagosDateStr(nowD)
+    const nowTime = lagosTimeStr(nowD)
+    const isPastDate = params.dueDate < today
+    const isPastTimeToday = params.dueDate === today && !!params.dueTime && params.dueTime < nowTime
+    if (isPastDate || isPastTimeToday) {
+      throw new PastDueReminderError(
+        `Resolved date/time (${params.dueDate}${params.dueTime ? ' ' + params.dueTime : ''}) is already in the past.`
+      )
+    }
+  }
+
   // Upsert-by-intent: if an active reminder with the same title and date
   // already exists, update it instead of creating a duplicate. The AI can
   // emit SET_REMINDER repeatedly for one conversation ("set it" / "did you

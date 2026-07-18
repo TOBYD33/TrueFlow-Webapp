@@ -3,7 +3,7 @@
 // e.g. "SET_BUDGET:Transport:120000" → writes budget to Supabase
 
 import { setBudget } from './budget-service'
-import { setReminder } from './reminder-service'
+import { setReminder, PastDueReminderError } from './reminder-service'
 import { generateAndSendPDF } from './pdf-generator'
 import { getBudgetStatus } from './report-service'
 import { getInventoryItems, addInventoryItem, updateStock, getLowStockItems } from './inventory-service'
@@ -228,7 +228,11 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
       }
     } catch (err: any) {
       console.error(`executeAction ${type} failed:`, err)
-      failures.push(actionFailureMessage(type))
+      if (err instanceof PastDueReminderError) {
+        failures.push("⏰ That time's already passed — did you mean tomorrow, or right now? Let me know and I'll set it.")
+      } else {
+        failures.push(actionFailureMessage(type))
+      }
     }
   }
 

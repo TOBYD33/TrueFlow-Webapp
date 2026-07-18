@@ -1,17 +1,21 @@
 // onboarding-service.ts
 // Conversational first-contact onboarding: name -> business/family/personal
-// -> capability list -> first real action (receipt, reminder, or business
-// card). Exactly 2 questions, always, before the first aha moment — never
-// more, and never anything before the first question either.
+// -> [business name, business accounts only] -> capability list -> first
+// real action (receipt, reminder, or business card). Exactly 2 questions
+// for family/personal accounts, always, before the first aha moment.
+// Business accounts get one extra, conditional question — their business
+// name — since organizations.name otherwise stays the onboarding
+// placeholder forever with no other point where it's ever captured.
 //
 // State lives on whatsapp_sessions.onboarding_step:
-//   'awaiting_name' -> 'awaiting_type' -> 'awaiting_first_action' -> null (done)
+//   'awaiting_name' -> 'awaiting_type' -> ['awaiting_business_name' ->]
+//   'awaiting_first_action' -> null (done)
 
 import crypto from 'crypto'
 import { supabase } from './supabase'
 import { sendWhatsAppMessage } from './twilio-sender'
 
-export type OnboardingStep = 'awaiting_name' | 'awaiting_type' | 'awaiting_first_action'
+export type OnboardingStep = 'awaiting_name' | 'awaiting_type' | 'awaiting_business_name' | 'awaiting_first_action'
 
 export interface OnboardingResult {
   reply: string | null   // what to send back; null when not handled here
@@ -80,6 +84,25 @@ export async function handleOnboardingReply(
     }
   }
 
+  if (step === 'awaiting_business_name') {
+    if (hasImage || !messageText.trim()) {
+      return { handled: true, step, reply: 'What should I call your business? (just the name is fine)' }
+    }
+    const businessName = messageText.trim().slice(0, 120)
+
+    await supabase.from('organizations').update({ name: businessName }).eq('id', orgId)
+    await supabase.from('whatsapp_sessions').update({ onboarding_step: 'awaiting_first_action' }).eq('phone_number', phoneNumber)
+
+    return {
+      handled: true,
+      step,
+      reply:
+        `${businessName} ✅\n\nHere's what we can do together:\n${capabilityList(true)}\n\n` +
+        `Let's try it. Got a receipt handy? Send a photo.\n\n` +
+        `No receipt nearby? Tell me something to remind you about instead, like 'remind me to pay rent Friday.'`,
+    }
+  }
+
   // step === 'awaiting_type'
   if (hasImage) {
     return { handled: true, step, reply: 'Just one more thing first — is this for your business, your family, or just you?' }
@@ -100,13 +123,25 @@ export async function handleOnboardingReply(
   }
 
   await supabase.from('organizations').update({ type }).eq('id', orgId)
+
+  // Business accounts get one more question before the capability list —
+  // organizations.name otherwise never gets captured anywhere else.
+  if (type === 'sme') {
+    await supabase.from('whatsapp_sessions').update({ onboarding_step: 'awaiting_business_name' }).eq('phone_number', phoneNumber)
+    return {
+      handled: true,
+      step,
+      reply: `Got it! What should I call your business?`,
+    }
+  }
+
   await supabase.from('whatsapp_sessions').update({ onboarding_step: 'awaiting_first_action' }).eq('phone_number', phoneNumber)
 
   return {
     handled: true,
     step,
     reply:
-      `Here's what we can do together:\n${capabilityList(type === 'sme')}\n\n` +
+      `Here's what we can do together:\n${capabilityList(false)}\n\n` +
       `Let's try it. Got a receipt handy? Send a photo.\n\n` +
       `No receipt nearby? Tell me something to remind you about instead, like 'remind me to pay rent Friday.'`,
   }

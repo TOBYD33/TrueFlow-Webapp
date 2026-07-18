@@ -13,6 +13,42 @@ import { getProjectsByClient } from './project-service'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// Phone-country-code → IANA timezone, first pass until a per-user timezone
+// field exists. Longest codes checked first so e.g. '234' isn't shadowed by
+// a shorter, unrelated prefix. Defaults to WAT (the primary market) when a
+// number's country code isn't in this list.
+const COUNTRY_CODE_TIMEZONES: Record<string, string> = {
+  '234': 'Africa/Lagos',        // Nigeria
+  '254': 'Africa/Nairobi',      // Kenya
+  '233': 'Africa/Accra',        // Ghana
+  '27': 'Africa/Johannesburg',  // South Africa
+  '44': 'Europe/London',        // UK
+  '92': 'Asia/Karachi',         // Pakistan
+  '55': 'America/Sao_Paulo',    // Brazil
+  '1': 'America/New_York',      // USA/Canada — coarse approximation, no area-code precision
+}
+const DEFAULT_TIMEZONE = 'Africa/Lagos'
+const SORTED_COUNTRY_CODES = Object.keys(COUNTRY_CODE_TIMEZONES).sort((a, b) => b.length - a.length)
+
+function resolveTimezone(phoneNumber: string): string {
+  const digits = phoneNumber.replace(/\D/g, '')
+  for (const code of SORTED_COUNTRY_CODES) {
+    if (digits.startsWith(code)) return COUNTRY_CODE_TIMEZONES[code]
+  }
+  return DEFAULT_TIMEZONE
+}
+
+function dateStrInTimezone(tz: string, date: Date): string {
+  // en-CA formats as YYYY-MM-DD, exactly what due_date columns expect
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+}
+
+function addDaysToDateStr(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
 const SYSTEM_PROMPT = `
 You are TrueFlow, a friendly and honest WhatsApp financial assistant for small
 business owners. You track both money going OUT (expenses) and money coming IN (client payments).
@@ -60,9 +96,22 @@ confirmations when a save silently fails.
 Available actions:
 ACTION:SET_BUDGET:{category}:{amount}
 ACTION:SET_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}:{HHMM}
-  (HHMM = optional time as 4 digits, 24-hour WAT, e.g. 2030 for 8:30 PM.
-   ALWAYS include it when the user gives a time. Omit only when no time
-   is given — those reminders deliver at 8:00 AM on the due date.
+  (YYYY-MM-DD — ALWAYS compute this from the CURRENT DATE AND TIME block
+   given in your context below, never from memory, never from an example
+   date shown anywhere in these instructions, and never left as a guess.
+   "today"/"tomorrow"/"yesterday" are given to you pre-computed in that
+   block — use those exact values, do not do the arithmetic yourself.
+   For anything else relative ("next Friday", "in 3 days", "the 25th"),
+   calculate it yourself starting from that block's real current date.
+   HHMM = optional time as 4 digits, 24-hour, in the user's own local time
+   as stated in that block. ALWAYS include it when the user gives a time.
+   Omit only when no time is given — those reminders deliver at 8:00 AM on
+   the due date.
+   If the user says "today" for a clock time that has ALREADY PASSED
+   relative to the current time in that block, do NOT silently emit
+   SET_REMINDER with a same-day date — ask first: "That time's already
+   passed today — did you mean tomorrow, or is this for right now?" Wait
+   for their answer before emitting the action.
    Emit SET_REMINDER ONLY when the user is creating or changing a reminder.
    Never emit it when they are merely asking about one — e.g. "did you set
    the reminder?" is a question, answer it without any ACTION tag. To change
@@ -140,10 +189,12 @@ filing or guaranteed-accurate calculator:
   context below — if a country/tax type isn't listed, say you don't have a
   verified reference rate for it rather than guessing.
 
-EXAMPLES:
+EXAMPLES (the dates below are illustrative placeholders, NEVER copy them
+literally — always substitute the real date computed from the CURRENT
+DATE AND TIME block in your context for whatever "{...}" describes):
 User sets transport budget → end reply with: ACTION:SET_BUDGET:Transport:120000
-User sets salary reminder → end reply with: ACTION:SET_REMINDER:Pay staff salaries:2025-06-25:monthly
-User says "Remind me 8:30pm today to pick up Jennifer" → end reply with: ACTION:SET_REMINDER:Pick up Jennifer:2026-07-12:once:2030
+User sets salary reminder for the 25th → end reply with: ACTION:SET_REMINDER:Pay staff salaries:{this or next month's 25th, from CURRENT DATE}:monthly
+User says "Remind me 8:30pm today to pick up Jennifer" → end reply with: ACTION:SET_REMINDER:Pick up Jennifer:{today's date, from CURRENT DATE}:once:2030
 User asks for PDF → end reply with: ACTION:EXPORT_PDF
 User says "I sold 12 yards of Ankara today" → end reply with: ACTION:UPDATE_INVENTORY:Ankara:-12:sale
 User asks "What's my stock level?" → end reply with: ACTION:SHOW_INVENTORY
@@ -152,7 +203,7 @@ User says "New client Marcus Adebayo" → end reply with: ACTION:START_CLIENT_SE
 User says "Marcus paid me 150k" (Marcus is in client list) → end reply with: ACTION:LOG_PAYMENT:Marcus Adebayo:150000
 User says "Generate an invoice for Marcus" → end reply with: ACTION:GENERATE_INVOICE
 User asks "What's my estimated tax this month" → end reply with: ACTION:GET_TAX_ESTIMATE:Nigeria:this_month
-User says "Remind me to pay VAT on the 21st, monthly" → end reply with: ACTION:SET_TAX_REMINDER:Pay VAT:2025-06-21:monthly
+User says "Remind me to pay VAT on the 21st, monthly" → end reply with: ACTION:SET_TAX_REMINDER:Pay VAT:{this or next month's 21st, from CURRENT DATE}:monthly
 User says "Switch to Kenya" (in a tax context) → end reply with: ACTION:SWITCH_TAX_COUNTRY:Kenya
 `
 
@@ -225,7 +276,27 @@ If the user asks about clients, income, or projects and canSeeClients is NO, pol
   const now = new Date()
   const monthName = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
+  // Grounds every date/time resolution the model does — computed fresh on
+  // every single message (never cached, never hardcoded), in the user's
+  // own local timezone derived from their phone's country code. This is
+  // the fix for the bug where "today" resolved to a stale, wrong day: the
+  // model was never told the real date and instead pattern-matched a
+  // hardcoded example date left in this same prompt.
+  const userTimezone = resolveTimezone(phoneNumber)
+  const todayStr = dateStrInTimezone(userTimezone, now)
+  const tomorrowStr = addDaysToDateStr(todayStr, 1)
+  const yesterdayStr = addDaysToDateStr(todayStr, -1)
+  const dayName = new Intl.DateTimeFormat('en-US', { timeZone: userTimezone, weekday: 'long' }).format(now)
+  const timeStr = new Intl.DateTimeFormat('en-US', { timeZone: userTimezone, hour: '2-digit', minute: '2-digit', hour12: true }).format(now)
+
   const contextBlock = `
+[CURRENT DATE AND TIME — GROUND ALL DATE/TIME RESOLUTION ON THIS, NEVER GUESS OR COPY AN EXAMPLE DATE FROM YOUR INSTRUCTIONS]
+Right now it is ${dayName}, ${todayStr}, ${timeStr} (${userTimezone}).
+"today" = ${todayStr}
+"tomorrow" = ${tomorrowStr}
+"yesterday" = ${yesterdayStr}
+Compute any other relative date (e.g. "next Friday", "in 3 days", "the 25th") starting from ${todayStr} above — never from memory, training data, or any date shown elsewhere in these instructions.
+
 [FINANCIAL CONTEXT — ${monthName}]
 Business: ${orgName}
 Owner: ${userName}
