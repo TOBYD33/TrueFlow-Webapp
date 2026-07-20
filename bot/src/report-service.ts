@@ -84,7 +84,16 @@ export async function sendWeeklySummaries() {
 
   if (error) { console.error('sendWeeklySummaries failed:', error); return }
 
+  // Dedupe by org+phone — more than one org_members row can legitimately
+  // point at the same person (e.g. a stale duplicate owner row left over
+  // from before an identity merge), which would otherwise send the exact
+  // same summary twice to the same WhatsApp number back to back.
+  const seen = new Set<string>()
   for (const member of members || []) {
+    const dedupeKey = `${member.org_id}:${member.whatsapp_number}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+
     try {
       const org = member.organizations as any
       const spending = await getMonthlySpending(member.org_id)
@@ -129,7 +138,13 @@ export async function sendMonthlyReports() {
 
   if (error) { console.error('sendMonthlyReports failed:', error); return }
 
+  // Same dedupe as sendWeeklySummaries — see comment there.
+  const seenMonthly = new Set<string>()
   for (const member of members || []) {
+    const dedupeKey = `${member.org_id}:${member.whatsapp_number}`
+    if (seenMonthly.has(dedupeKey)) continue
+    seenMonthly.add(dedupeKey)
+
     try {
       const org = member.organizations as any
       const currency = org?.currency || 'NGN'
