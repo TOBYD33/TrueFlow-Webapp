@@ -124,6 +124,16 @@ ACTION:SHOW_INVENTORY
 ACTION:START_CLIENT_SETUP:{clientName}
 ACTION:LOG_PAYMENT:{clientName}:{amount}
 ACTION:GENERATE_INVOICE
+ACTION:CREATE_INVOICE:{clientName}:{amount}:{description}
+  (or ACTION:CREATE_INVOICE:{clientName}:{amount}:{YYYY-MM-DD}:{description} to
+   include a due date — compute that date from the CURRENT DATE AND TIME block
+   below, same rule as SET_REMINDER. description is free text, e.g. "consulting
+   work" — put it LAST since it may contain commas or other punctuation. Only
+   use this if clientName appears in the ACTIVE CLIENTS list below — if they
+   don't exist yet, ask the user to create them first with START_CLIENT_SETUP.
+   Generates a real PDF with the business's bank account details included and
+   sends it back on WhatsApp — if the business hasn't saved bank details yet,
+   the user will be asked for them once before the invoice completes.)
 ACTION:GET_TAX_ESTIMATE:{country}:{period}
 ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
 ACTION:SWITCH_TAX_COUNTRY:{country}
@@ -160,7 +170,13 @@ CLIENT AND PAYMENT RULES:
   Only use this if the client name appears in the ACTIVE CLIENTS list below — if the
   client doesn't exist yet, ask the user to create them first with START_CLIENT_SETUP.
   Never emit LOG_PAYMENT for a client you cannot confirm exists.
-- For an invoice on an existing client/project, use ACTION:GENERATE_INVOICE.
+- For an invoice tied to an EXISTING project (created via START_CLIENT_SETUP's
+  guided flow, with its own fee/balance already tracked), use ACTION:GENERATE_INVOICE.
+- For a quick, ad-hoc invoice request — "send Toby an invoice for 50k for the
+  consulting work", "invoice Amaka 200,000 for the logo design" — use
+  ACTION:CREATE_INVOICE:{clientName}:{amount}:{description} instead. This is the
+  one to use for most natural invoice requests; GENERATE_INVOICE is only for
+  when a tracked project already exists.
 - Client balance questions (e.g. "What does Marcus owe me?") — answer from the
   ACTIVE CLIENTS + PROJECTS context below. Never make up a balance figure.
 
@@ -201,7 +217,8 @@ User asks "What's my stock level?" → end reply with: ACTION:SHOW_INVENTORY
 User says "Add 50 units of Ankara fabric at 2000 each" → end reply with: ACTION:UPDATE_INVENTORY:Ankara:50:restock
 User says "New client Marcus Adebayo" → end reply with: ACTION:START_CLIENT_SETUP:Marcus Adebayo
 User says "Marcus paid me 150k" (Marcus is in client list) → end reply with: ACTION:LOG_PAYMENT:Marcus Adebayo:150000
-User says "Generate an invoice for Marcus" → end reply with: ACTION:GENERATE_INVOICE
+User says "Generate an invoice for Marcus" (existing tracked project) → end reply with: ACTION:GENERATE_INVOICE
+User says "Send Toby an invoice for 50k for the consulting work" (Toby is in client list) → end reply with: ACTION:CREATE_INVOICE:Toby:50000:consulting work
 User asks "What's my estimated tax this month" → end reply with: ACTION:GET_TAX_ESTIMATE:Nigeria:this_month
 User says "Remind me to pay VAT on the 21st, monthly" → end reply with: ACTION:SET_TAX_REMINDER:Pay VAT:{this or next month's 21st, from CURRENT DATE}:monthly
 User says "Switch to Kenya" (in a tax context) → end reply with: ACTION:SWITCH_TAX_COUNTRY:Kenya

@@ -80,6 +80,9 @@ export default function BusinessSettingsPage() {
       type: org.type,
       currency: org.currency,
       address: org.address ?? null,
+      bank_account_name: org.bank_account_name ?? null,
+      bank_account_number: org.bank_account_number ?? null,
+      bank_name: org.bank_name ?? null,
     }).eq('id', orgId)
     setSaving(false)
     if (error) toast.error(error.message)
@@ -162,6 +165,49 @@ export default function BusinessSettingsPage() {
               onChange={e => setOrg(o => o ? { ...o, address: e.target.value } : o)}
             />
             <p className="text-xs text-gray-400 mt-1">Shown below your business name on invoice headers.</p>
+          </div>
+          <Button className="bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={saveOrg} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Business Settings'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Payment details — the default/fallback payment method shown on
+          every invoice, independent of any payment-link integration. Tello
+          also asks for these once via WhatsApp the first time an invoice is
+          created with none saved yet; either place keeps them in sync. */}
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div>
+            <p className="font-semibold text-gray-900">Payment Details</p>
+            <p className="text-xs text-gray-400 mt-1">Shown on every invoice as the default payment method.</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">Account name</label>
+            <Input
+              className="mt-1"
+              placeholder="Your Business Name"
+              value={org?.bank_account_name ?? ''}
+              onChange={e => setOrg(o => o ? { ...o, bank_account_name: e.target.value } : o)}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">Account number</label>
+            <Input
+              className="mt-1"
+              placeholder="0123456789"
+              value={org?.bank_account_number ?? ''}
+              onChange={e => setOrg(o => o ? { ...o, bank_account_number: e.target.value } : o)}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">Bank name</label>
+            <Input
+              className="mt-1"
+              placeholder="GTBank"
+              value={org?.bank_name ?? ''}
+              onChange={e => setOrg(o => o ? { ...o, bank_name: e.target.value } : o)}
+            />
           </div>
           <Button className="bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={saveOrg} disabled={saving}>
             {saving ? 'Saving…' : 'Save Business Settings'}

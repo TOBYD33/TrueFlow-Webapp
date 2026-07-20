@@ -10,6 +10,7 @@ import { getInventoryItems, addInventoryItem, updateStock, getLowStockItems } fr
 import { startGuidedClientSetup } from './client-setup-service'
 import { findClientByName } from './client-service'
 import { recordClientPayment } from './client-payment-service'
+import { startInvoiceCreation } from './invoice-setup-service'
 import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
 import { supabase } from './supabase'
 
@@ -178,6 +179,47 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
           break
         }
 
+        case 'CREATE_INVOICE': {
+          // CREATE_INVOICE:{clientName}:{amount}:{description}
+          // CREATE_INVOICE:{clientName}:{amount}:{YYYY-MM-DD}:{description}  (with a due date)
+          const invParts = parts.slice(1)
+          const clientName = invParts[0]?.trim()
+          const amount = parseFloat(invParts[1])
+          const rest = invParts.slice(2)
+
+          let dueDate: string | undefined
+          let description: string
+          if (rest[0] && /^\d{4}-\d{2}-\d{2}$/.test(rest[0])) {
+            dueDate = rest[0]
+            description = rest.slice(1).join(':').trim()
+          } else {
+            description = rest.join(':').trim()
+          }
+
+          if (!clientName || isNaN(amount) || amount <= 0 || !description) break
+
+          const invoiceClient = await findClientByName(user.org_id, clientName)
+          if (!invoiceClient) {
+            notifications.push(
+              `I couldn't find a client matching "${clientName}". Create them first by saying "New client ${clientName}".`
+            )
+            break
+          }
+
+          const invoiceReply = await startInvoiceCreation({
+            orgId: user.org_id,
+            phoneNumber: user.whatsapp_number,
+            clientId: invoiceClient.id,
+            clientName: invoiceClient.name,
+            amount,
+            currency: user.currency || 'NGN',
+            description,
+            dueDate,
+          })
+          notifications.push(invoiceReply)
+          break
+        }
+
         case 'START_CLIENT_SETUP': {
           // START_CLIENT_SETUP:{clientName}
           const clientName = parts.slice(1).join(':').trim()
@@ -254,6 +296,8 @@ function actionFailureMessage(type: string): string {
       return "⚠️ I couldn't log that payment — please try again in a moment."
     case 'START_CLIENT_SETUP':
       return "⚠️ I couldn't start that client setup — please try again in a moment."
+    case 'CREATE_INVOICE':
+      return "⚠️ I couldn't create that invoice — please try again in a moment."
     default:
       return "⚠️ Something went wrong completing that action — please try again in a moment."
   }

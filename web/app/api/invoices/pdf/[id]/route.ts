@@ -21,13 +21,17 @@ export async function GET(
 
     const { data: member } = await supabase
       .from('org_members')
-      .select('org_id, organizations(name, logo_url, currency, address)')
+      .select('org_id, organizations(name, logo_url, currency, address, bank_account_name, bank_account_number, bank_name)')
       .eq('user_id', user.id)
       .single()
 
     if (!member) return NextResponse.json({ error: 'No org found' }, { status: 404 })
 
-    const org = member.organizations as unknown as { name: string; logo_url?: string | null; currency?: string; address?: string | null } | null
+    const org = member.organizations as unknown as {
+      name: string; logo_url?: string | null; currency?: string; address?: string | null
+      bank_account_name?: string | null; bank_account_number?: string | null; bank_name?: string | null
+    } | null
+    const hasBankDetails = !!(org?.bank_account_name && org?.bank_account_number && org?.bank_name)
     const orgName = org?.name ?? 'Your Business'
 
     // Fetch profile phone for invoice header contact line
@@ -104,6 +108,10 @@ export async function GET(
   .totals-row.sub { color: #6b7280; }
   .totals-row.grand { font-size: 16px; font-weight: 700; border-top: 2px solid #111827; padding-top: 12px; margin-top: 6px; }
   .totals-row.grand .grand-amount { color: #6C63FF; }
+  .bank-box { background: #6C63FF0d; border: 1px solid #6C63FF33; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+  .bank-box h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #6C63FF; font-weight: 600; margin-bottom: 8px; }
+  .bank-row { display: flex; gap: 32px; font-size: 13px; }
+  .bank-row div span { display: block; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
   .notes-box { background: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 40px; }
   .notes-box h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; font-weight: 600; margin-bottom: 8px; }
   .notes-box p { font-size: 12px; color: #374151; line-height: 1.6; white-space: pre-wrap; }
@@ -205,6 +213,15 @@ export async function GET(
     </div>
   </div>
 </div>
+
+${hasBankDetails ? `<div class="bank-box">
+  <h4>Payment Details</h4>
+  <div class="bank-row">
+    <div><span>Account Name</span>${org!.bank_account_name}</div>
+    <div><span>Account Number</span>${org!.bank_account_number}</div>
+    <div><span>Bank</span>${org!.bank_name}</div>
+  </div>
+</div>` : ''}
 
 ${inv.notes ? `<div class="notes-box">
   <h4>Notes / Payment Terms</h4>

@@ -12,6 +12,7 @@
     "@types/ws": "^8.18.1",
     "axios": "latest",
     "dotenv": "latest",
+    "form-data": "^4.0.5",
     "express": "latest",
     "node-cron": "latest",
     "puppeteer": "^21.11.0",

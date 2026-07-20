@@ -18,6 +18,7 @@ import { executeActions } from './action-executor'
 import { buildTextResponse, buildEmptyResponse } from './twiml-builder'
 import { sendWhatsAppMessage } from './twilio-sender'
 import { getSetupState, continueGuidedSetup } from './client-setup-service'
+import { getPendingInvoiceSetup, continueInvoiceSetup } from './invoice-setup-service'
 import { handleMergeReply } from './merge-service'
 import { startOnboarding, handleOnboardingReply, completeOnboarding, sendPostOnboardingFollowUps } from './onboarding-service'
 import {
@@ -222,6 +223,17 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     const pendingDup = await getPendingDuplicateCheck(phoneNumber)
     if (pendingDup) {
       const reply = await resolveDuplicateCheck(phoneNumber, messageText, pendingDup)
+      return await deliverAndCloseOut(reply)
+    }
+  }
+
+  // ── Step 2b2: Pending invoice bank-details reply (waiting from a prior
+  // CREATE_INVOICE call that had none saved yet) — same priority as the
+  // business-card duplicate check above, another plain-text pending reply.
+  if (!hasImage && messageText) {
+    const pendingInvoice = await getPendingInvoiceSetup(phoneNumber)
+    if (pendingInvoice) {
+      const reply = await continueInvoiceSetup(phoneNumber, messageText, pendingInvoice)
       return await deliverAndCloseOut(reply)
     }
   }

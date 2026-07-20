@@ -12,6 +12,7 @@ import { verifyTwilioSignature } from './auth'
 import { handleMessage } from './message-handler'
 import { buildEmptyResponse, buildTextResponse, extractTextFromTwiml } from './twiml-builder'
 import { sendWhatsAppMessage } from './twilio-sender'
+import { transcribeVoiceNote } from './voice-transcriber'
 import { TwilioWebhookBody } from '../types'
 
 const APP_URL = process.env.WEBAPP_URL || 'app.gettrueflow.com'
@@ -36,8 +37,57 @@ webhookRouter.post('/whatsapp', async (req: Request, res: Response) => {
     return
   }
 
-  const hasImage = parseInt(body.NumMedia) > 0 && !!body.MediaUrl0
+  const hasMedia = parseInt(body.NumMedia) > 0 && !!body.MediaUrl0
+  const isVoiceNote = hasMedia && (body.MediaContentType0 || '').startsWith('audio/')
+  const hasImage = hasMedia && !isVoiceNote
   const phoneNumber = body.From.replace('whatsapp:', '')
+
+  if (isVoiceNote) {
+    // Same timeout constraint as images — transcription can take a few
+    // seconds, so ack immediately and process in the background.
+    res.send(buildTextResponse('🎙️ Listening to your voice note...'))
+
+    ;(async () => {
+      const transcript = await transcribeVoiceNote(body.MediaUrl0!)
+
+      if (!transcript) {
+        await sendWhatsAppMessage(
+          phoneNumber,
+          "Sorry, I couldn't quite make that out — mind typing it instead? 🙏"
+        ).catch(() => {})
+        return
+      }
+
+      // Feed the transcript into the EXACT same pipeline a typed text
+      // message goes through — construct a body where Body is the
+      // transcript and every media field is cleared, so handleMessage
+      // (which derives hasImage/imageUrl straight from these same fields)
+      // treats this identically to the user having typed it themselves.
+      // No separate classification or DB-write logic lives here or ever
+      // should — that would be a second, divergent pipeline.
+      const textBody: TwilioWebhookBody = {
+        ...body,
+        Body: transcript,
+        NumMedia: '0',
+        MediaUrl0: undefined,
+        MediaContentType0: undefined,
+      }
+
+      try {
+        const twiml = await handleMessage(textBody)
+        const text = extractTextFromTwiml(twiml)
+        if (text) await sendWhatsAppMessage(phoneNumber, text)
+      } catch (err) {
+        console.error('webhook: voice note text-pipeline handling failed:', err)
+        await sendWhatsAppMessage(
+          phoneNumber,
+          `Sorry, I had trouble with that. Please try again or type it instead.`
+        ).catch(() => {})
+      }
+    })()
+
+    return
+  }
 
   if (hasImage) {
     // Acknowledge Twilio immediately — avoids the 15-second timeout

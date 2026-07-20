@@ -34,6 +34,9 @@ export interface Organization {
   default_tax_country: string
   logo_url?: string | null
   address?: string | null
+  bank_account_name?: string | null
+  bank_account_number?: string | null
+  bank_name?: string | null
   created_at: string
   updated_at?: string
 }
