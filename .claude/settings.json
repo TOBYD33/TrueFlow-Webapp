@@ -1,7 +1,35 @@
 {
   "permissions": {
     "allow": [
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(grep -v \"^#\\\\|^$\" \"/Users/tobydee/Documents/TrueFlow Project/TrueFlow Webapp/web/.env.local\")",
+      "Bash(railway whoami *)",
+      "Bash(echo \"src exit: $?\")",
+      "Bash(echo \"build exit: $?\")",
+      "Bash(gh repo *)",
+      "Bash(gh api *)",
+      "Bash(curl -s \"https://api.github.com/users/TOBYD33/repos?per_page=30\")",
+      "Bash(python3 -c \"import json,sys; rows=json.load\\(sys.stdin\\); print\\(len\\(rows\\),'rows fixed:'\\); [print\\(' -',r['title']\\) for r in rows]\")",
+      "Bash(dig +short gettrueflow.com A)",
+      "Bash(dig +short www.gettrueflow.com)",
+      "Bash(dig +short app.gettrueflow.com)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 10 \"https://gettrueflow.com/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 10 \"http://gettrueflow.com/\")",
+      "Bash(curl -s -L --max-time 15 -o /tmp/gtf.html -w \"final URL: %{url_effective}\\\\nfinal status: %{http_code}\\\\n\" \"https://gettrueflow.com/\")",
+      "Bash(curl -s -L --max-time 15 \"https://gettrueflow.com/robots.txt\" -w \"\\\\nrobots status: %{http_code}\\\\n\")",
+      "Bash(curl -s -I --max-time 10 \"https://gettrueflow.com/\")",
+      "Bash(curl -s -I --max-time 10 \"https://www.gettrueflow.com/\")",
+      "Bash(curl -s --max-time 15 \"https://www.gettrueflow.com/\" -o /tmp/gtf.html -w \"status: %{http_code}, bytes: %{size_download}\\\\n\")",
+      "Bash(curl -s --max-time 10 \"https://www.gettrueflow.com/robots.txt\" -w \"\\\\nstatus: %{http_code}\\\\n\")",
+      "Bash(dig @8.8.8.8 +short app.gettrueflow.com)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 10 \"https://app.gettrueflow.com/login\")",
+      "Bash(echo \"tsc exit: $?\")",
+      "Bash(npx next *)",
+      "Bash(echo \"tsc: $?\")",
+      "Bash(xargs -0 sed -i '' -e 's|bg-emerald-100 text-emerald-700|bg-[#00D4AA]/10 text-[#00A88A]|g' -e 's|hover:bg-emerald-700|hover:bg-[#5A52E0]|g' -e 's|hover:bg-emerald-600|hover:bg-[#5A52E0]|g' -e 's|bg-emerald-600|bg-[#6C63FF]|g' -e 's|bg-emerald-500|bg-[#6C63FF]|g' -e 's|text-emerald-600 hover:underline|text-[#6C63FF] hover:underline|g' -e 's|hover:text-emerald-700|hover:text-[#5A52E0]|g' -e 's|text-emerald-600|text-[#00A88A]|g' -e 's|text-emerald-700|text-[#00A88A]|g' -e 's|text-emerald-500|text-[#00D4AA]|g' -e 's|text-emerald-400|text-[#00D4AA]|g' -e 's|bg-emerald-50|bg-[#00D4AA]/5|g' -e 's|bg-emerald-100|bg-[#00D4AA]/10|g' -e 's|border-emerald-400|border-[#00D4AA]/60|g' -e 's|border-emerald-200|border-[#00D4AA]/30|g' -e 's|hover:border-emerald-400|hover:border-[#6C63FF]|g' -e 's|accent-emerald-600|accent-[#6C63FF]|g' -e 's|ring-emerald-500|ring-[#6C63FF]|g' -e 's|bg-blue-100 text-blue-700|bg-[#6C63FF]/10 text-[#6C63FF]|g' -e 's|hover:bg-blue-700|hover:bg-[#5A52E0]|g' -e 's|bg-blue-600|bg-[#6C63FF]|g' -e 's|bg-blue-500|bg-[#6C63FF]|g' -e 's|text-blue-600|text-[#6C63FF]|g' -e 's|text-blue-700|text-[#6C63FF]|g' -e 's|text-blue-500|text-[#6C63FF]|g' -e 's|bg-blue-50|bg-[#6C63FF]/5|g' -e 's|bg-blue-100|bg-[#6C63FF]/10|g' -e 's|border-blue-200|border-[#6C63FF]/30|g' -e 's|bg-purple-100 text-purple-700|bg-[#6C63FF]/10 text-[#6C63FF]|g' -e 's|text-purple-600|text-[#6C63FF]|g' -e 's|text-purple-700|text-[#6C63FF]|g' -e 's|bg-purple-600|bg-[#6C63FF]|g' -e 's|bg-purple-50|bg-[#6C63FF]/5|g' -e 's|bg-purple-100|bg-[#6C63FF]/10|g' -e 's|text-indigo-600|text-[#6C63FF]|g' -e 's|bg-indigo-100|bg-[#6C63FF]/10|g' -e 's|bg-indigo-50|bg-[#6C63FF]/5|g' -e 's|bg-green-100 text-green-700|bg-[#00D4AA]/10 text-[#00A88A]|g' -e 's|text-green-600|text-[#00A88A]|g' -e 's|text-green-700|text-[#00A88A]|g')"
+    ],
+    "additionalDirectories": [
+      "/Users/tobydee/Documents/TrueFlow Project/TrueFlow Website"
     ]
   }
 }
