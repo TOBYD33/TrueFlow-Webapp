@@ -10,44 +10,9 @@ import { getConversationHistory, saveMessage } from './conversation'
 import { getAllTaxRates, calculateTaxEstimate, TAX_COUNTRIES } from './tax-service'
 import { getClientsByOrg } from './client-service'
 import { getProjectsByClient } from './project-service'
+import { resolveTimezone, dateStrInTimezone, addDaysToDateStr } from './timezone-util'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-// Phone-country-code → IANA timezone, first pass until a per-user timezone
-// field exists. Longest codes checked first so e.g. '234' isn't shadowed by
-// a shorter, unrelated prefix. Defaults to WAT (the primary market) when a
-// number's country code isn't in this list.
-const COUNTRY_CODE_TIMEZONES: Record<string, string> = {
-  '234': 'Africa/Lagos',        // Nigeria
-  '254': 'Africa/Nairobi',      // Kenya
-  '233': 'Africa/Accra',        // Ghana
-  '27': 'Africa/Johannesburg',  // South Africa
-  '44': 'Europe/London',        // UK
-  '92': 'Asia/Karachi',         // Pakistan
-  '55': 'America/Sao_Paulo',    // Brazil
-  '1': 'America/New_York',      // USA/Canada — coarse approximation, no area-code precision
-}
-const DEFAULT_TIMEZONE = 'Africa/Lagos'
-const SORTED_COUNTRY_CODES = Object.keys(COUNTRY_CODE_TIMEZONES).sort((a, b) => b.length - a.length)
-
-function resolveTimezone(phoneNumber: string): string {
-  const digits = phoneNumber.replace(/\D/g, '')
-  for (const code of SORTED_COUNTRY_CODES) {
-    if (digits.startsWith(code)) return COUNTRY_CODE_TIMEZONES[code]
-  }
-  return DEFAULT_TIMEZONE
-}
-
-function dateStrInTimezone(tz: string, date: Date): string {
-  // en-CA formats as YYYY-MM-DD, exactly what due_date columns expect
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
-}
-
-function addDaysToDateStr(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().split('T')[0]
-}
 
 const SYSTEM_PROMPT = `
 You are TrueFlow, a friendly and honest WhatsApp financial assistant for small
@@ -139,6 +104,13 @@ ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
 ACTION:SWITCH_TAX_COUNTRY:{country}
 ACTION:SET_CLIENT_SOURCE:{clientName}:{source}
 ACTION:SET_CLIENT_PAYING:{clientName}:{true|false}
+ACTION:SET_CLIENT_BIRTHDAY:{clientName}:{month}:{day}
+  (or ACTION:SET_CLIENT_BIRTHDAY:{clientName}:{month}:{day}:{year} if the user
+   gives a year — never ask for the year, it's optional, many people won't
+   want to share a business contact's age. month/day are plain numbers, e.g.
+   "March 5th" → 3:5. This automatically creates three reminders — 1 month,
+   1 week, and 1 day before — recurring every year, you don't compute those
+   yourself.)
 
 recurrence values: once | daily | weekly | monthly | yearly
 period values for GET_TAX_ESTIMATE: this_month | last_month | this_quarter | this_year
@@ -194,6 +166,10 @@ CLIENT AND PAYMENT RULES:
   independent of whether the client is a lead or active — never confuse the
   two, and never emit START_CLIENT_SETUP or a status change just because the
   user mentioned paying status.
+- When the user gives a client's birthday ("Toby's birthday is March 5th",
+  "it's Amaka's birthday on the 12th of June"), emit
+  ACTION:SET_CLIENT_BIRTHDAY:{clientName}:{month}:{day}. Only use this if the
+  client name appears in the ACTIVE CLIENTS list below.
 
 TAX HUB RULES — IMPORTANT, this is a tracking and estimating tool, NOT a tax
 filing or guaranteed-accurate calculator:
@@ -240,6 +216,7 @@ User says "Switch to Kenya" (in a tax context) → end reply with: ACTION:SWITCH
 User says "I met this client on Instagram" (about Marcus) → end reply with: ACTION:SET_CLIENT_SOURCE:Marcus Adebayo:instagram
 User says "mark Toby as a paying client" → end reply with: ACTION:SET_CLIENT_PAYING:Toby:true
 User says "Amaka isn't paying yet" → end reply with: ACTION:SET_CLIENT_PAYING:Amaka:false
+User says "Toby's birthday is March 5th" → end reply with: ACTION:SET_CLIENT_BIRTHDAY:Toby:3:5
 `
 
 interface UserPermissions {

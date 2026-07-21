@@ -9,6 +9,7 @@ import { getBudgetStatus } from './report-service'
 import { getInventoryItems, addInventoryItem, updateStock, getLowStockItems } from './inventory-service'
 import { startGuidedClientSetup } from './client-setup-service'
 import { findClientByName } from './client-service'
+import { setClientBirthday } from './client-birthday-service'
 import { recordClientPayment } from './client-payment-service'
 import { startInvoiceCreation } from './invoice-setup-service'
 import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
@@ -301,6 +302,34 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
           break
         }
 
+        case 'SET_CLIENT_BIRTHDAY': {
+          // SET_CLIENT_BIRTHDAY:{clientName}:{month}:{day}[:{year}]
+          const [, clientName, monthRaw, dayRaw, yearRaw] = parts
+          const month = parseInt(monthRaw, 10)
+          const day = parseInt(dayRaw, 10)
+          const year = yearRaw ? parseInt(yearRaw, 10) : undefined
+          if (!clientName || !month || month < 1 || month > 12 || !day || day < 1 || day > 31) break
+
+          const birthdayClient = await findClientByName(user.org_id, clientName)
+          if (!birthdayClient) {
+            notifications.push(`I couldn't find a client matching "${clientName}".`)
+            break
+          }
+          await setClientBirthday({
+            orgId: user.org_id,
+            clientId: birthdayClient.id,
+            clientName: birthdayClient.name,
+            phoneNumber: user.whatsapp_number,
+            month,
+            day,
+            year,
+          })
+          notifications.push(
+            `✅ Got it — saved *${birthdayClient.name}*'s birthday. I'll remind you 1 month, 1 week, and 1 day before, every year.`
+          )
+          break
+        }
+
         default:
           break
       }
@@ -338,6 +367,8 @@ function actionFailureMessage(type: string): string {
       return "⚠️ I couldn't save that — please try again in a moment."
     case 'SET_CLIENT_PAYING':
       return "⚠️ I couldn't update that client — please try again in a moment."
+    case 'SET_CLIENT_BIRTHDAY':
+      return "⚠️ I couldn't save that birthday — please try again in a moment."
     default:
       return "⚠️ Something went wrong completing that action — please try again in a moment."
   }

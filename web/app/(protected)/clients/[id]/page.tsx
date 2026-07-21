@@ -43,6 +43,10 @@ export default function ClientDetailPage() {
   const [converting, setConverting] = useState(false)
   const [savingSource, setSavingSource] = useState(false)
   const [savingPaying, setSavingPaying] = useState(false)
+  const [birthdayMonth, setBirthdayMonth] = useState('')
+  const [birthdayDay, setBirthdayDay] = useState('')
+  const [birthdayYear, setBirthdayYear] = useState('')
+  const [savingBirthday, setSavingBirthday] = useState(false)
 
   const [projectForm, setProjectForm] = useState({ name: '', description: '', total_fee: '', deadline: '', notes: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', payment_type: 'part_payment', payment_date: new Date().toISOString().split('T')[0], payment_reference: '', project_id: '', notes: '' })
@@ -63,6 +67,10 @@ export default function ClientDetailPage() {
         ])
 
         setClient(c as Client)
+        const cc = c as Client
+        setBirthdayMonth(cc.birthday_month ? String(cc.birthday_month) : '')
+        setBirthdayDay(cc.birthday_day ? String(cc.birthday_day) : '')
+        setBirthdayYear(cc.birthday_year ? String(cc.birthday_year) : '')
         setProjects((p as Project[]) ?? [])
         setPayments((cp as ClientPayment[]) ?? [])
       } finally {
@@ -100,6 +108,34 @@ export default function ClientDetailPage() {
     if (error) { toast.error(error.message); return }
     setClient(prev => prev ? { ...prev, source: source as Client['source'] } : prev)
     toast.success('Source updated')
+  }
+
+  async function saveBirthday() {
+    if (!birthdayMonth || !birthdayDay) { toast.error('Month and day are required'); return }
+    setSavingBirthday(true)
+    try {
+      const res = await fetch('/api/clients/set-birthday', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          month: Number(birthdayMonth),
+          day: Number(birthdayDay),
+          year: birthdayYear ? Number(birthdayYear) : undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Could not save birthday'); return }
+      setClient(prev => prev ? {
+        ...prev,
+        birthday_month: Number(birthdayMonth),
+        birthday_day: Number(birthdayDay),
+        birthday_year: birthdayYear ? Number(birthdayYear) : null,
+      } : prev)
+      toast.success('Birthday saved — reminders set for 1 month, 1 week, and 1 day before')
+    } finally {
+      setSavingBirthday(false)
+    }
   }
 
   async function togglePaying(isPaying: boolean) {
@@ -259,6 +295,33 @@ export default function ClientDetailPage() {
               />
               Paying client
             </label>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="text-sm font-medium text-gray-700">
+              Birthday {client.birthday_month && client.birthday_day && (
+                <span className="text-gray-400 font-normal">
+                  (currently {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][client.birthday_month - 1]} {client.birthday_day}{client.birthday_year ? `, ${client.birthday_year}` : ''})
+                </span>
+              )}
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 mt-1">
+              <Select value={birthdayMonth} onValueChange={v => setBirthdayMonth(v ?? '')}>
+                <SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger>
+                <SelectContent>
+                  {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+                    .map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Input type="number" placeholder="Day" min={1} max={31} value={birthdayDay} onChange={e => setBirthdayDay(e.target.value)} />
+              <Input type="number" placeholder="Year (optional)" value={birthdayYear} onChange={e => setBirthdayYear(e.target.value)} />
+              <Button
+                className="bg-[#6C63FF] hover:bg-[#5A52E0]"
+                onClick={saveBirthday}
+                disabled={savingBirthday || !birthdayMonth || !birthdayDay}
+              >
+                {savingBirthday ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

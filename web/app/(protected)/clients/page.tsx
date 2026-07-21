@@ -30,7 +30,10 @@ export default function ClientsPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '', source: '' })
+  const [form, setForm] = useState({
+    name: '', phone: '', email: '', address: '', notes: '', source: '',
+    isPaying: false, birthdayMonth: '', birthdayDay: '', birthdayYear: '',
+  })
 
   useEffect(() => {
     if (!orgId) {
@@ -109,13 +112,30 @@ export default function ClientsPage() {
       address: form.address || null,
       notes: form.notes || null,
       source: form.source || null,
+      is_paying: form.isPaying,
       created_via: 'web',
     }).select().single()
+
+    if (!error && data && form.birthdayMonth && form.birthdayDay) {
+      // Fire-and-forget — the client is already saved either way; the
+      // birthday + its reminders are an enhancement, not a blocker.
+      fetch('/api/clients/set-birthday', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: (data as Client).id,
+          month: Number(form.birthdayMonth),
+          day: Number(form.birthdayDay),
+          year: form.birthdayYear ? Number(form.birthdayYear) : undefined,
+        }),
+      }).catch(() => {})
+    }
+
     setSaving(false)
     if (error) { toast.error(error.message); return }
     setClients(prev => [data as Client, ...prev])
     setAddOpen(false)
-    setForm({ name: '', phone: '', email: '', address: '', notes: '', source: '' })
+    setForm({ name: '', phone: '', email: '', address: '', notes: '', source: '', isPaying: false, birthdayMonth: '', birthdayDay: '', birthdayYear: '' })
     toast.success('Client added')
   }
 
@@ -260,6 +280,29 @@ export default function ClientsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Birthday (optional)</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                <Select value={form.birthdayMonth} onValueChange={v => setForm(f => ({ ...f, birthdayMonth: v ?? '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger>
+                  <SelectContent>
+                    {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+                      .map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input type="number" placeholder="Day" min={1} max={31} value={form.birthdayDay} onChange={e => setForm(f => ({ ...f, birthdayDay: e.target.value }))} />
+                <Input type="number" placeholder="Year (optional)" value={form.birthdayYear} onChange={e => setForm(f => ({ ...f, birthdayYear: e.target.value }))} />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-[#6C63FF]"
+                checked={form.isPaying}
+                onChange={e => setForm(f => ({ ...f, isPaying: e.target.checked }))}
+              />
+              Paying client
+            </label>
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setAddOpen(false)}>Cancel</Button>
               <Button className="flex-1 bg-[#6C63FF] hover:bg-[#5A52E0]" onClick={handleAdd} disabled={saving || !form.name.trim()}>

@@ -116,6 +116,9 @@ export interface Client {
   status: 'active' | 'inactive' | 'archived' | 'lead'
   source: 'manual' | 'business_card' | 'smart_transfer' | 'whatsapp' | 'facebook' | 'instagram' | 'referral' | 'offline' | 'other' | null
   is_paying: boolean
+  birthday_month: number | null
+  birthday_day: number | null
+  birthday_year: number | null
   created_via: string
   created_at: string
 }
