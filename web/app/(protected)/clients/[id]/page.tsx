@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { Client, Project, ClientPayment } from '@/types'
+import { Client, Project, ClientPayment, CLIENT_SOURCE_OPTIONS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,6 +41,8 @@ export default function ClientDetailPage() {
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [converting, setConverting] = useState(false)
+  const [savingSource, setSavingSource] = useState(false)
+  const [savingPaying, setSavingPaying] = useState(false)
 
   const [projectForm, setProjectForm] = useState({ name: '', description: '', total_fee: '', deadline: '', notes: '' })
   const [paymentForm, setPaymentForm] = useState({ amount: '', payment_type: 'part_payment', payment_date: new Date().toISOString().split('T')[0], payment_reference: '', project_id: '', notes: '' })
@@ -89,6 +91,24 @@ export default function ClientDetailPage() {
     } finally {
       setConverting(false)
     }
+  }
+
+  async function updateSource(source: string) {
+    setSavingSource(true)
+    const { error } = await supabase.from('clients').update({ source }).eq('id', clientId)
+    setSavingSource(false)
+    if (error) { toast.error(error.message); return }
+    setClient(prev => prev ? { ...prev, source: source as Client['source'] } : prev)
+    toast.success('Source updated')
+  }
+
+  async function togglePaying(isPaying: boolean) {
+    setSavingPaying(true)
+    const { error } = await supabase.from('clients').update({ is_paying: isPaying }).eq('id', clientId)
+    setSavingPaying(false)
+    if (error) { toast.error(error.message); return }
+    setClient(prev => prev ? { ...prev, is_paying: isPaying } : prev)
+    toast.success(isPaying ? 'Marked as a paying client' : 'Unmarked as a paying client')
   }
 
   async function addProject() {
@@ -207,6 +227,41 @@ export default function ClientDetailPage() {
           </Card>
         ))}
       </div>
+
+      {/* Client details — source and paying-client flag, independent of status */}
+      <Card>
+        <CardHeader><CardTitle className="text-base">Client Details</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700">Where did you meet this client?</label>
+            <Select
+              value={client.source ?? 'manual'}
+              onValueChange={v => v && updateSource(v)}
+              disabled={savingSource}
+            >
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manual">Not specified</SelectItem>
+                {CLIENT_SOURCE_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end pb-1">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-[#6C63FF]"
+                checked={client.is_paying}
+                disabled={savingPaying}
+                onChange={e => togglePaying(e.target.checked)}
+              />
+              Paying client
+            </label>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Projects */}
       <Card>

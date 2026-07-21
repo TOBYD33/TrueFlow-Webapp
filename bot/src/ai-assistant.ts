@@ -137,10 +137,13 @@ ACTION:CREATE_INVOICE:{clientName}:{amount}:{description}
 ACTION:GET_TAX_ESTIMATE:{country}:{period}
 ACTION:SET_TAX_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}
 ACTION:SWITCH_TAX_COUNTRY:{country}
+ACTION:SET_CLIENT_SOURCE:{clientName}:{source}
+ACTION:SET_CLIENT_PAYING:{clientName}:{true|false}
 
 recurrence values: once | daily | weekly | monthly | yearly
 period values for GET_TAX_ESTIMATE: this_month | last_month | this_quarter | this_year
 country values: Nigeria | Kenya | Ghana | USA | UK
+source values for SET_CLIENT_SOURCE: whatsapp | facebook | instagram | referral | offline | business_card | other
 
 INVENTORY RULES:
 - changeType is one of: restock | sale | adjustment
@@ -179,6 +182,18 @@ CLIENT AND PAYMENT RULES:
   when a tracked project already exists.
 - Client balance questions (e.g. "What does Marcus owe me?") — answer from the
   ACTIVE CLIENTS + PROJECTS context below. Never make up a balance figure.
+- When the user says how they met a client ("I met this client on Instagram",
+  "Marcus came through a referral", "found Amaka on Facebook", "met them
+  in person"), emit ACTION:SET_CLIENT_SOURCE:{clientName}:{source} using one
+  of the fixed source values listed above — map "in person"/"offline" to
+  offline, "someone referred them"/"referral" to referral, etc. Only use this
+  if the client name appears in the ACTIVE CLIENTS list below.
+- When the user says a client is (or isn't) currently paying ("mark Toby as
+  a paying client", "Amaka isn't paying yet", "Marcus is now a paying
+  client"), emit ACTION:SET_CLIENT_PAYING:{clientName}:{true|false}. This is
+  independent of whether the client is a lead or active — never confuse the
+  two, and never emit START_CLIENT_SETUP or a status change just because the
+  user mentioned paying status.
 
 TAX HUB RULES — IMPORTANT, this is a tracking and estimating tool, NOT a tax
 filing or guaranteed-accurate calculator:
@@ -222,6 +237,9 @@ User says "Send Toby an invoice for 50k for the consulting work" (Toby is in cli
 User asks "What's my estimated tax this month" → end reply with: ACTION:GET_TAX_ESTIMATE:Nigeria:this_month
 User says "Remind me to pay VAT on the 21st, monthly" → end reply with: ACTION:SET_TAX_REMINDER:Pay VAT:{this or next month's 21st, from CURRENT DATE}:monthly
 User says "Switch to Kenya" (in a tax context) → end reply with: ACTION:SWITCH_TAX_COUNTRY:Kenya
+User says "I met this client on Instagram" (about Marcus) → end reply with: ACTION:SET_CLIENT_SOURCE:Marcus Adebayo:instagram
+User says "mark Toby as a paying client" → end reply with: ACTION:SET_CLIENT_PAYING:Toby:true
+User says "Amaka isn't paying yet" → end reply with: ACTION:SET_CLIENT_PAYING:Amaka:false
 `
 
 interface UserPermissions {

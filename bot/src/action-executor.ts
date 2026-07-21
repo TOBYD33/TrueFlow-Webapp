@@ -265,6 +265,42 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
           break
         }
 
+        case 'SET_CLIENT_SOURCE': {
+          // SET_CLIENT_SOURCE:{clientName}:{source}
+          const [, clientName, source] = parts
+          const validSources = ['whatsapp', 'facebook', 'instagram', 'referral', 'offline', 'business_card', 'other']
+          if (!clientName || !validSources.includes(source)) break
+
+          const sourceClient = await findClientByName(user.org_id, clientName)
+          if (!sourceClient) {
+            notifications.push(`I couldn't find a client matching "${clientName}".`)
+            break
+          }
+          await supabase.from('clients').update({ source }).eq('id', sourceClient.id)
+          notifications.push(`✅ Got it — noted ${sourceClient.name} came through ${source.replace('_', ' ')}.`)
+          break
+        }
+
+        case 'SET_CLIENT_PAYING': {
+          // SET_CLIENT_PAYING:{clientName}:{true|false}
+          const [, clientName, flagRaw] = parts
+          if (!clientName || (flagRaw !== 'true' && flagRaw !== 'false')) break
+
+          const payingClient = await findClientByName(user.org_id, clientName)
+          if (!payingClient) {
+            notifications.push(`I couldn't find a client matching "${clientName}".`)
+            break
+          }
+          const isPaying = flagRaw === 'true'
+          await supabase.from('clients').update({ is_paying: isPaying }).eq('id', payingClient.id)
+          notifications.push(
+            isPaying
+              ? `✅ Marked *${payingClient.name}* as a paying client.`
+              : `✅ Noted — *${payingClient.name}* isn't a paying client right now.`
+          )
+          break
+        }
+
         default:
           break
       }
@@ -298,6 +334,10 @@ function actionFailureMessage(type: string): string {
       return "⚠️ I couldn't start that client setup — please try again in a moment."
     case 'CREATE_INVOICE':
       return "⚠️ I couldn't create that invoice — please try again in a moment."
+    case 'SET_CLIENT_SOURCE':
+      return "⚠️ I couldn't save that — please try again in a moment."
+    case 'SET_CLIENT_PAYING':
+      return "⚠️ I couldn't update that client — please try again in a moment."
     default:
       return "⚠️ Something went wrong completing that action — please try again in a moment."
   }

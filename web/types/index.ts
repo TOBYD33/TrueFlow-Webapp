@@ -114,10 +114,24 @@ export interface Client {
   total_earned: number
   outstanding_balance: number
   status: 'active' | 'inactive' | 'archived' | 'lead'
-  source: 'manual' | 'business_card' | 'smart_transfer' | null
+  source: 'manual' | 'business_card' | 'smart_transfer' | 'whatsapp' | 'facebook' | 'instagram' | 'referral' | 'offline' | 'other' | null
+  is_paying: boolean
   created_via: string
   created_at: string
 }
+
+// Fixed list a user can pick from — 'manual'/'smart_transfer' are system-set
+// defaults (never shown as user-selectable options), 'business_card' stays
+// exactly as the existing scanning feature already sets it.
+export const CLIENT_SOURCE_OPTIONS: { value: NonNullable<Client['source']>; label: string }[] = [
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'offline', label: 'In person' },
+  { value: 'business_card', label: 'Business card' },
+  { value: 'other', label: 'Other' },
+]
 
 export interface Project {
   id: string

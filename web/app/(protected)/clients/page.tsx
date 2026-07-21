@@ -6,12 +6,13 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { useViewingContext } from '@/components/ViewingContext'
-import { Client } from '@/types'
+import { Client, CLIENT_SOURCE_OPTIONS } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { UserPlus, Search, Phone, Mail, ChevronRight, IdCard } from 'lucide-react'
 import { toast } from 'sonner'
@@ -29,7 +30,7 @@ export default function ClientsPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
+  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '', source: '' })
 
   useEffect(() => {
     if (!orgId) {
@@ -107,13 +108,14 @@ export default function ClientsPage() {
       email: form.email || null,
       address: form.address || null,
       notes: form.notes || null,
+      source: form.source || null,
       created_via: 'web',
     }).select().single()
     setSaving(false)
     if (error) { toast.error(error.message); return }
     setClients(prev => [data as Client, ...prev])
     setAddOpen(false)
-    setForm({ name: '', phone: '', email: '', address: '', notes: '' })
+    setForm({ name: '', phone: '', email: '', address: '', notes: '', source: '' })
     toast.success('Client added')
   }
 
@@ -203,6 +205,11 @@ export default function ClientsPage() {
                       <p className="text-xs text-orange-500">₦{Number(client.outstanding_balance).toLocaleString()} due</p>
                     )}
                   </div>
+                  {client.is_paying && (
+                    <Badge variant="outline" className="gap-1 bg-[#00D4AA]/10 text-[#00A88A]">
+                      Paying
+                    </Badge>
+                  )}
                   <Badge variant="outline" className={`gap-1 ${statusColor(client.status)}`}>
                     {client.status === 'lead' && <IdCard size={11} />}
                     {client.status === 'lead' ? 'Lead' : client.status}
@@ -241,6 +248,17 @@ export default function ClientsPage() {
             <div>
               <label className="text-sm font-medium text-gray-700">Notes</label>
               <Input className="mt-1" placeholder="Any notes about this client" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Where did you meet this client?</label>
+              <Select value={form.source} onValueChange={v => setForm(f => ({ ...f, source: v ?? '' }))}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Not specified" /></SelectTrigger>
+                <SelectContent>
+                  {CLIENT_SOURCE_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setAddOpen(false)}>Cancel</Button>
