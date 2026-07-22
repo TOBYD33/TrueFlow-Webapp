@@ -1,11 +1,22 @@
 // webhook.ts
 // Receives Twilio POST to /webhook/whatsapp, verifies signature, calls message handler.
 //
-// ASYNC IMAGE STRATEGY:
-// Claude Vision takes 5-12 seconds. Twilio's webhook timeout is 15 seconds.
-// For image messages we respond to Twilio immediately with an ack ("📸 Reading..."),
-// then process in the background and send the real result via the Twilio REST API.
-// Text messages are handled synchronously — they are fast.
+// ASYNC STRATEGY (all message types):
+// Twilio's webhook timeout is 15 seconds. Image/voice processing (Claude Vision,
+// Whisper) reliably takes long enough to need an immediate ack + background REST
+// reply. Text messages used to be assumed "fast" and handled synchronously — that
+// assumption broke down once a single text message could trigger several chained
+// actions (e.g. set a client's birthday AND set a reminder), each its own DB
+// round trip on top of the Claude call. When that total crossed Twilio's timeout,
+// the sync response never arrived and the user saw nothing at all, not even a
+// late reply. So text messages now use the same immediate-ack-then-REST pattern.
+//
+// THINKING-INDICATOR RACE:
+// Most text messages still resolve in well under a second, so we don't want a
+// "thinking" message popping up on every reply. Instead we race the real
+// processing against a short timer (THINKING_DELAY_MS) — only if handleMessage
+// hasn't resolved by then do we send an interim message, so slow replies get
+// visible feedback instead of silence, and fast ones stay a single message.
 
 import { Router, Request, Response } from 'express'
 import { verifyTwilioSignature } from './auth'
@@ -16,6 +27,13 @@ import { transcribeVoiceNote } from './voice-transcriber'
 import { TwilioWebhookBody } from '../types'
 
 const APP_URL = process.env.WEBAPP_URL || 'app.gettrueflow.com'
+const THINKING_DELAY_MS = 4000
+
+const THINKING_MESSAGES = [
+  "🤔 Still working on that, one moment...",
+  "Just a sec, sorting that out for you...",
+  "🤔 Hang tight, almost got it...",
+]
 
 export const webhookRouter = Router()
 
@@ -110,12 +128,32 @@ webhookRouter.post('/whatsapp', async (req: Request, res: Response) => {
     return
   }
 
-  // Text messages — handle synchronously (fast, no timeout risk)
-  try {
-    const twiml = await handleMessage(body)
-    res.send(twiml)
-  } catch (err) {
-    console.error('webhook: unhandled error:', err)
-    res.send(buildEmptyResponse())
-  }
+  // Text messages — ack Twilio immediately, process in background, and send
+  // the real reply via REST. A short race decides whether the user also sees
+  // an interim "still working on it" message before the real one arrives.
+  res.send(buildEmptyResponse())
+
+  let settled = false
+  const thinkingTimer = setTimeout(() => {
+    if (settled) return
+    const msg = THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)]
+    sendWhatsAppMessage(phoneNumber, msg).catch(() => {})
+  }, THINKING_DELAY_MS)
+
+  handleMessage(body)
+    .then(twiml => {
+      settled = true
+      clearTimeout(thinkingTimer)
+      const text = extractTextFromTwiml(twiml)
+      if (text) return sendWhatsAppMessage(phoneNumber, text)
+    })
+    .catch(err => {
+      settled = true
+      clearTimeout(thinkingTimer)
+      console.error('webhook: async text handler failed:', err)
+      sendWhatsAppMessage(
+        phoneNumber,
+        `Sorry, I had trouble with that. Please try again in a moment.`
+      ).catch(() => {})
+    })
 })
