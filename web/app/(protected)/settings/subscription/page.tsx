@@ -179,26 +179,26 @@ function PlanCard({
 
   return (
     <div
-      className={`rounded-xl border p-5 flex flex-col relative ${
+      className={`rounded-2xl border p-7 flex flex-col relative ${
         isCurrent ? 'border-[#00D4AA]/60 bg-[#00D4AA]/5' : c.mostPopular ? 'border-[#6C63FF] bg-white shadow-md' : 'border-gray-200 bg-white'
       }`}
     >
       {c.mostPopular && !isCurrent && (
-        <span className="absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-[#6C63FF]">
+        <span className="absolute -top-3 left-6 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-[#6C63FF]">
           Most Popular
         </span>
       )}
-      <div className="flex items-start justify-between mb-1">
-        <p className="font-semibold text-sm text-gray-900">{c.displayLabel}</p>
-        {isCurrent && <Check size={14} className="text-[#00A88A] mt-0.5 flex-shrink-0" />}
+      <div className="flex items-start justify-between mb-1.5">
+        <p className="font-semibold text-base text-gray-900">{c.displayLabel}</p>
+        {isCurrent && <Check size={15} className="text-[#00A88A] mt-0.5 flex-shrink-0" />}
       </div>
-      <p className="text-xs text-gray-500 mb-2">{c.tagline}</p>
-      <p className="text-[#00A88A] font-bold text-lg mb-3">{formatPrice(c.monthlyNgn, cycle)}</p>
-      <div className="space-y-1.5 mb-4 flex-1">
+      <p className="text-xs text-gray-500 mb-5 leading-relaxed">{c.tagline}</p>
+      <p className="text-[#00A88A] font-bold text-2xl mb-6">{formatPrice(c.monthlyNgn, cycle)}</p>
+      <div className="space-y-3.5 mb-7 flex-1">
         {planFeatureRows(id).map(row => (
-          <div key={row.label} className="flex items-center justify-between gap-2 text-xs">
+          <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
             <span className="text-gray-500">{row.label}</span>
-            <span className={`font-medium flex items-center gap-1 ${row.ok ? 'text-gray-700' : 'text-gray-400'}`}>
+            <span className={`font-medium flex items-center gap-1.5 shrink-0 ${row.ok ? 'text-gray-700' : 'text-gray-400'}`}>
               {row.ok ? <Check size={11} className="text-[#00A88A]" /> : <X size={11} className="text-gray-300" />}
               {row.value}
             </span>
@@ -209,18 +209,10 @@ function PlanCard({
         <button
           onClick={() => onUpgrade(id)}
           disabled={upgrading === id}
-          className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60"
+          className="block w-full text-center text-sm font-semibold h-10 leading-10 rounded-lg bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60"
         >
           {upgrading === id ? 'Redirecting…' : `Get ${c.displayLabel}`}
         </button>
-      )}
-      {!isCurrent && id === 'enterprise' && (
-        <a
-          href="mailto:hello@gettrueflow.com?subject=Enterprise%20plan%20consultation"
-          className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          Talk to Us
-        </a>
       )}
       {!isCurrent && id === 'free' && (
         <p className="text-xs text-gray-400 text-center">No card required</p>
@@ -229,6 +221,41 @@ function PlanCard({
         <p className="text-xs text-[#00A88A] font-medium text-center">✓ Current plan</p>
       )}
     </div>
+  )
+}
+
+// Enterprise is deliberately NOT the feature-checklist card style above —
+// it reads like the Andrea Aid card below it (icon, prose, one CTA), since
+// "everything, custom-priced" doesn't fit a feature-by-feature comparison.
+function EnterpriseCard() {
+  return (
+    <Card className="border-[#6C63FF]/30">
+      <CardContent className="pt-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-9 h-9 rounded-full bg-[#6C63FF]/15 flex items-center justify-center shrink-0">
+            <Sparkles size={16} className="text-[#6C63FF]" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900">Enterprise</p>
+            <p className="text-xs text-gray-500 mt-0.5">Custom pricing, built around your organisation</p>
+          </div>
+        </div>
+
+        <p className="text-sm text-gray-600 leading-relaxed mb-5">
+          Unlimited receipts, clients, and team members, advanced tax reporting, custom invoice
+          branding, and priority support — all scoped and priced around how your business actually
+          works. No fixed tiers, no self-serve checkout, just a plan built for you.
+        </p>
+
+        <a
+          href="mailto:hello@gettrueflow.com?subject=Enterprise%20plan%20consultation"
+          className="inline-block text-sm font-semibold px-5 py-2.5 rounded-lg text-white transition-colors"
+          style={{ background: '#6C63FF' }}
+        >
+          Talk to Us
+        </a>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -386,22 +413,20 @@ export default function SubscriptionPage() {
           <BillingToggle cycle={cycle} onChange={setCycle} />
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-8">
           {/* Free / Individual / Business / Business Pro — one row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <PlanCard id="free" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
             <PlanCard id="individual" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
             <PlanCard id="business" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
             <PlanCard id="business_pro" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
           </div>
 
-          {/* Enterprise stands alone */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <PlanCard id="enterprise" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
-          </div>
+          {/* Enterprise stands alone, in the Andrea-style prose card */}
+          <EnterpriseCard />
         </div>
 
-        <p className="text-xs text-gray-400 mt-3">
+        <p className="text-xs text-gray-400 mt-4">
           Payments processed securely via Flutterwave. Cancel any time from your account settings.
         </p>
       </div>

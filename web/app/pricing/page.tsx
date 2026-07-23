@@ -12,7 +12,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check, X } from 'lucide-react'
+import { Check, X, Sparkles } from 'lucide-react'
 import {
   PLAN_CONFIG, PlanId, BillingCycle, priceForCycle,
   QUARTERLY_DISCOUNT_PCT, YEARLY_DISCOUNT_PCT, WHATSAPP_TRIAL_DAYS,
@@ -92,48 +92,70 @@ function PlanCard({ id, cycle }: { id: PlanId; cycle: BillingCycle }) {
   const c = PLAN_CONFIG[id]
   return (
     <div
-      className={`rounded-xl border p-6 flex flex-col relative ${
+      className={`rounded-2xl border p-8 flex flex-col relative ${
         c.mostPopular ? 'border-[#6C63FF] shadow-xl bg-white' : 'bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow'
       }`}
     >
       {c.mostPopular && (
         <span
-          className="absolute -top-3 left-5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white"
+          className="absolute -top-3 left-6 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-white"
           style={{ background: BRAND.violet }}
         >
           Most Popular
         </span>
       )}
-      <h3 className="text-lg font-bold text-gray-900 mb-0.5">{c.displayLabel}</h3>
-      <p className="text-sm text-gray-500 mb-4">{c.tagline}</p>
-      <p className="text-2xl font-bold text-gray-900 mb-5">{formatPrice(c.monthlyNgn, cycle)}</p>
-      <div className="space-y-2 mb-6 flex-1">
+      <h3 className="text-lg font-bold text-gray-900 mb-1">{c.displayLabel}</h3>
+      <p className="text-sm text-gray-500 mb-5 leading-relaxed">{c.tagline}</p>
+      <p className="text-3xl font-bold text-gray-900 mb-7">{formatPrice(c.monthlyNgn, cycle)}</p>
+      <div className="space-y-3.5 mb-8 flex-1">
         {planFeatureRows(id).map(row => (
-          <div key={row.label} className="flex items-start justify-between gap-2 text-sm">
+          <div key={row.label} className="flex items-start justify-between gap-3 text-sm">
             <span className="text-gray-500">{row.label}</span>
-            <span className={`font-medium flex items-center gap-1 shrink-0 ${row.ok ? 'text-gray-700' : 'text-gray-400'}`}>
+            <span className={`font-medium flex items-center gap-1.5 shrink-0 ${row.ok ? 'text-gray-700' : 'text-gray-400'}`}>
               {row.ok ? <Check size={13} className="text-[#00A88A]" /> : <X size={13} className="text-gray-300" />}
               {row.value}
             </span>
           </div>
         ))}
       </div>
-      {id === 'enterprise' ? (
-        <a
-          href="mailto:hello@gettrueflow.com?subject=Enterprise%20plan%20consultation"
-          className="block text-center text-sm font-semibold px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          Talk to Us
-        </a>
-      ) : (
-        <Link
-          href="/signup"
-          className="block text-center text-sm font-semibold px-5 py-2.5 rounded-lg text-white transition-colors"
-          style={{ background: c.mostPopular ? BRAND.mint : BRAND.black }}
-        >
-          {c.monthlyNgn === 0 ? 'Get started free' : `Get ${c.displayLabel}`}
-        </Link>
-      )}
+      <Link
+        href="/signup"
+        className="block text-center text-sm font-semibold px-5 py-3 rounded-lg text-white transition-colors"
+        style={{ background: c.mostPopular ? BRAND.mint : BRAND.black }}
+      >
+        {c.monthlyNgn === 0 ? 'Get started free' : `Get ${c.displayLabel}`}
+      </Link>
+    </div>
+  )
+}
+
+// Enterprise reads as prose, not a feature checklist — "everything,
+// custom-priced" doesn't fit a row-by-row comparison the way the other
+// four tiers do.
+function EnterpriseCard() {
+  return (
+    <div className="rounded-2xl border border-[#6C63FF]/30 bg-white p-8 max-w-2xl mx-auto">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-10 h-10 rounded-full bg-[#6C63FF]/10 flex items-center justify-center shrink-0">
+          <Sparkles size={18} style={{ color: BRAND.violet }} />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-gray-900">Enterprise</h3>
+          <p className="text-sm text-gray-500 mt-0.5">Custom pricing, built around your organisation</p>
+        </div>
+      </div>
+      <p className="text-sm text-gray-600 leading-relaxed mb-6">
+        Unlimited receipts, clients, and team members, advanced tax reporting, custom invoice
+        branding, and priority support — all scoped and priced around how your business actually
+        works. No fixed tiers, no self-serve checkout, just a plan built for you.
+      </p>
+      <a
+        href="mailto:hello@gettrueflow.com?subject=Enterprise%20plan%20consultation"
+        className="inline-block text-sm font-semibold px-6 py-2.5 rounded-lg text-white transition-colors"
+        style={{ background: BRAND.violet }}
+      >
+        Talk to Us
+      </a>
     </div>
   )
 }
@@ -203,16 +225,16 @@ export default function PricingPage() {
         </div>
 
         {/* Free / Individual / Business / Business Pro — one row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <PlanCard id="free" cycle={cycle} />
           <PlanCard id="individual" cycle={cycle} />
           <PlanCard id="business" cycle={cycle} />
           <PlanCard id="business_pro" cycle={cycle} />
         </div>
 
-        {/* Enterprise — stands alone */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-16">
-          <PlanCard id="enterprise" cycle={cycle} />
+        {/* Enterprise — stands alone, prose card like Andrea Aid's style */}
+        <div className="mb-16">
+          <EnterpriseCard />
         </div>
 
         {/* FAQ */}
