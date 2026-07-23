@@ -1,11 +1,10 @@
 'use client'
 // settings/subscription/page.tsx
 // "All Plans" page — current plan, usage stats, and the full plan grid.
-// Layout hierarchy (deliberate, not just copy): Free stands alone at the
-// top, Individual/Business/Business Pro sit together as the real 3-way
-// comparison, Enterprise stands alone at the bottom. No mention of
-// "Family" anywhere — it's a standalone feature for ~2 months post-launch
-// and should look like it was never part of this plan.
+// Layout: Free/Individual/Business/Business Pro sit together in one row,
+// Enterprise stands alone below it. No mention of "Family" anywhere —
+// it's a standalone feature for ~2 months post-launch and should look
+// like it was never part of this plan.
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
@@ -388,20 +387,16 @@ export default function SubscriptionPage() {
         </div>
 
         <div className="space-y-4">
-          {/* Free stands alone */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Free / Individual / Business / Business Pro — one row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <PlanCard id="free" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
-          </div>
-
-          {/* Individual / Business / Business Pro — the real 3-way comparison */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <PlanCard id="individual" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
             <PlanCard id="business" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
             <PlanCard id="business_pro" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
           </div>
 
           {/* Enterprise stands alone */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <PlanCard id="enterprise" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
           </div>
         </div>

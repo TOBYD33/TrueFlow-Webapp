@@ -3,9 +3,8 @@
 // Public marketing pricing page. Reads from lib/plans.ts — the SAME
 // single source of truth the in-app Settings → Subscription ("All Plans")
 // page uses — so the two surfaces can never drift out of sync on prices,
-// features, or tier names. Layout hierarchy mirrors that page deliberately:
-// Free alone / Individual+Business+Business Pro as the real 3-way
-// comparison / Enterprise alone.
+// features, or tier names. Layout mirrors that page deliberately:
+// Free/Individual/Business/Business Pro in one row, Enterprise alone below.
 //
 // No mention of "Family" anywhere on this page, intentionally — it's a
 // standalone announcement ~2 months post-launch and should look like it
@@ -203,20 +202,16 @@ export default function PricingPage() {
           <BillingToggle cycle={cycle} onChange={setCycle} />
         </div>
 
-        {/* Free — stands alone */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        {/* Free / Individual / Business / Business Pro — one row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
           <PlanCard id="free" cycle={cycle} />
-        </div>
-
-        {/* Individual / Business / Business Pro — the real comparison */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
           <PlanCard id="individual" cycle={cycle} />
           <PlanCard id="business" cycle={cycle} />
           <PlanCard id="business_pro" cycle={cycle} />
         </div>
 
         {/* Enterprise — stands alone */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-16">
           <PlanCard id="enterprise" cycle={cycle} />
         </div>
 
