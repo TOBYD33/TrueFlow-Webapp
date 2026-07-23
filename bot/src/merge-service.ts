@@ -172,6 +172,17 @@ export async function handleMergeReply(
     if (!existing) {
       await supabase.from('profiles').update({ email: text }).eq('id', user.user_id)
       await clearMergeState(phoneNumber)
+
+      // Confirm on the email itself, not just on WhatsApp — the whole point
+      // of adding it is to receive things there, so the first thing that
+      // address should ever see from TrueFlow is proof it's on file.
+      sendEmail(
+        text,
+        "You're on the list — TrueFlow has your email",
+        `<p>This email is now saved to your TrueFlow profile.</p>
+         <p>We'll use it for things like your invoices and monthly summaries. Nothing else changes — WhatsApp is still where you do everything.</p>`
+      ).catch(() => {})
+
       return 'Got it, saved to your profile ✅'
     }
 
