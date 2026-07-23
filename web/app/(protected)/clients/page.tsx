@@ -17,6 +17,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { UserPlus, Search, Phone, Mail, ChevronRight, IdCard } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePageTools } from '@/components/shared/PageTools'
+import { clientLimitFor } from '@/lib/plans'
 
 export default function ClientsPage() {
   const supabase = createClient()
@@ -24,6 +25,7 @@ export default function ClientsPage() {
 
   const { orgId } = useViewingContext()
   const [clients, setClients] = useState<Client[]>([])
+  const [plan, setPlan] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -54,11 +56,10 @@ export default function ClientsPage() {
     }, 15000)
 
     async function load() {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('org_id', orgId)
-        .order('created_at', { ascending: false })
+      const [{ data, error }, { data: org }] = await Promise.all([
+        supabase.from('clients').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('organizations').select('plan').eq('id', orgId).single(),
+      ])
       if (cancelled) return
       clearTimeout(timeout)
       if (error) {
@@ -67,6 +68,7 @@ export default function ClientsPage() {
         return
       }
       setClients((data as Client[]) ?? [])
+      setPlan(org?.plan ?? null)
       setLoading(false)
     }
     load()
@@ -103,6 +105,14 @@ export default function ClientsPage() {
 
   async function handleAdd() {
     if (!orgId || !form.name.trim()) return
+    // This form always creates an active client (status defaults to
+    // 'active' at the DB level, never a lead), so it always counts against
+    // client_limit — mirrors bot/src/client-service.ts's checkActiveClientLimit.
+    const limit = clientLimitFor(plan)
+    if (limit !== -1 && activeCount >= limit) {
+      toast.error(`You've reached your plan's client limit (${limit}). Upgrade to add more.`)
+      return
+    }
     setSaving(true)
     const { data, error } = await supabase.from('clients').insert({
       org_id: orgId,

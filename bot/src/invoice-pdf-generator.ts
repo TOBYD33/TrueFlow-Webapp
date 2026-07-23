@@ -8,21 +8,7 @@
 
 import puppeteer from 'puppeteer'
 import { supabase } from './supabase'
-
-// Mirrors web/lib/plans.ts's invoiceBranding flag — bot and web are separate
-// deployments with no shared package (same precedent as timezone-util.ts),
-// so this is intentionally duplicated. Only Business Pro/Enterprise (and
-// the free_trial preview state) get the uploaded logo on generated
-// invoices; deprecated plan names are treated the same as web's
-// resolvePlan() would map them.
-const INVOICE_BRANDING_PLANS = new Set([
-  'business_pro', 'enterprise', 'free_trial',
-  // deprecated names that resolve to business_pro
-  'agency', 'sme_pro', 'studio',
-])
-function canUseInvoiceBranding(plan: string | null | undefined): boolean {
-  return !!plan && INVOICE_BRANDING_PLANS.has(plan)
-}
+import { canUseInvoiceBranding } from './plan-gates'
 
 interface InvoicePdfData {
   orgName: string

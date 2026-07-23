@@ -14,6 +14,7 @@ import { recordClientPayment } from './client-payment-service'
 import { startInvoiceCreation } from './invoice-setup-service'
 import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
 import { supabase } from './supabase'
+import { canUseAutomatedReminders } from './plan-gates'
 
 export interface ActionExecutionResult {
   notifications: string[]
@@ -43,6 +44,10 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
           break
         }
         case 'SET_REMINDER': {
+          if (!canUseAutomatedReminders(user.plan)) {
+            notifications.push('⏰ Automated reminders aren\'t available on the Free plan. Upgrade at app.gettrueflow.com/settings/subscription to unlock them.')
+            break
+          }
           // SET_REMINDER:Pay VAT:2025-06-21:monthly:2030
           // Last part is an optional time as HHMM digits (24h WAT)
           const [, title, date, recurrence, timeRaw] = parts

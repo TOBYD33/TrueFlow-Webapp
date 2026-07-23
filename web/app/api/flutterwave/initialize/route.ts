@@ -20,7 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
-import { SELF_SERVE_PLAN_IDS, PLAN_CONFIG as PLANS, PlanId } from '@/lib/plans'
+import { SELF_SERVE_PLAN_IDS, PLAN_CONFIG as PLANS, PlanId, BillingCycle, priceForCycle } from '@/lib/plans'
 
 function getAdmin() {
   return createClient(
@@ -39,7 +39,8 @@ const FLW_PLAN_IDS: Partial<Record<PlanId, string | undefined>> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { plan_id } = await req.json() as { plan_id: string }
+    const { plan_id, cycle } = await req.json() as { plan_id: string; cycle?: BillingCycle }
+    const billingCycle: BillingCycle = cycle === 'quarterly' || cycle === 'yearly' ? cycle : 'monthly'
 
     if (!plan_id || !SELF_SERVE_PLAN_IDS.includes(plan_id as PlanId)) {
       return NextResponse.json({ error: 'Invalid plan — this plan is not available for self-serve checkout' }, { status: 400 })
@@ -65,7 +66,8 @@ export async function POST(req: NextRequest) {
     const ownRow = members.find(m => m.role === 'owner') ?? members[0]
 
     const plan = plan_id as PlanId
-    const config = { planId: FLW_PLAN_IDS[plan], amount: PLANS[plan].monthlyNgn, label: PLANS[plan].label }
+    const amount = priceForCycle(PLANS[plan].monthlyNgn, billingCycle)
+    const label = PLANS[plan].label
     const orgId = ownRow.org_id
     const customerName = profileRes.data?.full_name ?? user.email ?? 'TrueFlow User'
     const txRef = `TF-${orgId.slice(0, 8)}-${Date.now()}`
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     const body: Record<string, unknown> = {
       tx_ref: txRef,
-      amount: config.amount,
+      amount,
       currency: 'NGN',
       redirect_url: callbackUrl,
       payment_options: 'card,ussd,banktransfer',
@@ -84,19 +86,27 @@ export async function POST(req: NextRequest) {
       },
       customizations: {
         title: 'TrueFlow',
-        description: `Upgrade to ${config.label} plan`,
+        description: `Upgrade to ${label} plan (${billingCycle})`,
         logo: 'https://app.gettrueflow.com/logo.png',
       },
       meta: {
         org_id: orgId,
         plan_id,
+        billing_cycle: billingCycle,
         user_id: user.id,
       },
     }
 
-    // Attach recurring payment plan if configured in Flutterwave dashboard
-    if (config.planId) {
-      body.payment_plan = config.planId
+    // Flutterwave's recurring "payment_plan" objects (FLW_PLAN_*) are
+    // configured monthly-only in their dashboard — attaching one alongside
+    // a quarterly/yearly custom `amount` would conflict (the plan's own
+    // fixed amount/interval would win). So recurring billing only applies
+    // to the monthly cycle; quarterly/yearly charge the correct one-time
+    // amount for that period without Flutterwave-native recurrence. FLAGGED:
+    // true recurring quarterly/yearly billing needs its own FLW payment
+    // plan objects per tier if that's wanted — not yet built.
+    if (billingCycle === 'monthly' && FLW_PLAN_IDS[plan]) {
+      body.payment_plan = FLW_PLAN_IDS[plan]
     }
 
     const response = await fetch('https://api.flutterwave.com/v3/payments', {

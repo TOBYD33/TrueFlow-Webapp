@@ -125,6 +125,7 @@ export interface UserContext {
   org_id: string
   org_name: string
   org_status: string
+  org_created_at: string
   full_name: string
   plan: string
   currency: string

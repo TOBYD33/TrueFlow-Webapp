@@ -1,27 +1,23 @@
 'use client'
 // pricing/page.tsx
-// Public pricing page — rebuilt for the new 2026-07 plan structure
-// (free_trial, free, individual, business, business_pro, enterprise).
-// Prices come from lib/plans.ts (single source of truth, shared with the
-// in-app Settings → Subscription page and the Flutterwave checkout routes)
-// so this page can never silently drift out of sync with what checkout
-// actually charges.
+// Public marketing pricing page. Reads from lib/plans.ts — the SAME
+// single source of truth the in-app Settings → Subscription ("All Plans")
+// page uses — so the two surfaces can never drift out of sync on prices,
+// features, or tier names. Layout hierarchy mirrors that page deliberately:
+// Free alone / Individual+Business+Business Pro as the real 3-way
+// comparison / Enterprise alone.
 //
-// FLAGGED — not yet product-confirmed, see lib/plans.ts:
-//   - ANNUAL_DISCOUNT_PCT (15%) is a placeholder from the ticket.
-//   - Post-trial Free tier caps are placeholders (Feature 3).
-// Multi-currency display (the old NG/KE/US switcher) was intentionally
-// dropped in this rebuild — the new tier table only specifies NGN prices,
-// and guessing KES/USD equivalents for the new tiers would be inventing
-// numbers nobody has approved. Reintroduce once real FX/local pricing is
-// decided.
+// No mention of "Family" anywhere on this page, intentionally — it's a
+// standalone announcement ~2 months post-launch and should look like it
+// was never part of this plan, not delayed.
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check, Sparkles } from 'lucide-react'
-import { PLAN_CONFIG, ANNUAL_DISCOUNT_PCT, TRIAL_DAYS, PlanId } from '@/lib/plans'
-
-type BillingCycle = 'monthly' | 'annual'
+import { Check, X } from 'lucide-react'
+import {
+  PLAN_CONFIG, PlanId, BillingCycle, priceForCycle,
+  QUARTERLY_DISCOUNT_PCT, YEARLY_DISCOUNT_PCT, WHATSAPP_TRIAL_DAYS,
+} from '@/lib/plans'
 
 const BRAND = {
   violet: '#6C63FF',
@@ -31,61 +27,114 @@ const BRAND = {
   cloud: '#F5F5F7',
 }
 
-interface PricingCard {
-  id: PlanId
-  tagline: string
-  features: string[]
-  highlight: boolean
+function formatPrice(monthlyNgn: number, cycle: BillingCycle): string {
+  if (monthlyNgn === -1) return 'Custom'
+  if (monthlyNgn === 0) return '₦0'
+  const price = priceForCycle(monthlyNgn, cycle)
+  const suffix = cycle === 'quarterly' ? '/quarter' : cycle === 'yearly' ? '/year' : '/month'
+  return `₦${price.toLocaleString('en-NG')}${suffix}`
 }
 
-const CARDS: PricingCard[] = [
-  {
-    id: 'free',
-    tagline: 'For individuals just getting started',
-    features: ['10 receipts/month', '1 user', 'WhatsApp bot access', 'Basic expense tracking'],
-    highlight: false,
-  },
-  {
-    id: 'individual',
-    tagline: 'Track your own money, effortlessly',
-    features: ['Unlimited receipts', '1 user', 'Budgets & reminders', 'WhatsApp bot + web app', '+ optional Family add-on, +₦2,500/mo'],
-    highlight: false,
-  },
-  {
-    id: 'business',
-    tagline: 'For businesses with a team, no headcount limits',
-    features: ['Unlimited receipts, clients & staff', 'Client CRM & invoices', 'Basic Tax Hub', 'Accountant share link', 'WhatsApp bot for all staff'],
-    highlight: true,
-  },
-  {
-    id: 'business_pro',
-    tagline: 'Deeper reporting and your own brand on every invoice',
-    features: ['Everything in Business', 'Advanced Tax Hub (quarterly & yearly)', 'Custom invoice logo & branding', 'Priority support', 'No headcount limits'],
-    highlight: false,
-  },
-]
-
-function formatPrice(monthlyNgn: number, cycle: BillingCycle): string {
-  if (monthlyNgn === 0) return '₦0'
-  const monthly = cycle === 'annual' ? Math.round(monthlyNgn * (1 - ANNUAL_DISCOUNT_PCT / 100)) : monthlyNgn
-  return `₦${monthly.toLocaleString('en-NG')}`
+function planFeatureRows(id: PlanId): { label: string; value: string; ok: boolean }[] {
+  const c = PLAN_CONFIG[id]
+  return [
+    {
+      label: 'WhatsApp Automation',
+      value: id === 'free' ? `Active (${WHATSAPP_TRIAL_DAYS}-day trial)` : 'Active',
+      ok: true,
+    },
+    {
+      label: 'Scanning (Business Card & Receipt)',
+      value: c.scanLimit === -1 ? 'Active' : `${c.scanLimit}x`,
+      ok: true,
+    },
+    {
+      label: 'Clients',
+      value: c.clientLimit === -1 ? 'Active' : c.clientLimit === 0 ? 'None' : `Up to ${c.clientLimit}`,
+      ok: c.clientLimit !== 0,
+    },
+    { label: 'Automated Reminder', value: c.automatedReminder ? 'Active' : 'Inactive', ok: c.automatedReminder },
+    { label: 'Team members', value: c.staffLimit === -1 ? 'Active' : 'Inactive', ok: c.staffLimit === -1 },
+    {
+      label: 'Tax Analysis',
+      value: c.taxAnalysis === 'advanced' ? 'Advanced' : c.taxAnalysis === 'basic' ? 'Basic' : 'Inactive',
+      ok: c.taxAnalysis !== 'inactive',
+    },
+    { label: 'Custom invoice (logo/branding)', value: c.invoiceBranding ? 'Active' : 'Inactive', ok: c.invoiceBranding },
+    ...(c.supportPriority ? [{ label: 'Support Priority', value: 'Active', ok: true }] : []),
+  ]
 }
 
 function BillingToggle({ cycle, onChange }: { cycle: BillingCycle; onChange: (c: BillingCycle) => void }) {
+  const options: { value: BillingCycle; label: string }[] = [
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: `Quarterly (save ${QUARTERLY_DISCOUNT_PCT}%)` },
+    { value: 'yearly', label: `Yearly (save ${YEARLY_DISCOUNT_PCT}%)` },
+  ]
   return (
-    <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white border border-gray-200 shadow-sm">
-      {(['monthly', 'annual'] as BillingCycle[]).map(c => (
+    <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-white border border-gray-200 shadow-sm">
+      {options.map(o => (
         <button
-          key={c}
-          onClick={() => onChange(c)}
+          key={o.value}
+          onClick={() => onChange(o.value)}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-            cycle === c ? 'text-white' : 'text-gray-500 hover:text-gray-800'
+            cycle === o.value ? 'text-white' : 'text-gray-500 hover:text-gray-800'
           }`}
-          style={cycle === c ? { background: BRAND.violet } : undefined}
+          style={cycle === o.value ? { background: BRAND.violet } : undefined}
         >
-          {c === 'monthly' ? 'Monthly' : `Annual (save ${ANNUAL_DISCOUNT_PCT}%)`}
+          {o.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+function PlanCard({ id, cycle }: { id: PlanId; cycle: BillingCycle }) {
+  const c = PLAN_CONFIG[id]
+  return (
+    <div
+      className={`rounded-xl border p-6 flex flex-col relative ${
+        c.mostPopular ? 'border-[#6C63FF] shadow-xl bg-white' : 'bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow'
+      }`}
+    >
+      {c.mostPopular && (
+        <span
+          className="absolute -top-3 left-5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white"
+          style={{ background: BRAND.violet }}
+        >
+          Most Popular
+        </span>
+      )}
+      <h3 className="text-lg font-bold text-gray-900 mb-0.5">{c.displayLabel}</h3>
+      <p className="text-sm text-gray-500 mb-4">{c.tagline}</p>
+      <p className="text-2xl font-bold text-gray-900 mb-5">{formatPrice(c.monthlyNgn, cycle)}</p>
+      <div className="space-y-2 mb-6 flex-1">
+        {planFeatureRows(id).map(row => (
+          <div key={row.label} className="flex items-start justify-between gap-2 text-sm">
+            <span className="text-gray-500">{row.label}</span>
+            <span className={`font-medium flex items-center gap-1 shrink-0 ${row.ok ? 'text-gray-700' : 'text-gray-400'}`}>
+              {row.ok ? <Check size={13} className="text-[#00A88A]" /> : <X size={13} className="text-gray-300" />}
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      {id === 'enterprise' ? (
+        <a
+          href="mailto:hello@gettrueflow.com?subject=Enterprise%20plan%20consultation"
+          className="block text-center text-sm font-semibold px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Talk to Us
+        </a>
+      ) : (
+        <Link
+          href="/signup"
+          className="block text-center text-sm font-semibold px-5 py-2.5 rounded-lg text-white transition-colors"
+          style={{ background: c.mostPopular ? BRAND.mint : BRAND.black }}
+        >
+          {c.monthlyNgn === 0 ? 'Get started free' : `Get ${c.displayLabel}`}
+        </Link>
+      )}
     </div>
   )
 }
@@ -93,23 +142,23 @@ function BillingToggle({ cycle, onChange }: { cycle: BillingCycle; onChange: (c:
 const FAQS = [
   {
     q: 'Can I start for free?',
-    a: `Yes. Every new signup gets ${TRIAL_DAYS} days of full access, no card required. After the trial, if you haven't upgraded, your account continues on the Free plan rather than losing access.`,
+    a: `Yes. The Free plan is ₦0, no card required. WhatsApp automation stays active for the first ${WHATSAPP_TRIAL_DAYS} days; scanning and client limits apply from day one.`,
   },
   {
     q: 'How does the WhatsApp bot work?',
-    a: 'Send a receipt photo to our WhatsApp number. The AI reads it, extracts the amount, vendor, and category, and logs it to your account automatically. It also works for client payment screenshots.',
+    a: 'Send a receipt photo to our WhatsApp number. The AI reads it, extracts the amount, vendor, and category, and logs it to your account automatically. It also works for client payment screenshots and business cards.',
   },
   {
     q: 'What is Smart Transfer Recognition?',
     a: "When a client sends you a payment proof (bank screenshot) on WhatsApp, forward it to TrueFlow. We read the screenshot, identify the sender, and update your books automatically. Works with all Nigerian banks.",
   },
   {
-    q: 'Can I give my accountant access?',
-    a: 'Yes. On Business and above, you can generate a read-only link for your accountant. They open it in any browser — no account needed.',
+    q: 'Why can\'t Business (Starter) invite team members?',
+    a: "Business (Starter) is built for solo-run businesses that want to look professional — custom invoices, unlimited clients, basic tax tracking. Adding a team is exactly what Business (Pro) unlocks.",
   },
   {
-    q: 'Is Business really unlimited on team members?',
-    a: "Yes. Business and Business Pro both have no cap on staff headcount. They're differentiated by invoice/client volume, Tax Hub depth, and invoice branding, not by how many people you can add.",
+    q: 'What\'s the difference between Basic and Advanced Tax Analysis?',
+    a: 'Basic (Individual, Business Starter) tracks and estimates tax month by month. Advanced (Business Pro, Enterprise) adds quarterly and yearly reporting.',
   },
   {
     q: 'How do I upgrade or cancel?',
@@ -135,7 +184,7 @@ export default function PricingPage() {
               className="text-sm font-semibold px-4 py-2 rounded-lg text-white transition-colors"
               style={{ background: BRAND.violet }}
             >
-              Start Free Trial
+              Get started free
             </Link>
           </div>
         </div>
@@ -144,116 +193,31 @@ export default function PricingPage() {
       <main className="max-w-6xl mx-auto px-6 py-14">
         {/* Hero */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Simple, honest pricing</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-3">Simple pricing for all your needs</h1>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
-            Start free. Upgrade when you grow. Cancel anytime.
+            Start for free, upgrade when you love it — no card required to try. All prices in NGN.
           </p>
         </div>
 
-        {/* Free Trial — prominent, separate from the plan grid */}
-        <div
-          className="rounded-2xl p-8 mb-10 text-center relative overflow-hidden"
-          style={{ background: `linear-gradient(135deg, ${BRAND.violet}, #4b3fd6)` }}
-        >
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-bold uppercase tracking-wide mb-3">
-            <Sparkles size={13} /> Free Trial
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">
-            Try everything free for {TRIAL_DAYS} days
-          </h2>
-          <p className="text-white/80 text-sm max-w-md mx-auto mb-5">
-            Full feature access, no credit card required. When your trial period ends, your
-            account simply continues on the Free plan — nothing is ever cut off without warning.
-          </p>
-          <Link
-            href="/signup"
-            className="inline-block text-sm font-semibold px-6 py-2.5 rounded-lg text-white transition-colors"
-            style={{ background: BRAND.mint }}
-          >
-            Start Free Trial
-          </Link>
-        </div>
-
-        {/* Billing toggle */}
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center mb-10">
           <BillingToggle cycle={cycle} onChange={setCycle} />
         </div>
 
-        {/* Plan grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-16">
-          {CARDS.map(card => {
-            const config = PLAN_CONFIG[card.id]
-            return (
-              <div
-                key={card.id}
-                className={`rounded-xl border flex flex-col p-6 transition-shadow ${
-                  card.highlight
-                    ? 'shadow-xl text-white'
-                    : 'bg-white border-gray-200 shadow-sm hover:shadow-md'
-                }`}
-                style={card.highlight ? { background: BRAND.black, borderColor: '#2a2a35' } : undefined}
-              >
-                {card.highlight && (
-                  <span className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: BRAND.mint }}>
-                    Most popular
-                  </span>
-                )}
-                <h3 className={`text-lg font-bold mb-0.5 ${card.highlight ? 'text-white' : 'text-gray-900'}`}>
-                  {config.label}
-                </h3>
-                <p className={`text-sm mb-5 ${card.highlight ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {card.tagline}
-                </p>
-                <div className="mb-6">
-                  <span className={`text-3xl font-bold ${card.highlight ? 'text-white' : 'text-gray-900'}`}>
-                    {formatPrice(config.monthlyNgn, cycle)}
-                  </span>
-                  {config.monthlyNgn > 0 && (
-                    <span className={`text-sm ml-1 ${card.highlight ? 'text-gray-400' : 'text-gray-400'}`}>
-                      /month{cycle === 'annual' ? ', billed yearly' : ''}
-                    </span>
-                  )}
-                </div>
-                <ul className="space-y-2 mb-8 flex-1">
-                  {card.features.map(f => (
-                    <li key={f} className="flex items-start gap-2 text-sm">
-                      <Check
-                        size={15}
-                        className="mt-0.5 flex-shrink-0"
-                        style={{ color: card.highlight ? BRAND.mint : BRAND.mintDeep }}
-                      />
-                      <span className={card.highlight ? 'text-gray-300' : 'text-gray-600'}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/signup"
-                  className={`block text-center text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors ${
-                    card.highlight ? 'text-white' : 'text-white'
-                  }`}
-                  style={{ background: card.highlight ? BRAND.mint : BRAND.black }}
-                >
-                  {config.monthlyNgn === 0 ? 'Get started free' : `Get ${config.label}`}
-                </Link>
-              </div>
-            )
-          })}
+        {/* Free — stands alone */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+          <PlanCard id="free" cycle={cycle} />
         </div>
 
-        {/* Enterprise CTA — never a checkout flow */}
-        <div className="rounded-xl bg-white border border-gray-200 shadow-sm px-8 py-10 text-center mb-16">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Need more? Enterprise plan available.</h2>
-          <p className="text-gray-500 mb-6 max-w-lg mx-auto text-sm">
-            Unlimited everything, custom integrations, dedicated support, white-label invoices,
-            and pricing built around your organisation.
-          </p>
-          <a
-            href="mailto:hello@gettrueflow.com?subject=Enterprise%20plan%20consultation"
-            className="inline-block text-sm font-semibold px-6 py-2.5 rounded-lg text-white transition-colors"
-            style={{ background: BRAND.violet }}
-          >
-            Talk to Us
-          </a>
+        {/* Individual / Business / Business Pro — the real comparison */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+          <PlanCard id="individual" cycle={cycle} />
+          <PlanCard id="business" cycle={cycle} />
+          <PlanCard id="business_pro" cycle={cycle} />
+        </div>
+
+        {/* Enterprise — stands alone */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
+          <PlanCard id="enterprise" cycle={cycle} />
         </div>
 
         {/* FAQ */}

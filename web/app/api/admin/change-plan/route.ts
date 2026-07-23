@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     const newConfig = PLAN_CONFIG[new_plan as PlanId]
     const { error } = await admin.from('organizations').update({
       plan: new_plan,
-      receipt_limit: newConfig.receiptLimit,
+      receipt_limit: newConfig.scanLimit,
       client_limit: newConfig.clientLimit,
     }).eq('id', org_id)
 

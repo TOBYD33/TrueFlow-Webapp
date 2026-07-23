@@ -6,8 +6,14 @@
 // now imports from here instead — the old scattered-duplicate-maps pattern
 // is exactly how a plan rename like this one silently misses a spot.
 //
-// Live tiers (self-serve, via Flutterwave — see PLATFORM DECISION below):
-//   free_trial, free, individual, business, business_pro
+// REVISION (2026-07, second pass): 'free_trial' as a separate plan id has
+// been retired — zero live orgs were ever on it, confirmed before removing.
+// Free is now the only entry tier, with a limited feature set from day one
+// plus a 14-day window during which WhatsApp automation itself is active
+// (see WHATSAPP_TRIAL_DAYS and canUseWhatsAppAutomation below).
+//
+// Live tiers (self-serve, via Flutterwave):
+//   free, individual, business, business_pro
 // Enterprise is NOT self-serve — no checkout, no price shown. It is only
 // ever assigned manually via /admin (see app/api/admin/change-plan).
 //
@@ -18,6 +24,10 @@
 // and was intentionally left as-is (dead code) rather than updated, since
 // maintaining two live plan-code maps was explicitly ruled out.
 //
+// FAMILY: intentionally has no trace anywhere in this file or either
+// pricing surface. Planned as a standalone announcement ~2 months post
+// launch — must look like it was never part of the plan, not delayed.
+//
 // DEPRECATED PLAN NAMES: organizations.plan is a plain text column (no DB
 // enum/check constraint), so old values like 'sme_starter' or 'freelancer'
 // just sit there readable but never matched by PLAN_CONFIG below. Never
@@ -25,67 +35,126 @@
 // resolvePlan() first, so a not-yet-migrated org degrades to a sensible
 // current tier instead of matching nothing.
 
-export type PlanId = 'free_trial' | 'free' | 'individual' | 'business' | 'business_pro' | 'enterprise'
+export type PlanId = 'free' | 'individual' | 'business' | 'business_pro' | 'enterprise'
 
 export const SELF_SERVE_PLAN_IDS: PlanId[] = ['individual', 'business', 'business_pro']
 
+// Display labels differ slightly from the internal id per the ticket
+// ("Business (Starter)" / "Business (Pro)") — UI should read displayLabel,
+// not humanize the id.
 export interface PlanConfig {
   id: PlanId
   label: string
-  monthlyNgn: number // 0 for free/free_trial, -1 = "Custom" (enterprise)
-  receiptLimit: number // -1 = unlimited
-  clientLimit: number // -1 = unlimited, 0 = no client CRM
-  staffLimit: number // -1 = unlimited — Business/Business Pro are NEVER headcount-gated
-  taxHub: 'none' | 'basic' | 'advanced' // advanced = quarterly/yearly reporting
+  displayLabel: string
+  tagline: string
+  monthlyNgn: number // 0 for free, -1 = "Custom" (enterprise)
+  scanLimit: number // -1 = unlimited. Covers business card + receipt scans together.
+  clientLimit: number // -1 = unlimited, 0 = none
+  automatedReminder: boolean
+  staffLimit: number // -1 = unlimited, 0 = cannot invite ANY team member
+  taxAnalysis: 'inactive' | 'basic' | 'advanced' // advanced = quarterly/yearly reporting
   invoiceBranding: boolean // custom logo on generated invoice PDFs
+  supportPriority: boolean
   selfServe: boolean
+  mostPopular: boolean
 }
 
 export const PLAN_CONFIG: Record<PlanId, PlanConfig> = {
-  free_trial:  { id: 'free_trial',  label: 'Free Trial',   monthlyNgn: 0,     receiptLimit: -1, clientLimit: -1, staffLimit: -1, taxHub: 'advanced', invoiceBranding: true,  selfServe: false },
-  free:        { id: 'free',        label: 'Free',         monthlyNgn: 0,     receiptLimit: 10, clientLimit: 0,  staffLimit: 1,  taxHub: 'none',     invoiceBranding: false, selfServe: false },
-  individual:  { id: 'individual',  label: 'Individual',   monthlyNgn: 2500,  receiptLimit: -1, clientLimit: 0,  staffLimit: 1,  taxHub: 'basic',    invoiceBranding: false, selfServe: true  },
-  business:    { id: 'business',    label: 'Business',     monthlyNgn: 5000,  receiptLimit: -1, clientLimit: -1, staffLimit: -1, taxHub: 'basic',    invoiceBranding: false, selfServe: true  },
-  business_pro:{ id: 'business_pro',label: 'Business Pro', monthlyNgn: 10000, receiptLimit: -1, clientLimit: -1, staffLimit: -1, taxHub: 'advanced', invoiceBranding: true,  selfServe: true  },
-  enterprise:  { id: 'enterprise',  label: 'Enterprise',   monthlyNgn: -1,    receiptLimit: -1, clientLimit: -1, staffLimit: -1, taxHub: 'advanced', invoiceBranding: true,  selfServe: false },
+  free: {
+    id: 'free', label: 'Free', displayLabel: 'Free',
+    tagline: '14-day trial, no card required',
+    monthlyNgn: 0, scanLimit: 10, clientLimit: 5, automatedReminder: false,
+    staffLimit: 0, taxAnalysis: 'inactive', invoiceBranding: false, supportPriority: false,
+    selfServe: false, mostPopular: false,
+  },
+  individual: {
+    id: 'individual', label: 'Individual', displayLabel: 'Individual',
+    tagline: 'Track your own money, effortlessly',
+    monthlyNgn: 2500, scanLimit: -1, clientLimit: 0, automatedReminder: true,
+    staffLimit: 0, taxAnalysis: 'basic', invoiceBranding: false, supportPriority: false,
+    selfServe: true, mostPopular: false,
+  },
+  business: {
+    id: 'business', label: 'Business', displayLabel: 'Business (Starter)',
+    tagline: 'For solo-run businesses ready to look professional',
+    monthlyNgn: 5000, scanLimit: -1, clientLimit: -1, automatedReminder: true,
+    // Team members intentionally inactive — this is the defining Business
+    // Pro upsell, not a bug or oversight.
+    staffLimit: 0, taxAnalysis: 'basic', invoiceBranding: true, supportPriority: false,
+    selfServe: true, mostPopular: true,
+  },
+  business_pro: {
+    id: 'business_pro', label: 'Business Pro', displayLabel: 'Business (Pro)',
+    tagline: 'Add your team and go deeper on tax reporting',
+    monthlyNgn: 10000, scanLimit: -1, clientLimit: -1, automatedReminder: true,
+    staffLimit: -1, taxAnalysis: 'advanced', invoiceBranding: true, supportPriority: true,
+    selfServe: true, mostPopular: false,
+  },
+  enterprise: {
+    id: 'enterprise', label: 'Enterprise', displayLabel: 'Enterprise',
+    tagline: 'Everything unlimited, built around your organisation',
+    monthlyNgn: -1, scanLimit: -1, clientLimit: -1, automatedReminder: true,
+    staffLimit: -1, taxAnalysis: 'advanced', invoiceBranding: true, supportPriority: true,
+    selfServe: false, mostPopular: false,
+  },
 }
 
-// ── FLAGGED — needs product confirmation before shipping to real users ──
-// Annual billing discount shown on the pricing page. 15% is a placeholder
-// from the ticket, explicitly NOT confirmed as final.
-export const ANNUAL_DISCOUNT_PCT = 15
+// Confirmed billing toggle math (not a placeholder — exact per ticket):
+//   Quarterly = monthly x 3 x 0.90
+//   Yearly    = monthly x 12 x 0.80
+export const QUARTERLY_DISCOUNT_PCT = 10
+export const YEARLY_DISCOUNT_PCT = 20
 
-// Family add-on price stacked on top of Individual (per ticket: "+optional
-// Family add-on, +₦2,500/month"). Not yet wired into checkout — flagged
-// here so it has one obvious home when that's built.
-export const FAMILY_ADDON_NGN = 2500
+export type BillingCycle = 'monthly' | 'quarterly' | 'yearly'
 
-// Placeholder — NOT finalized. Number of invoices/month at which a
-// Business-tier org gets a soft "consider Business Pro" nudge (never a
-// hard block; Business has no invoice/client caps). Flag back before
-// tuning this for real.
-export const BUSINESS_INVOICE_NUDGE_THRESHOLD = 20
+// Returns the price actually due for that billing cycle (already applying
+// the discount and cycle length) — NOT a monthly-equivalent figure.
+export function priceForCycle(monthlyNgn: number, cycle: BillingCycle): number {
+  if (monthlyNgn <= 0) return monthlyNgn // 0 (free) or -1 (custom) pass through unchanged
+  if (cycle === 'quarterly') return Math.round(monthlyNgn * 3 * (1 - QUARTERLY_DISCOUNT_PCT / 100))
+  if (cycle === 'yearly') return Math.round(monthlyNgn * 12 * (1 - YEARLY_DISCOUNT_PCT / 100))
+  return monthlyNgn
+}
 
-// Placeholder — NOT finalized. Post-trial Free tier caps, per Feature 3.
-// Flag back before shipping; these are guesses to make the downgrade
-// mechanism functional, not product-approved numbers.
-export const FREE_TIER_RECEIPT_LIMIT = 10
-export const FREE_TIER_REMINDER_LIMIT = 5
-export const FREE_TIER_CLIENT_LIMIT = 0
+// ── WhatsApp automation trial window (Free plan only) ────────────────────
+// FLAGGED per the ticket's requirement 5: scanning (10x) and clients (5x)
+// caps are treated as permanent, cumulative caps rather than time-based —
+// they apply from day one and never "unlock" or "lock" on a timer, unlike
+// WhatsApp automation. This is a reasonable default, NOT a confirmed
+// product decision — flag back before relying on it.
+export const WHATSAPP_TRIAL_DAYS = 14
 
-export const TRIAL_DAYS = 14
+// SAFETY: this feature-gate is new. Every org already on 'free' today was
+// created before this shipped and has therefore already exceeded 14 days
+// since signup — applying the rule retroactively would silently cut off
+// WhatsApp access for every existing free-tier account (including active
+// test/ambassador users) with no warning, exactly what we've been told not
+// to do to existing users. So the 14-day rule only applies to orgs created
+// on/after this cutoff; anything older is grandfathered with WhatsApp
+// automation left active indefinitely. Flag back if this should change.
+export const WHATSAPP_TRIAL_ENFORCEMENT_START = '2026-07-23T00:00:00.000Z'
+
+export function canUseWhatsAppAutomation(rawPlan: string | null | undefined, orgCreatedAt: string | null | undefined): boolean {
+  const plan = resolvePlan(rawPlan)
+  if (plan !== 'free') return true
+  if (!orgCreatedAt) return true
+  if (orgCreatedAt < WHATSAPP_TRIAL_ENFORCEMENT_START) return true // grandfathered
+  const trialEnd = new Date(orgCreatedAt).getTime() + WHATSAPP_TRIAL_DAYS * 24 * 60 * 60 * 1000
+  return Date.now() < trialEnd
+}
 
 // ── Deprecated → current mapping ─────────────────────────────────────────
 // Confirmed 2026-07-23: only one live org ("Big Dee", sme_starter) was on
 // any deprecated name, with no real Paystack customer/subscription attached
 // (a manual admin test override, not a paying subscriber) — approved for
-// direct remap. See bot/sql/step10-plan-rename-migration.sql for the
-// one-time backfill actually applied to existing rows. This map exists
-// so reads never silently fail for any row the backfill missed.
+// direct remap, already applied (bot/sql/step10-plan-rename-migration.sql).
+// 'free_trial' is also now deprecated (retired this pass) — confirmed zero
+// live orgs were ever on it before removing it as a distinct id.
 export const DEPRECATED_PLAN_MAP: Record<string, PlanId> = {
+  free_trial: 'free',
   solo: 'individual',       // dead/unused alternate scheme found in prior code
   pro: 'business_pro',      // dead/unused alternate scheme found in prior code
-  family: 'individual',     // old standalone Family tier folded into Individual + add-on
+  family: 'individual',     // Family tier removed entirely — see FAMILY note above
   freelancer: 'business',
   sme_starter: 'business',
   agency: 'business_pro',
@@ -106,21 +175,36 @@ export function getPlanConfig(rawPlan: string | null | undefined): PlanConfig {
 }
 
 export function canUseAdvancedTaxHub(rawPlan: string | null | undefined): boolean {
-  return getPlanConfig(rawPlan).taxHub === 'advanced'
+  return getPlanConfig(rawPlan).taxAnalysis === 'advanced'
+}
+
+// Full Tax Hub page lock — Free's Tax Analysis is inactive, not just
+// capped at basic periods.
+export function canUseTaxHub(rawPlan: string | null | undefined): boolean {
+  return getPlanConfig(rawPlan).taxAnalysis !== 'inactive'
 }
 
 export function canUseInvoiceBranding(rawPlan: string | null | undefined): boolean {
   return getPlanConfig(rawPlan).invoiceBranding
 }
 
-// Business/Business Pro are explicitly NEVER headcount-gated (staffLimit
-// -1). Only Free/Individual (staffLimit 1) actually block invites.
+export function canUseAutomatedReminders(rawPlan: string | null | undefined): boolean {
+  return getPlanConfig(rawPlan).automatedReminder
+}
+
+// Business (Starter) is explicitly, permanently blocked from inviting ANY
+// team member (staffLimit 0) — this is the Business Pro upsell, not a
+// headcount cap to raise later. Only Business Pro/Enterprise are unlimited.
 export function staffLimitFor(rawPlan: string | null | undefined): number {
   return getPlanConfig(rawPlan).staffLimit
 }
 
+export function canInviteTeamMembers(rawPlan: string | null | undefined): boolean {
+  return getPlanConfig(rawPlan).staffLimit !== 0
+}
+
 export function receiptLimitFor(rawPlan: string | null | undefined): number {
-  return getPlanConfig(rawPlan).receiptLimit
+  return getPlanConfig(rawPlan).scanLimit
 }
 
 export function clientLimitFor(rawPlan: string | null | undefined): number {

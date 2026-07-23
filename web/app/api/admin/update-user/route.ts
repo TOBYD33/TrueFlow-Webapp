@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     if (fields.plan !== undefined && fields.plan !== org?.plan && fields.plan in PLAN_CONFIG) {
       const newConfig = PLAN_CONFIG[fields.plan as PlanId]
       orgUpdate.plan = fields.plan
-      orgUpdate.receipt_limit = newConfig.receiptLimit
+      orgUpdate.receipt_limit = newConfig.scanLimit
       orgUpdate.client_limit = newConfig.clientLimit
       changes.plan = { old: org?.plan ?? null, new: fields.plan }
     }

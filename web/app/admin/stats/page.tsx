@@ -58,10 +58,10 @@ export default async function AdminStatsPage() {
     planCounts[plan] = (planCounts[plan] ?? 0) + 1
   }
   const payingOrgs = Object.entries(planCounts)
-    .filter(([plan]) => plan !== 'free' && plan !== 'free_trial')
+    .filter(([plan]) => plan !== 'free')
     .reduce((s, [, n]) => s + n, 0)
 
-  const PLAN_ORDER = ['free', 'free_trial', 'individual', 'business', 'business_pro', 'enterprise']
+  const PLAN_ORDER = ['free', 'individual', 'business', 'business_pro', 'enterprise']
 
   return (
     <div className="space-y-6 max-w-5xl">

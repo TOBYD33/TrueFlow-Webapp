@@ -8,8 +8,10 @@
 //   1. Organization suspended
 //   2. whatsapp_active revoked
 //   3. Viewer role (read-only, no submissions)
+//   4. Free plan's WhatsApp automation trial window expired
 
 import { getOrCreateUser, isNewUser, markUserNotNew, getMonthlyReceiptCount, findPendingInvite } from './user-service'
+import { canUseWhatsAppAutomation } from './plan-gates'
 import { analyzeImage, buildMissingFieldsNote } from './image-analyzer'
 import { handleIncomingPayment } from './smart-transfer'
 import { saveFromAnalysis } from './receipt-scanner'
@@ -160,6 +162,17 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     return buildTextResponse(
       'Your account has view-only access.\n' +
       "You can check summaries but can't submit receipts or make changes via WhatsApp."
+    )
+  }
+
+  // ── Permission Gate 4: Free plan's WhatsApp trial window expired ────────
+  // Grandfathers every org created before WHATSAPP_TRIAL_ENFORCEMENT_START,
+  // so this new gate never silently cuts off an already-active free account.
+  if (!canUseWhatsAppAutomation(user.plan, user.org_created_at)) {
+    return buildTextResponse(
+      "⏳ Your 14-day WhatsApp trial has ended.\n" +
+      "Upgrade at app.gettrueflow.com/settings/subscription to keep using TrueFlow on WhatsApp — " +
+      "your data is safe and waiting for you either way."
     )
   }
 

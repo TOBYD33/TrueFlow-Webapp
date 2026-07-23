@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { PLAN_CONFIG, TRIAL_DAYS } from '@/lib/plans'
+import { PLAN_CONFIG } from '@/lib/plans'
 
 function getSupabaseAdmin() {
   return createClient(
@@ -70,22 +70,21 @@ export async function POST(req: NextRequest) {
         joined_at: new Date().toISOString(),
       })
     } else {
-      // Create a new org and make this user the owner — starts on the
-      // 14-day free_trial (full access, no card required); a scheduled
-      // job (bot/src/trial-service.ts) transitions it to 'free' if it
-      // isn't upgraded before trial_ends_at.
+      // Create a new org and make this user the owner — starts directly on
+      // 'free' (no separate free_trial plan anymore). WhatsApp automation
+      // stays active for WHATSAPP_TRIAL_DAYS from created_at before
+      // locking (see lib/plans.ts's canUseWhatsAppAutomation); scanning and
+      // client caps apply from day one.
       const orgName = businessName?.trim() || `${fullName}'s Business`
-      const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString()
       const { data: org, error: orgError } = await admin
         .from('organizations')
         .insert({
           name: orgName,
           owner_id: userId,
-          plan: 'free_trial',
-          trial_ends_at: trialEndsAt,
+          plan: 'free',
           type: orgType ?? 'sme',
-          receipt_limit: PLAN_CONFIG.free_trial.receiptLimit,
-          client_limit: PLAN_CONFIG.free_trial.clientLimit,
+          receipt_limit: PLAN_CONFIG.free.scanLimit,
+          client_limit: PLAN_CONFIG.free.clientLimit,
         })
         .select()
         .single()

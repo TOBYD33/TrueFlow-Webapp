@@ -1,14 +1,22 @@
 'use client'
 // settings/subscription/page.tsx
-// Current plan, usage stats, and plan comparison grid
+// "All Plans" page — current plan, usage stats, and the full plan grid.
+// Layout hierarchy (deliberate, not just copy): Free stands alone at the
+// top, Individual/Business/Business Pro sit together as the real 3-way
+// comparison, Enterprise stands alone at the bottom. No mention of
+// "Family" anywhere — it's a standalone feature for ~2 months post-launch
+// and should look like it was never part of this plan.
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useViewingContext } from '@/components/ViewingContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Check, Heart } from 'lucide-react'
-import { PLAN_CONFIG, resolvePlan, PlanId } from '@/lib/plans'
+import { Check, X, Heart, Sparkles } from 'lucide-react'
+import {
+  PLAN_CONFIG, resolvePlan, PlanId, BillingCycle, priceForCycle,
+  QUARTERLY_DISCOUNT_PCT, YEARLY_DISCOUNT_PCT, canUseWhatsAppAutomation, WHATSAPP_TRIAL_DAYS,
+} from '@/lib/plans'
 
 function AndreaSection({ orgId }: { orgId: string | null }) {
   const supabase = createClient()
@@ -95,59 +103,160 @@ function AndreaSection({ orgId }: { orgId: string | null }) {
   )
 }
 
-// Derived from lib/plans.ts's PLAN_CONFIG (single source of truth) — only
-// the self-serve tiers plus Enterprise are shown; free_trial isn't a
-// choosable card (it's a time-limited starting state, see currentPlan
-// handling below), but IS shown if that's the org's actual current plan.
-const DISPLAY_PLAN_IDS: PlanId[] = ['free', 'individual', 'business', 'business_pro', 'enterprise']
-
-function formatLimit(n: number) {
-  if (n === -1) return 'Unlimited'
-  if (n === 0) return 'None'
-  return String(n)
-}
-
-function formatPrice(monthlyNgn: number) {
+function formatPrice(monthlyNgn: number, cycle: BillingCycle): string {
   if (monthlyNgn === -1) return 'Custom'
   if (monthlyNgn === 0) return '₦0'
-  return `₦${monthlyNgn.toLocaleString('en-NG')}/mo`
+  const price = priceForCycle(monthlyNgn, cycle)
+  const suffix = cycle === 'quarterly' ? '/quarter' : cycle === 'yearly' ? '/year' : '/month'
+  return `₦${price.toLocaleString('en-NG')}${suffix}`
 }
 
-function planFeatures(id: PlanId): string[] {
+// Feature row values, human-readable per the ticket's Active/Inactive/Basic/
+// Advanced/count language — not a generic numeric limit table.
+function planFeatureRows(id: PlanId): { label: string; value: string; ok: boolean }[] {
   const c = PLAN_CONFIG[id]
-  const features = [
-    `Receipts: ${formatLimit(c.receiptLimit)}`,
-    `Clients: ${formatLimit(c.clientLimit)}`,
-    `Team members: ${formatLimit(c.staffLimit)}`,
-    `Tax Hub: ${c.taxHub === 'advanced' ? 'Advanced (quarterly/yearly)' : c.taxHub === 'basic' ? 'Basic' : 'Not included'}`,
+  return [
+    {
+      label: 'WhatsApp Automation',
+      value: id === 'free' ? `Active (${WHATSAPP_TRIAL_DAYS}-day trial)` : 'Active',
+      ok: true,
+    },
+    {
+      label: 'Scanning (Business Card & Receipt)',
+      value: c.scanLimit === -1 ? 'Active' : `${c.scanLimit}x`,
+      ok: true,
+    },
+    {
+      label: 'Clients',
+      value: c.clientLimit === -1 ? 'Active' : c.clientLimit === 0 ? 'None' : `Up to ${c.clientLimit}`,
+      ok: c.clientLimit !== 0,
+    },
+    { label: 'Automated Reminder', value: c.automatedReminder ? 'Active' : 'Inactive', ok: c.automatedReminder },
+    { label: 'Team members', value: c.staffLimit === -1 ? 'Active' : 'Inactive', ok: c.staffLimit === -1 },
+    {
+      label: 'Tax Analysis',
+      value: c.taxAnalysis === 'advanced' ? 'Advanced' : c.taxAnalysis === 'basic' ? 'Basic' : 'Inactive',
+      ok: c.taxAnalysis !== 'inactive',
+    },
+    { label: 'Custom invoice (logo/branding)', value: c.invoiceBranding ? 'Active' : 'Inactive', ok: c.invoiceBranding },
+    ...(c.supportPriority ? [{ label: 'Support Priority', value: 'Active', ok: true }] : []),
   ]
-  if (c.invoiceBranding) features.push('Custom invoice logo/branding')
-  return features
+}
+
+function BillingToggle({ cycle, onChange }: { cycle: BillingCycle; onChange: (c: BillingCycle) => void }) {
+  const options: { value: BillingCycle; label: string }[] = [
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: `Quarterly (save ${QUARTERLY_DISCOUNT_PCT}%)` },
+    { value: 'yearly', label: `Yearly (save ${YEARLY_DISCOUNT_PCT}%)` },
+  ]
+  return (
+    <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-gray-100">
+      {options.map(o => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+            cycle === o.value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function PlanCard({
+  id, plan, cycle, upgrading, onUpgrade,
+}: {
+  id: PlanId
+  plan: string
+  cycle: BillingCycle
+  upgrading: string | null
+  onUpgrade: (id: PlanId) => void
+}) {
+  const c = PLAN_CONFIG[id]
+  const isCurrent = resolvePlan(plan) === id
+
+  return (
+    <div
+      className={`rounded-xl border p-5 flex flex-col relative ${
+        isCurrent ? 'border-[#00D4AA]/60 bg-[#00D4AA]/5' : c.mostPopular ? 'border-[#6C63FF] bg-white shadow-md' : 'border-gray-200 bg-white'
+      }`}
+    >
+      {c.mostPopular && !isCurrent && (
+        <span className="absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-[#6C63FF]">
+          Most Popular
+        </span>
+      )}
+      <div className="flex items-start justify-between mb-1">
+        <p className="font-semibold text-sm text-gray-900">{c.displayLabel}</p>
+        {isCurrent && <Check size={14} className="text-[#00A88A] mt-0.5 flex-shrink-0" />}
+      </div>
+      <p className="text-xs text-gray-500 mb-2">{c.tagline}</p>
+      <p className="text-[#00A88A] font-bold text-lg mb-3">{formatPrice(c.monthlyNgn, cycle)}</p>
+      <div className="space-y-1.5 mb-4 flex-1">
+        {planFeatureRows(id).map(row => (
+          <div key={row.label} className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-gray-500">{row.label}</span>
+            <span className={`font-medium flex items-center gap-1 ${row.ok ? 'text-gray-700' : 'text-gray-400'}`}>
+              {row.ok ? <Check size={11} className="text-[#00A88A]" /> : <X size={11} className="text-gray-300" />}
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      {!isCurrent && c.selfServe && (
+        <button
+          onClick={() => onUpgrade(id)}
+          disabled={upgrading === id}
+          className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60"
+        >
+          {upgrading === id ? 'Redirecting…' : `Get ${c.displayLabel}`}
+        </button>
+      )}
+      {!isCurrent && id === 'enterprise' && (
+        <a
+          href="mailto:hello@gettrueflow.com?subject=Enterprise%20plan%20consultation"
+          className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Talk to Us
+        </a>
+      )}
+      {!isCurrent && id === 'free' && (
+        <p className="text-xs text-gray-400 text-center">No card required</p>
+      )}
+      {isCurrent && (
+        <p className="text-xs text-[#00A88A] font-medium text-center">✓ Current plan</p>
+      )}
+    </div>
+  )
 }
 
 export default function SubscriptionPage() {
   const supabase = createClient()
   const { orgId } = useViewingContext()
   const [plan, setPlan] = useState('free')
-  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
+  const [orgCreatedAt, setOrgCreatedAt] = useState<string | null>(null)
   const [receiptCount, setReceiptCount] = useState(0)
   const [clientCount, setClientCount] = useState(0)
   const [staffCount, setStaffCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [cycle, setCycle] = useState<BillingCycle>('monthly')
 
   useEffect(() => {
     if (!orgId) return
     async function load() {
       try {
         const [{ data: org }, { count: rc }, { count: cc }, { count: sc }] = await Promise.all([
-          supabase.from('organizations').select('plan, trial_ends_at').eq('id', orgId).single(),
+          supabase.from('organizations').select('plan, created_at').eq('id', orgId).single(),
           supabase.from('receipts').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
           supabase.from('clients').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
           supabase.from('org_members').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
         ])
 
         if (org?.plan) setPlan(resolvePlan(org.plan))
-        setTrialEndsAt(org?.trial_ends_at ?? null)
+        setOrgCreatedAt(org?.created_at ?? null)
         setReceiptCount(rc ?? 0)
         setClientCount(cc ?? 0)
         setStaffCount(sc ?? 0)
@@ -158,16 +267,16 @@ export default function SubscriptionPage() {
     load()
   }, [orgId])
 
-  const currentPlan = PLAN_CONFIG[plan as PlanId] ?? PLAN_CONFIG.free
+  const currentPlan = PLAN_CONFIG[resolvePlan(plan)]
   const [upgrading, setUpgrading] = useState<string | null>(null)
 
-  async function handleUpgrade(planId: string) {
+  async function handleUpgrade(planId: PlanId) {
     setUpgrading(planId)
     try {
       const res = await fetch('/api/flutterwave/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan_id: planId }),
+        body: JSON.stringify({ plan_id: planId, cycle }),
       })
       const json = await res.json()
       if (!res.ok || !json.link) {
@@ -220,6 +329,8 @@ export default function SubscriptionPage() {
     }
   }, [])
 
+  const whatsappActive = canUseWhatsAppAutomation(plan, orgCreatedAt)
+
   return (
     <div className="space-y-6">
       {showSuccess && (
@@ -229,15 +340,10 @@ export default function SubscriptionPage() {
         </div>
       )}
 
-      {plan === 'free_trial' && trialEndsAt && (
-        <div className="bg-[#6C63FF]/5 border border-[#6C63FF]/30 rounded-xl px-4 py-3">
-          <p className="text-sm text-[#6C63FF] font-medium">
-            {(() => {
-              const daysLeft = Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
-              return daysLeft > 0
-                ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} left on your free trial — full access, no card needed.`
-                : `Your free trial has ended and will move to the Free plan shortly.`
-            })()}
+      {resolvePlan(plan) === 'free' && !whatsappActive && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-sm text-amber-700 font-medium">
+            Your {WHATSAPP_TRIAL_DAYS}-day WhatsApp trial has ended — upgrade below to keep using TrueFlow on WhatsApp. Everything else keeps working.
           </p>
         </div>
       )}
@@ -248,11 +354,11 @@ export default function SubscriptionPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm text-gray-500">Current plan</p>
-              <p className="text-2xl font-bold text-gray-900 mt-0.5">{currentPlan.label}</p>
-              <p className="text-lg text-[#00A88A] font-semibold mt-0.5">{formatPrice(currentPlan.monthlyNgn)}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-0.5">{currentPlan.displayLabel}</p>
+              <p className="text-lg text-[#00A88A] font-semibold mt-0.5">{formatPrice(currentPlan.monthlyNgn, 'monthly')}</p>
             </div>
             <Badge className="bg-[#00D4AA]/10 text-[#00A88A] border-0 text-xs uppercase tracking-wide">
-              {loading ? '…' : plan}
+              {loading ? '…' : currentPlan.label}
             </Badge>
           </div>
 
@@ -274,52 +380,32 @@ export default function SubscriptionPage() {
         </CardContent>
       </Card>
 
-      {/* Plan comparison */}
+      {/* All Plans */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">All Plans</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {DISPLAY_PLAN_IDS.map(id => {
-            const p = PLAN_CONFIG[id]
-            const isCurrent = plan === id
-            return (
-              <div
-                key={id}
-                className={`rounded-xl border p-4 ${isCurrent ? 'border-[#00D4AA]/60 bg-[#00D4AA]/5' : 'border-gray-200 bg-white'}`}
-              >
-                <div className="flex items-start justify-between mb-1">
-                  <p className="font-semibold text-sm text-gray-900">{p.label}</p>
-                  {isCurrent && <Check size={14} className="text-[#00A88A] mt-0.5 flex-shrink-0" />}
-                </div>
-                <p className="text-[#00A88A] font-bold text-base mb-2">{formatPrice(p.monthlyNgn)}</p>
-                <div className="space-y-1 mb-3">
-                  {planFeatures(id).map(f => (
-                    <p key={f} className="text-xs text-gray-500">{f}</p>
-                  ))}
-                </div>
-                {!isCurrent && id !== 'free' && id !== 'enterprise' && (
-                  <button
-                    onClick={() => handleUpgrade(id)}
-                    disabled={upgrading === id}
-                    className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60"
-                  >
-                    {upgrading === id ? 'Redirecting…' : 'Upgrade'}
-                  </button>
-                )}
-                {!isCurrent && id === 'enterprise' && (
-                  <a
-                    href="mailto:hello@gettrueflow.com"
-                    className="block w-full text-center text-xs font-semibold h-8 leading-8 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Talk to us
-                  </a>
-                )}
-                {isCurrent && (
-                  <p className="text-xs text-[#00A88A] font-medium text-center">✓ Current plan</p>
-                )}
-              </div>
-            )
-          })}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">All Plans</h3>
+          <BillingToggle cycle={cycle} onChange={setCycle} />
         </div>
+
+        <div className="space-y-4">
+          {/* Free stands alone */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <PlanCard id="free" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
+          </div>
+
+          {/* Individual / Business / Business Pro — the real 3-way comparison */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <PlanCard id="individual" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
+            <PlanCard id="business" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
+            <PlanCard id="business_pro" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
+          </div>
+
+          {/* Enterprise stands alone */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <PlanCard id="enterprise" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
+          </div>
+        </div>
+
         <p className="text-xs text-gray-400 mt-3">
           Payments processed securely via Flutterwave. Cancel any time from your account settings.
         </p>

@@ -6,17 +6,13 @@
 import { supabase } from './supabase'
 import { UserContext } from '../types'
 
-// Mirrors web/lib/plans.ts's TRIAL_DAYS — bot and web are separate
-// deployments with no shared package (same precedent as timezone-util.ts).
-const TRIAL_DAYS = 14
-
 export async function getOrCreateUser(phoneNumber: string): Promise<UserContext | null> {
   // Look up existing session
   const { data: session, error: sessionError } = await supabase
     .from('whatsapp_sessions')
     .select(`
       *,
-      organizations(id, name, plan, currency, receipt_limit, default_tax_country, status),
+      organizations(id, name, plan, currency, receipt_limit, default_tax_country, status, created_at),
       profiles(id, full_name, merged_into_id)
     `)
     .eq('phone_number', phoneNumber)
@@ -62,6 +58,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
       org_id: session.org_id,
       org_name: org?.name || 'My Business',
       org_status: org?.status || 'active',
+      org_created_at: org?.created_at || new Date().toISOString(),
       full_name: profile?.full_name || phoneNumber,
       plan: org?.plan || 'free',
       currency: org?.currency || 'NGN',
@@ -81,7 +78,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     .from('org_members')
     .select(`
       *,
-      organizations(id, name, plan, currency, receipt_limit, default_tax_country, status),
+      organizations(id, name, plan, currency, receipt_limit, default_tax_country, status, created_at),
       profiles(id, full_name)
     `)
     .eq('whatsapp_number', phoneNumber)
@@ -106,6 +103,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
       org_id: orgMember.org_id,
       org_name: org?.name || 'My Business',
       org_status: org?.status || 'active',
+      org_created_at: org?.created_at || new Date().toISOString(),
       full_name: profile?.full_name || phoneNumber,
       plan: org?.plan || 'free',
       currency: org?.currency || 'NGN',
@@ -132,20 +130,20 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     return null
   }
 
-  // Starts on the 14-day free_trial (full access, no card required) — a
-  // scheduled job (trial-service.ts's expireTrials, run daily by
-  // scheduler.ts) transitions it to 'free' if not upgraded before
-  // trial_ends_at. receipt_limit -1 here means unlimited during the trial.
-  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  // Starts directly on 'free' (no separate free_trial plan anymore — see
+  // web/lib/plans.ts's revision note). WhatsApp automation itself stays
+  // active for WHATSAPP_TRIAL_DAYS from created_at before locking; scanning
+  // (10) and client (5) caps apply from day one, per the new Free feature
+  // set. Mirrors web/lib/plans.ts's PLAN_CONFIG.free values.
   const { data: newOrg, error: orgError } = await supabase
     .from('organizations')
     .insert({
       name: 'My Business',
       type: 'sme',
       owner_id: newProfile.id,
-      plan: 'free_trial',
-      trial_ends_at: trialEndsAt,
-      receipt_limit: -1,
+      plan: 'free',
+      receipt_limit: 10,
+      client_limit: 5,
       currency: 'NGN',
     })
     .select()
@@ -180,6 +178,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     org_id: newOrg.id,
     org_name: 'My Business',
     org_status: 'active',
+    org_created_at: newOrg.created_at,
     full_name: phoneNumber,
     plan: 'free',
     currency: 'NGN',

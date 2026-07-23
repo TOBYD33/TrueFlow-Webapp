@@ -127,7 +127,7 @@ async function activatePlan(
   const { error: updateError } = await admin.from('organizations').update({
     plan: plan_id,
     paystack_subscription_status: 'active',
-    receipt_limit: config.receiptLimit,
+    receipt_limit: config.scanLimit,
     client_limit: config.clientLimit,
   }).eq('id', orgId)
 

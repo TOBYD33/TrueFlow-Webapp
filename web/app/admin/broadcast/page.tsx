@@ -11,7 +11,7 @@ import { useTheme, tone, BRAND } from '@/components/shared/theme'
 import { toast } from 'sonner'
 import { Megaphone } from 'lucide-react'
 
-const PLANS = ['free', 'free_trial', 'individual', 'business', 'business_pro', 'enterprise']
+const PLANS = ['free', 'individual', 'business', 'business_pro', 'enterprise']
 const COUNTRIES = ['Nigeria', 'Kenya', 'Ghana', 'USA', 'UK']
 const CONFIRM_THRESHOLD = 50
 

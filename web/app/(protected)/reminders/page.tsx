@@ -16,6 +16,7 @@ import { formatDate } from '@/lib/utils'
 import { Plus, Bell, CheckCircle, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { canUseAutomatedReminders } from '@/lib/plans'
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'One time' },
@@ -58,6 +59,7 @@ export default function RemindersPage() {
 
   const { orgId } = useViewingContext()
   const [reminders, setReminders] = useState<Reminder[]>([])
+  const [plan, setPlan] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -71,13 +73,12 @@ export default function RemindersPage() {
   useEffect(() => {
     if (!orgId) return
     async function load() {
-      const { data } = await supabase
-        .from('reminders')
-        .select('*')
-        .eq('org_id', orgId)
-        .eq('status', 'active')
-        .order('due_date', { ascending: true })
+      const [{ data }, { data: org }] = await Promise.all([
+        supabase.from('reminders').select('*').eq('org_id', orgId).eq('status', 'active').order('due_date', { ascending: true }),
+        supabase.from('organizations').select('plan').eq('id', orgId).single(),
+      ])
       setReminders((data as Reminder[]) ?? [])
+      setPlan(org?.plan ?? null)
       setLoading(false)
     }
     load()
@@ -85,6 +86,10 @@ export default function RemindersPage() {
 
   async function handleAdd() {
     if (!orgId || !form.title.trim() || !form.due_date) return
+    if (!canUseAutomatedReminders(plan)) {
+      toast.error('Automated reminders aren\'t available on the Free plan. Upgrade to unlock them.')
+      return
+    }
     setSaving(true)
     const { data, error } = await supabase.from('reminders').insert({
       org_id: orgId,

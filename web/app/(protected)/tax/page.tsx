@@ -27,11 +27,12 @@ import {
 } from '@/lib/tax'
 import { Landmark, Calculator, ScrollText, Bell, ArrowRight, Plus, TrendingDown, TrendingUp, Lock } from 'lucide-react'
 import { toast } from 'sonner'
-import { canUseAdvancedTaxHub } from '@/lib/plans'
+import { canUseAdvancedTaxHub, canUseTaxHub } from '@/lib/plans'
 
-// Advanced Tax Hub (Business Pro/Enterprise/free_trial) unlocks quarterly
-// and yearly reporting periods — Basic tiers (Individual/Business) are
-// capped to month-level periods, per the ticket's tier differentiation.
+// Advanced Tax Hub (Business Pro/Enterprise) unlocks quarterly and yearly
+// reporting periods — Basic tiers (Individual/Business Starter) are capped
+// to month-level periods. Free's Tax Analysis is fully inactive — see the
+// full-page lock below, not just a period restriction.
 const ADVANCED_ONLY_PERIODS: TaxPeriodKey[] = ['this_quarter', 'this_year']
 
 const RECURRENCE_OPTIONS = [
@@ -187,6 +188,28 @@ export default function TaxHubPage() {
   }
 
   if (loading) return <div className="text-sm text-gray-400 py-12 text-center">Loading…</div>
+
+  if (!canUseTaxHub(plan)) {
+    return (
+      <div className="max-w-3xl">
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Lock size={28} className="mx-auto text-gray-300 mb-3" />
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Tax Hub is a paid feature</h2>
+            <p className="text-sm text-gray-500 mb-5 max-w-sm mx-auto">
+              Track and estimate your tax liability by upgrading to Individual or above.
+            </p>
+            <Link
+              href="/settings/subscription"
+              className="inline-block text-sm font-semibold px-5 py-2.5 rounded-lg bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors"
+            >
+              View plans
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 max-w-3xl">

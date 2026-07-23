@@ -43,9 +43,12 @@ export async function POST(req: NextRequest) {
     .eq('id', org_id)
     .single()
 
-  // Business/Business Pro (and Enterprise) are never headcount-gated —
-  // staffLimitFor returns -1 for them, which the check below treats as
-  // unlimited. Only Free/Individual (staffLimit 1) actually block invites.
+  // -1 = unlimited (Business Pro/Enterprise). 0 = cannot invite ANY team
+  // member at all (Free/Individual/Business Starter — this is Business
+  // Pro's defining upsell, not a headcount cap to raise). Any other
+  // positive number is a real cap. The old `slotLimit > 0` check treated 0
+  // as "no limit" (falsy), which would have silently let Business Starter
+  // invite unlimited staff — fixed to explicitly compare against -1.
   const slotLimit = staffLimitFor(org?.plan)
 
   // Count current active non-owner members
@@ -56,8 +59,8 @@ export async function POST(req: NextRequest) {
     .neq('role', 'owner')
     .is('removed_at', null)
 
-  if (slotLimit > 0 && (currentCount ?? 0) >= slotLimit) {
-    return NextResponse.json({ error: 'Team slot limit reached. Upgrade your plan.', upgradeRequired: true }, { status: 403 })
+  if (slotLimit !== -1 && (currentCount ?? 0) >= slotLimit) {
+    return NextResponse.json({ error: 'Team invites aren\'t available on your current plan. Upgrade to Business Pro to add team members.', upgradeRequired: true }, { status: 403 })
   }
 
   const { contact, contactType, role, canWhatsapp, canClients, canExport } = await req.json()

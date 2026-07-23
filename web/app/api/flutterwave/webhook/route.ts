@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
         await admin.from('organizations').update({
           plan: planId,
           paystack_subscription_status: 'active',
-          receipt_limit: config.receiptLimit,
+          receipt_limit: config.scanLimit,
           client_limit: config.clientLimit,
         }).eq('id', orgId)
 
