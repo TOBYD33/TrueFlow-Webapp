@@ -34,6 +34,18 @@ function formatPrice(monthlyNgn: number, cycle: BillingCycle): string {
   return `₦${price.toLocaleString('en-NG')}${suffix}`
 }
 
+// Split into amount + suffix, rendered as two separately-sized spans — a
+// single unbroken string like "₦13,500/quarter" has no spaces for the
+// browser to wrap at, so on a narrow card it silently overflows the
+// border instead of wrapping.
+function formatPriceParts(monthlyNgn: number, cycle: BillingCycle): { amount: string; suffix: string } {
+  if (monthlyNgn === -1) return { amount: 'Custom', suffix: '' }
+  if (monthlyNgn === 0) return { amount: '₦0', suffix: '' }
+  const price = priceForCycle(monthlyNgn, cycle)
+  const suffix = cycle === 'quarterly' ? '/quarter' : cycle === 'yearly' ? '/year' : '/month'
+  return { amount: `₦${price.toLocaleString('en-NG')}`, suffix }
+}
+
 function planFeatureRows(id: PlanId): { label: string; value: string; ok: boolean }[] {
   const c = PLAN_CONFIG[id]
   return [
@@ -92,7 +104,7 @@ function PlanCard({ id, cycle }: { id: PlanId; cycle: BillingCycle }) {
   const c = PLAN_CONFIG[id]
   return (
     <div
-      className={`rounded-2xl border p-8 flex flex-col relative ${
+      className={`rounded-2xl border p-6 sm:p-8 flex flex-col relative ${
         c.mostPopular ? 'border-[#6C63FF] shadow-xl bg-white' : 'bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow'
       }`}
     >
@@ -104,9 +116,12 @@ function PlanCard({ id, cycle }: { id: PlanId; cycle: BillingCycle }) {
           Most Popular
         </span>
       )}
-      <h3 className="text-lg font-bold text-gray-900 mb-1">{c.displayLabel}</h3>
+      <h3 className="text-lg font-bold text-gray-900 mb-1 break-words">{c.displayLabel}</h3>
       <p className="text-sm text-gray-500 mb-5 leading-relaxed">{c.tagline}</p>
-      <p className="text-3xl font-bold text-gray-900 mb-7">{formatPrice(c.monthlyNgn, cycle)}</p>
+      <p className="text-gray-900 font-bold mb-7 flex items-baseline gap-1.5 flex-wrap">
+        <span className="text-3xl">{formatPriceParts(c.monthlyNgn, cycle).amount}</span>
+        <span className="text-sm font-medium text-gray-400">{formatPriceParts(c.monthlyNgn, cycle).suffix}</span>
+      </p>
       <div className="space-y-3.5 mb-8 flex-1">
         {planFeatureRows(id).map(row => (
           <div key={row.label} className="flex items-start justify-between gap-3 text-sm">
@@ -120,10 +135,10 @@ function PlanCard({ id, cycle }: { id: PlanId; cycle: BillingCycle }) {
       </div>
       <Link
         href="/signup"
-        className="block text-center text-sm font-semibold px-5 py-3 rounded-lg text-white transition-colors"
+        className="block text-center text-sm font-semibold px-5 py-3 rounded-lg text-white transition-colors truncate"
         style={{ background: c.mostPopular ? BRAND.mint : BRAND.black }}
       >
-        {c.monthlyNgn === 0 ? 'Get started free' : `Get ${c.displayLabel}`}
+        {c.monthlyNgn === 0 ? 'Get started free' : `Get ${c.label}`}
       </Link>
     </div>
   )
@@ -134,7 +149,7 @@ function PlanCard({ id, cycle }: { id: PlanId; cycle: BillingCycle }) {
 // four tiers do.
 function EnterpriseCard() {
   return (
-    <div className="rounded-2xl border border-[#6C63FF]/30 bg-white p-8 max-w-2xl mx-auto">
+    <div className="rounded-2xl border border-[#6C63FF]/30 bg-white p-6 sm:p-8 max-w-2xl mx-auto">
       <div className="flex items-start gap-3 mb-4">
         <div className="w-10 h-10 rounded-full bg-[#6C63FF]/10 flex items-center justify-center shrink-0">
           <Sparkles size={18} style={{ color: BRAND.violet }} />
@@ -193,16 +208,16 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen" style={{ background: BRAND.cloud }}>
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold" style={{ color: BRAND.violet }}>TrueFlow</Link>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          <Link href="/" className="text-xl font-bold shrink-0" style={{ color: BRAND.violet }}>TrueFlow</Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link href="/login" className="hidden sm:inline text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
               Sign in
             </Link>
             <Link
               href="/signup"
-              className="text-sm font-semibold px-4 py-2 rounded-lg text-white transition-colors"
+              className="text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg text-white transition-colors whitespace-nowrap"
               style={{ background: BRAND.violet }}
             >
               Get started free
@@ -211,21 +226,21 @@ export default function PricingPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-14">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         {/* Hero */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Simple pricing for all your needs</h1>
-          <p className="text-lg text-gray-500 max-w-xl mx-auto">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">Simple pricing for all your needs</h1>
+          <p className="text-base sm:text-lg text-gray-500 max-w-xl mx-auto px-2">
             Start for free, upgrade when you love it — no card required to try. All prices in NGN.
           </p>
         </div>
 
-        <div className="flex justify-center mb-10">
+        <div className="flex justify-center mb-10 px-2">
           <BillingToggle cycle={cycle} onChange={setCycle} />
         </div>
 
         {/* Free / Individual / Business / Business Pro — one row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-8 mb-8">
           <PlanCard id="free" cycle={cycle} />
           <PlanCard id="individual" cycle={cycle} />
           <PlanCard id="business" cycle={cycle} />

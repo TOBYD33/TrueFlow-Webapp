@@ -110,6 +110,19 @@ function formatPrice(monthlyNgn: number, cycle: BillingCycle): string {
   return `₦${price.toLocaleString('en-NG')}${suffix}`
 }
 
+// Split into amount + suffix, rendered as two separately-sized spans — a
+// single unbroken string like "₦13,500/quarter" has no spaces for the
+// browser to wrap at, so on a narrow card it silently overflows the
+// border instead of wrapping. Splitting it also reads closer to the
+// reference style ("$12 /per month").
+function formatPriceParts(monthlyNgn: number, cycle: BillingCycle): { amount: string; suffix: string } {
+  if (monthlyNgn === -1) return { amount: 'Custom', suffix: '' }
+  if (monthlyNgn === 0) return { amount: '₦0', suffix: '' }
+  const price = priceForCycle(monthlyNgn, cycle)
+  const suffix = cycle === 'quarterly' ? '/quarter' : cycle === 'yearly' ? '/year' : '/month'
+  return { amount: `₦${price.toLocaleString('en-NG')}`, suffix }
+}
+
 // Feature row values, human-readable per the ticket's Active/Inactive/Basic/
 // Advanced/count language — not a generic numeric limit table.
 function planFeatureRows(id: PlanId): { label: string; value: string; ok: boolean }[] {
@@ -179,7 +192,7 @@ function PlanCard({
 
   return (
     <div
-      className={`rounded-2xl border p-7 flex flex-col relative ${
+      className={`rounded-2xl border p-6 sm:p-7 flex flex-col relative ${
         isCurrent ? 'border-[#00D4AA]/60 bg-[#00D4AA]/5' : c.mostPopular ? 'border-[#6C63FF] bg-white shadow-md' : 'border-gray-200 bg-white'
       }`}
     >
@@ -188,12 +201,15 @@ function PlanCard({
           Most Popular
         </span>
       )}
-      <div className="flex items-start justify-between mb-1.5">
-        <p className="font-semibold text-base text-gray-900">{c.displayLabel}</p>
+      <div className="flex items-start justify-between mb-1.5 gap-2">
+        <p className="font-semibold text-base text-gray-900 break-words">{c.displayLabel}</p>
         {isCurrent && <Check size={15} className="text-[#00A88A] mt-0.5 flex-shrink-0" />}
       </div>
       <p className="text-xs text-gray-500 mb-5 leading-relaxed">{c.tagline}</p>
-      <p className="text-[#00A88A] font-bold text-2xl mb-6">{formatPrice(c.monthlyNgn, cycle)}</p>
+      <p className="text-[#00A88A] font-bold mb-6 flex items-baseline gap-1 flex-wrap">
+        <span className="text-2xl">{formatPriceParts(c.monthlyNgn, cycle).amount}</span>
+        <span className="text-sm font-medium text-[#00A88A]/70">{formatPriceParts(c.monthlyNgn, cycle).suffix}</span>
+      </p>
       <div className="space-y-3.5 mb-7 flex-1">
         {planFeatureRows(id).map(row => (
           <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
@@ -209,9 +225,9 @@ function PlanCard({
         <button
           onClick={() => onUpgrade(id)}
           disabled={upgrading === id}
-          className="block w-full text-center text-sm font-semibold h-10 leading-10 rounded-lg bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60"
+          className="block w-full text-center text-sm font-semibold h-10 leading-10 rounded-lg bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60 truncate px-2"
         >
-          {upgrading === id ? 'Redirecting…' : `Get ${c.displayLabel}`}
+          {upgrading === id ? 'Redirecting…' : `Get ${c.label}`}
         </button>
       )}
       {!isCurrent && id === 'free' && (
@@ -415,7 +431,7 @@ export default function SubscriptionPage() {
 
         <div className="space-y-8">
           {/* Free / Individual / Business / Business Pro — one row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-8">
             <PlanCard id="free" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
             <PlanCard id="individual" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
             <PlanCard id="business" plan={plan} cycle={cycle} upgrading={upgrading} onUpgrade={handleUpgrade} />
