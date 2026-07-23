@@ -42,10 +42,24 @@ interface ThemeValue {
 
 const ThemeContext = createContext<ThemeValue>({ dark: false, setDark: () => {} })
 
+const STORAGE_KEY = 'trueflow-admin-theme'
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Light mode is the default. State lives in the persistent (protected)
-  // layout shell, so it survives client-side navigation within a session.
-  const [dark, setDark] = useState(false)
+  // Light mode is the default, but the choice is persisted to localStorage —
+  // any admin page that does a plain <form method="GET"> search (a real
+  // browser navigation, not a client-side transition) fully remounts this
+  // provider, and without persistence that silently reset dark mode back to
+  // light every time. Reading synchronously in useState's initializer (not
+  // an effect) avoids a flash of the wrong theme on first paint.
+  const [dark, setDarkState] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(STORAGE_KEY) === 'dark'
+  })
+
+  const setDark = (d: boolean) => {
+    setDarkState(d)
+    window.localStorage.setItem(STORAGE_KEY, d ? 'dark' : 'light')
+  }
 
   // The app's CSS uses class-based dark mode (`.dark` on <html> flips the
   // shadcn tokens: --background, --card, --card-foreground, etc.). Without

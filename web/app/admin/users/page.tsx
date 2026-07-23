@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { PlanBadge, StatusBadge } from '@/components/shared/AdminBadge'
+import { AdminSearchInput } from '@/components/shared/AdminSearchInput'
 
 const PLACEHOLDER_BUSINESS_NAME = 'My Business'
 
@@ -110,14 +111,7 @@ export default async function AdminUsersPage({
       </div>
 
       {/* Search */}
-      <form method="GET">
-        <input
-          name="q"
-          defaultValue={q ?? ''}
-          placeholder="Search by name, phone or org…"
-          className="w-full sm:w-80 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-        />
-      </form>
+      <AdminSearchInput placeholder="Search by name, phone or org…" />
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">

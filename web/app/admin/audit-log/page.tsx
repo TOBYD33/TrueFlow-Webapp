@@ -2,7 +2,9 @@
 // Searchable list of all admin_audit_log entries, newest first.
 
 import { createClient } from '@supabase/supabase-js'
+import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { AdminSearchInput } from '@/components/shared/AdminSearchInput'
 
 function getAdmin() {
   return createClient(
@@ -55,30 +57,22 @@ export default async function AdminAuditLogPage({
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
-        <form method="GET" className="flex gap-2">
-          <input
-            name="q"
-            defaultValue={q ?? ''}
-            placeholder="Search actions or details…"
-            className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-          />
-          {action && <input type="hidden" name="action" value={action} />}
-        </form>
+        <AdminSearchInput placeholder="Search actions or details…" />
         <div className="flex gap-1.5 flex-wrap">
-          <a
+          <Link
             href="/admin/audit-log"
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!action ? 'bg-violet-900/60 text-violet-300' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
           >
             All
-          </a>
+          </Link>
           {uniqueActions.map(a => (
-            <a
+            <Link
               key={a}
               href={`/admin/audit-log?action=${a}`}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${action === a ? 'bg-violet-900/60 text-violet-300' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
             >
               {a}
-            </a>
+            </Link>
           ))}
         </div>
       </div>
