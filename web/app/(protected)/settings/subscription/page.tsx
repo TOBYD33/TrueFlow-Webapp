@@ -202,19 +202,21 @@ function PlanCard({
         isCurrent ? 'border-[#00D4AA]/60 bg-[#00D4AA]/5' : c.mostPopular ? 'border-[#6C63FF] bg-white shadow-md' : 'border-gray-200 bg-white'
       }`}
     >
-      {/* Icon + title row */}
-      <div className="flex items-center justify-between mb-5 gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`w-9 h-9 rounded-full ${bg} flex items-center justify-center shrink-0`}>
-            <Icon size={16} style={{ color }} />
-          </div>
-          <p className="font-semibold text-base text-gray-900 truncate">{c.displayLabel}</p>
+      {/* Floats above the card entirely — can never collide with the icon
+          or title below it, regardless of how long the title wraps. */}
+      {c.mostPopular && !isCurrent && (
+        <span className="absolute -top-3 left-6 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-[#6C63FF]">
+          Most Popular
+        </span>
+      )}
+
+      {/* Icon + title row — title wraps onto a second line rather than
+          ever being cut off with an ellipsis. */}
+      <div className="flex items-start gap-2.5 mb-5">
+        <div className={`w-9 h-9 rounded-full ${bg} flex items-center justify-center shrink-0`}>
+          <Icon size={16} style={{ color }} />
         </div>
-        {c.mostPopular && !isCurrent && (
-          <span className="shrink-0 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-[#6C63FF]">
-            Popular
-          </span>
-        )}
+        <p className="font-semibold text-base text-gray-900 leading-snug break-words">{c.displayLabel}</p>
       </div>
 
       {/* Price */}
@@ -228,7 +230,7 @@ function PlanCard({
         <button
           onClick={() => onUpgrade(id)}
           disabled={upgrading === id}
-          className="block w-full text-center text-sm font-semibold h-10 leading-10 rounded-lg bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60 truncate px-2 mb-5"
+          className="block w-full text-center text-sm font-semibold h-10 leading-10 rounded-lg bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60 px-2 mb-5"
         >
           {upgrading === id ? 'Redirecting…' : `Get ${c.label}`}
         </button>

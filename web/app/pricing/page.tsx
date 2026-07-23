@@ -115,22 +115,24 @@ function PlanCard({ id, cycle }: { id: PlanId; cycle: BillingCycle }) {
         c.mostPopular ? 'border-[#6C63FF] shadow-xl bg-white' : 'bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow'
       }`}
     >
-      {/* Icon + title row */}
-      <div className="flex items-center justify-between mb-6 gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`w-10 h-10 rounded-full ${bg} flex items-center justify-center shrink-0`}>
-            <Icon size={18} style={{ color }} />
-          </div>
-          <h3 className="text-lg font-bold text-gray-900 truncate">{c.displayLabel}</h3>
+      {/* Floats above the card entirely — can never collide with the icon
+          or title below it, regardless of how long the title wraps. */}
+      {c.mostPopular && (
+        <span
+          className="absolute -top-3 left-6 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-white"
+          style={{ background: BRAND.violet }}
+        >
+          Most Popular
+        </span>
+      )}
+
+      {/* Icon + title row — title wraps onto a second line rather than
+          ever being cut off with an ellipsis. */}
+      <div className="flex items-start gap-2.5 mb-6">
+        <div className={`w-10 h-10 rounded-full ${bg} flex items-center justify-center shrink-0`}>
+          <Icon size={18} style={{ color }} />
         </div>
-        {c.mostPopular && (
-          <span
-            className="shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-white"
-            style={{ background: BRAND.violet }}
-          >
-            Popular
-          </span>
-        )}
+        <h3 className="text-lg font-bold text-gray-900 leading-snug break-words">{c.displayLabel}</h3>
       </div>
 
       {/* Price */}
@@ -142,7 +144,7 @@ function PlanCard({ id, cycle }: { id: PlanId; cycle: BillingCycle }) {
       {/* CTA */}
       <Link
         href="/signup"
-        className="block text-center text-sm font-semibold px-5 py-3 rounded-lg text-white transition-colors truncate mb-6"
+        className="block text-center text-sm font-semibold px-5 py-3 rounded-lg text-white transition-colors mb-6"
         style={{ background: c.mostPopular ? BRAND.mint : BRAND.black }}
       >
         {c.monthlyNgn === 0 ? 'Get started free' : `Get ${c.label}`}
