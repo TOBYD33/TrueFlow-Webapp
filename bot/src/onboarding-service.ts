@@ -10,12 +10,20 @@
 // State lives on whatsapp_sessions.onboarding_step:
 //   'awaiting_name' -> 'awaiting_type' -> ['awaiting_business_name' ->]
 //   'awaiting_first_action' -> null (done)
+//
+// 'nudge_business_name' is a separate, lighter-weight step used only by
+// nudgeMissingBusinessNames() below, for orgs that already finished
+// onboarding long ago but got stuck on the placeholder name (created
+// before the awaiting_business_name step existed). It captures the same
+// answer but never re-enters the real onboarding flow or re-fires
+// sendPostOnboardingFollowUps — that would resend the magic-link/email
+// prompts to someone who already has an established account.
 
 import crypto from 'crypto'
 import { supabase } from './supabase'
 import { sendWhatsAppMessage } from './twilio-sender'
 
-export type OnboardingStep = 'awaiting_name' | 'awaiting_type' | 'awaiting_business_name' | 'awaiting_first_action'
+export type OnboardingStep = 'awaiting_name' | 'awaiting_type' | 'awaiting_business_name' | 'awaiting_first_action' | 'nudge_business_name'
 
 export interface OnboardingResult {
   reply: string | null   // what to send back; null when not handled here
@@ -82,6 +90,18 @@ export async function handleOnboardingReply(
       step,
       reply: `Nice to meet you, ${name}! Quick one, is this for your business, your family, or just you?`,
     }
+  }
+
+  if (step === 'nudge_business_name') {
+    if (hasImage || !messageText.trim()) {
+      return { handled: true, step, reply: 'What should I call your business? (just the name is fine)' }
+    }
+    const businessName = messageText.trim().slice(0, 120)
+
+    await supabase.from('organizations').update({ name: businessName }).eq('id', orgId)
+    await supabase.from('whatsapp_sessions').update({ onboarding_step: null }).eq('phone_number', phoneNumber)
+
+    return { handled: true, step, reply: `${businessName} ✅ Thanks — updated!` }
   }
 
   if (step === 'awaiting_business_name') {
@@ -168,6 +188,57 @@ async function generateMagicToken(userId: string): Promise<string> {
     expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
   })
   return token
+}
+
+// ── Backfill nudge: orgs stuck on the placeholder business name ──────────
+// awaiting_business_name capture only exists going forward — orgs created
+// before that step shipped (or that somehow slipped through it) are stuck
+// with organizations.name === 'My Business' forever, since nothing else
+// ever prompts for it. Run daily by scheduler.ts: find sme-type orgs still
+// on the placeholder that haven't been nudged yet, ask once via WhatsApp,
+// and reuse the exact same awaiting_business_name capture step onboarding
+// already has — the next message they send is treated as their answer.
+const PLACEHOLDER_BUSINESS_NAME = 'My Business'
+
+export async function nudgeMissingBusinessNames(): Promise<void> {
+  const { data: orgs, error } = await supabase
+    .from('organizations')
+    .select('id, org_members(whatsapp_number, role, user_id)')
+    .eq('type', 'sme')
+    .eq('name', PLACEHOLDER_BUSINESS_NAME)
+    .is('business_name_nudge_sent_at', null)
+
+  if (error) { console.error('nudgeMissingBusinessNames: query failed:', error); return }
+
+  for (const org of orgs || []) {
+    try {
+      const owner = (org as any).org_members?.find((m: any) => m.role === 'owner')
+      if (!owner?.whatsapp_number) continue
+
+      // Don't hijack someone mid-onboarding or mid another conversation flow
+      const { data: session } = await supabase
+        .from('whatsapp_sessions')
+        .select('onboarding_step, merge_state, setup_state')
+        .eq('phone_number', owner.whatsapp_number)
+        .maybeSingle()
+      if (session?.onboarding_step || session?.merge_state || session?.setup_state) continue
+
+      await sendWhatsAppMessage(
+        owner.whatsapp_number,
+        `Quick one — I still don't have a name for your business! What should I call it?`
+      )
+      await supabase
+        .from('whatsapp_sessions')
+        .update({ onboarding_step: 'nudge_business_name' })
+        .eq('phone_number', owner.whatsapp_number)
+      await supabase
+        .from('organizations')
+        .update({ business_name_nudge_sent_at: new Date().toISOString() })
+        .eq('id', (org as any).id)
+    } catch (err) {
+      console.error(`nudgeMissingBusinessNames: failed for org ${(org as any).id}:`, err)
+    }
+  }
 }
 
 export async function sendPostOnboardingFollowUps(phoneNumber: string, userId: string): Promise<void> {

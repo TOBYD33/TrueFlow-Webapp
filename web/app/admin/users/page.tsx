@@ -4,6 +4,9 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { PlanBadge, StatusBadge } from '@/components/shared/AdminBadge'
+
+const PLACEHOLDER_BUSINESS_NAME = 'My Business'
 
 function getAdmin() {
   return createClient(
@@ -21,6 +24,7 @@ interface UserRow {
   created_at: string
   org_id: string | null
   org_name: string | null
+  org_type: string | null
   plan: string | null
   status: string | null
 }
@@ -40,7 +44,7 @@ export default async function AdminUsersPage({
       user_id,
       org_id,
       profiles!inner(id, full_name, phone, created_at),
-      organizations!inner(id, name, plan, status)
+      organizations!inner(id, name, type, plan, status)
     `)
     .order('profiles(created_at)', { ascending: false })
     .limit(200)
@@ -64,6 +68,7 @@ export default async function AdminUsersPage({
     created_at: m.profiles?.created_at ?? '',
     org_id: m.org_id,
     org_name: m.organizations?.name ?? null,
+    org_type: m.organizations?.type ?? null,
     plan: m.organizations?.plan ?? null,
     status: m.organizations?.status ?? 'active',
   }))
@@ -79,6 +84,7 @@ export default async function AdminUsersPage({
         created_at: (p as any).created_at ?? '',
         org_id: null,
         org_name: null,
+        org_type: null,
         plan: null,
         status: null,
       })
@@ -138,20 +144,26 @@ export default async function AdminUsersPage({
                     <p className="font-medium text-white">{user.full_name ?? '—'}</p>
                     <p className="text-xs text-gray-500 font-mono">{user.phone ?? '—'}</p>
                   </td>
-                  <td className="px-4 py-3 text-gray-300">{user.org_name ?? <span className="text-gray-600">No org</span>}</td>
-                  <td className="px-4 py-3">
-                    {user.plan ? (
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                        user.plan === 'free' ? 'bg-gray-700 text-gray-300' : 'bg-violet-900/60 text-violet-300'
-                      }`}>{user.plan}</span>
-                    ) : <span className="text-gray-600">—</span>}
+                  <td className="px-4 py-3 text-gray-300">
+                    {user.org_name ? (
+                      <>
+                        {user.org_name}
+                        {user.org_type === 'sme' && user.org_name === PLACEHOLDER_BUSINESS_NAME && (
+                          <span
+                            className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold align-middle"
+                            style={{ background: 'rgba(255,181,69,0.28)', color: '#8A5A00' }}
+                          >
+                            name not set
+                          </span>
+                        )}
+                      </>
+                    ) : <span className="text-gray-600">No org</span>}
                   </td>
                   <td className="px-4 py-3">
-                    {user.status === 'suspended' ? (
-                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-900/50 text-red-400">suspended</span>
-                    ) : user.status ? (
-                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-900/40 text-emerald-400">active</span>
-                    ) : <span className="text-gray-600">—</span>}
+                    {user.plan ? <PlanBadge plan={user.plan} /> : <span className="text-gray-600">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={user.status} />
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{user.created_at ? formatDate(user.created_at) : '—'}</td>
                   <td className="px-4 py-3 text-right">

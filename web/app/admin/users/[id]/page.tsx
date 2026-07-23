@@ -10,6 +10,9 @@ import { AdminUserActions } from './AdminUserActions'
 import { AdminEditErase } from './AdminEditErase'
 import { AdminEraseUser } from './AdminEraseUser'
 import { ImpersonateButton } from './ImpersonateButton'
+import { PlanBadge, StatusBadge } from '@/components/shared/AdminBadge'
+
+const PLACEHOLDER_BUSINESS_NAME = 'My Business'
 
 function getAdmin() {
   return createClient(
@@ -136,18 +139,22 @@ export default async function AdminUserDetailPage({
             <span className="text-xs text-gray-600 font-mono">{org.id}</span>
           </div>
           <div className="px-5 py-2">
-            <Row label="Name" value={org.name} />
+            <Row label="Name" value={
+              <>
+                {org.name}
+                {org.type === 'sme' && org.name === PLACEHOLDER_BUSINESS_NAME && (
+                  <span
+                    className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold align-middle"
+                    style={{ background: 'rgba(255,181,69,0.28)', color: '#8A5A00' }}
+                  >
+                    name not set
+                  </span>
+                )}
+              </>
+            } />
             <Row label="Type" value={org.type} />
-            <Row label="Plan" value={
-              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                org.plan === 'free' ? 'bg-gray-700 text-gray-300' : 'bg-violet-900/60 text-violet-300'
-              }`}>{org.plan}</span>
-            } />
-            <Row label="Status" value={
-              org.status === 'suspended'
-                ? <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-900/50 text-red-400">suspended</span>
-                : <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-900/40 text-emerald-400">active</span>
-            } />
+            <Row label="Plan" value={<PlanBadge plan={org.plan} />} />
+            <Row label="Status" value={<StatusBadge status={org.status} />} />
             <Row label="Currency" value={org.currency} />
             <Row label="Role in org" value={(activeMembership as any)?.role} />
             <Row label="WhatsApp" value={(activeMembership as any)?.whatsapp_number ? <span className="font-mono">{(activeMembership as any)?.whatsapp_number}</span> : null} />
