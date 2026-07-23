@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
+import { SELF_SERVE_PLAN_IDS, PLAN_CONFIG, PlanId } from '@/lib/plans'
 
 function getAdmin() {
   return createClient(
@@ -13,22 +14,6 @@ function getAdmin() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
-}
-
-const PLAN_RECEIPT_LIMITS: Record<string, number> = {
-  free: 10, individual: -1, family: -1, freelancer: -1,
-  sme_starter: -1, agency: -1, sme_pro: -1, studio: -1, enterprise: -1,
-}
-
-const PLAN_CLIENT_LIMITS: Record<string, number> = {
-  free: 0, individual: 0, family: 0, freelancer: 10,
-  sme_starter: 10, agency: 50, sme_pro: 50, studio: -1, enterprise: -1,
-}
-
-// NGN price per plan — payment must match or exceed this to activate
-const PLAN_PRICES: Record<string, number> = {
-  individual: 2500, family: 5000, freelancer: 5000,
-  sme_starter: 7500, agency: 12000, sme_pro: 15000, studio: 25000,
 }
 
 export async function POST(req: NextRequest) {
@@ -42,8 +27,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing transaction_id or plan_id' }, { status: 400 })
     }
 
-    if (PLAN_RECEIPT_LIMITS[plan_id] === undefined) {
-      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+    if (!SELF_SERVE_PLAN_IDS.includes(plan_id as PlanId)) {
+      return NextResponse.json({ error: 'Invalid plan — this plan is not available for self-serve checkout' }, { status: 400 })
     }
 
     // Require an authenticated session
@@ -67,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     // The paid amount must cover the requested plan's price
     const paidAmount = Number(txData.amount ?? 0)
-    const requiredAmount = PLAN_PRICES[plan_id]
+    const requiredAmount = PLAN_CONFIG[plan_id as PlanId].monthlyNgn
     if (!requiredAmount || paidAmount < requiredAmount) {
       console.error(
         `verify-redirect: amount mismatch — paid ${paidAmount}, plan ${plan_id} requires ${requiredAmount}`
@@ -138,11 +123,12 @@ async function activatePlan(
   }
 
   // Activate the new plan
+  const config = PLAN_CONFIG[plan_id as PlanId]
   const { error: updateError } = await admin.from('organizations').update({
     plan: plan_id,
     paystack_subscription_status: 'active',
-    receipt_limit: PLAN_RECEIPT_LIMITS[plan_id],
-    client_limit: PLAN_CLIENT_LIMITS[plan_id] ?? 0,
+    receipt_limit: config.receiptLimit,
+    client_limit: config.clientLimit,
   }).eq('id', orgId)
 
   if (updateError) {

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { Invoice } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { canUseInvoiceBranding } from '@/lib/plans'
 
 type LineItem = { description: string; quantity: number; unit_price: number; total: number }
 
@@ -21,18 +22,21 @@ export async function GET(
 
     const { data: member } = await supabase
       .from('org_members')
-      .select('org_id, organizations(name, logo_url, currency, address, bank_account_name, bank_account_number, bank_name)')
+      .select('org_id, organizations(name, logo_url, currency, address, plan, bank_account_name, bank_account_number, bank_name)')
       .eq('user_id', user.id)
       .single()
 
     if (!member) return NextResponse.json({ error: 'No org found' }, { status: 404 })
 
     const org = member.organizations as unknown as {
-      name: string; logo_url?: string | null; currency?: string; address?: string | null
+      name: string; logo_url?: string | null; currency?: string; address?: string | null; plan?: string | null
       bank_account_name?: string | null; bank_account_number?: string | null; bank_name?: string | null
     } | null
     const hasBankDetails = !!(org?.bank_account_name && org?.bank_account_number && org?.bank_name)
     const orgName = org?.name ?? 'Your Business'
+    // Custom invoice logo/branding is a Business Pro+ feature — lower tiers
+    // still get a clean invoice, just without the uploaded logo rendered.
+    const showLogo = !!org?.logo_url && canUseInvoiceBranding(org?.plan)
 
     // Fetch profile phone for invoice header contact line
     const { data: profileData } = await supabase
@@ -133,7 +137,7 @@ export async function GET(
 
 <div class="header">
   <div>
-    ${org?.logo_url
+    ${showLogo
       ? `<div class="org-block">
            <img src="${org.logo_url}" alt="${orgName}" class="org-logo" />
            <div>

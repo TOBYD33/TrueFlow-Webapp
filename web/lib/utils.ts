@@ -44,10 +44,5 @@ export const CATEGORY_COLORS: Record<string, string> = {
   Other: '#6b7280',
 }
 
-export const PLAN_LIMITS: Record<string, number> = {
-  free: 10,
-  solo: Infinity,
-  business: Infinity,
-  pro: Infinity,
-  enterprise: Infinity,
-}
+// Plan-based limits live in lib/plans.ts (PLAN_CONFIG) — that's the single
+// source of truth for receipt/client/staff limits and tier gating now.

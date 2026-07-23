@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
+import { staffLimitFor } from '@/lib/plans'
 
 function getAdmin() {
   return createAdminClient(
@@ -13,12 +14,6 @@ function getAdmin() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
-}
-
-const SLOT_LIMITS: Record<string, number> = {
-  free: 0, individual: 0, family: 6,
-  sme_starter: 5, sme_pro: 15,
-  freelancer: 1, agency: 3, studio: 10, enterprise: 999,
 }
 
 export async function POST(req: NextRequest) {
@@ -48,8 +43,10 @@ export async function POST(req: NextRequest) {
     .eq('id', org_id)
     .single()
 
-  const plan = org?.plan ?? 'free'
-  const slotLimit = SLOT_LIMITS[plan] ?? 0
+  // Business/Business Pro (and Enterprise) are never headcount-gated —
+  // staffLimitFor returns -1 for them, which the check below treats as
+  // unlimited. Only Free/Individual (staffLimit 1) actually block invites.
+  const slotLimit = staffLimitFor(org?.plan)
 
   // Count current active non-owner members
   const { count: currentCount } = await admin

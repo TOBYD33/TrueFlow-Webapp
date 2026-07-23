@@ -3,6 +3,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { formatDate } from '@/lib/utils'
+import { resolvePlan } from '@/lib/plans'
 
 function getAdmin() {
   return createClient(
@@ -48,17 +49,19 @@ export default async function AdminStatsPage() {
     admin.from('receipts').select('*', { count: 'exact', head: true }),
   ])
 
-  // Count paying orgs (non-free)
+  // Count paying orgs (non-free) — resolvePlan buckets any deprecated plan
+  // name (e.g. 'sme_starter') the migration hasn't reached yet into its
+  // current equivalent, so it's never silently dropped from this rollup.
   const planCounts: Record<string, number> = {}
   for (const org of (planBreakdown ?? [])) {
-    const plan = (org as { plan: string }).plan ?? 'free'
+    const plan = resolvePlan((org as { plan: string }).plan)
     planCounts[plan] = (planCounts[plan] ?? 0) + 1
   }
   const payingOrgs = Object.entries(planCounts)
-    .filter(([plan]) => plan !== 'free')
+    .filter(([plan]) => plan !== 'free' && plan !== 'free_trial')
     .reduce((s, [, n]) => s + n, 0)
 
-  const PLAN_ORDER = ['free', 'individual', 'family', 'freelancer', 'sme_starter', 'agency', 'sme_pro', 'studio', 'enterprise']
+  const PLAN_ORDER = ['free', 'free_trial', 'individual', 'business', 'business_pro', 'enterprise']
 
   return (
     <div className="space-y-6 max-w-5xl">

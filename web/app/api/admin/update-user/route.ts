@@ -6,15 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, getAdminClient } from '@/lib/admin-auth'
 import { logAdminAction } from '@/lib/admin-audit'
-
-const PLAN_RECEIPT_LIMITS: Record<string, number> = {
-  free: 10, individual: -1, family: -1, freelancer: -1,
-  sme_starter: -1, agency: -1, sme_pro: -1, studio: -1, enterprise: -1,
-}
-const PLAN_CLIENT_LIMITS: Record<string, number> = {
-  free: 0, individual: 0, family: 0, freelancer: 10,
-  sme_starter: 10, agency: 50, sme_pro: 50, studio: -1, enterprise: -1,
-}
+import { PLAN_CONFIG, PlanId } from '@/lib/plans'
 
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin(['super', 'support'])
@@ -69,10 +61,11 @@ export async function POST(req: NextRequest) {
       orgUpdate.name = fields.org_name
       changes.org_name = { old: org?.name ?? null, new: fields.org_name }
     }
-    if (fields.plan !== undefined && fields.plan !== org?.plan && PLAN_RECEIPT_LIMITS[fields.plan] !== undefined) {
+    if (fields.plan !== undefined && fields.plan !== org?.plan && fields.plan in PLAN_CONFIG) {
+      const newConfig = PLAN_CONFIG[fields.plan as PlanId]
       orgUpdate.plan = fields.plan
-      orgUpdate.receipt_limit = PLAN_RECEIPT_LIMITS[fields.plan]
-      orgUpdate.client_limit = PLAN_CLIENT_LIMITS[fields.plan]
+      orgUpdate.receipt_limit = newConfig.receiptLimit
+      orgUpdate.client_limit = newConfig.clientLimit
       changes.plan = { old: org?.plan ?? null, new: fields.plan }
     }
     if (Object.keys(orgUpdate).length > 0) {

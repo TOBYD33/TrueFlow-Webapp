@@ -6,6 +6,10 @@
 import { supabase } from './supabase'
 import { UserContext } from '../types'
 
+// Mirrors web/lib/plans.ts's TRIAL_DAYS — bot and web are separate
+// deployments with no shared package (same precedent as timezone-util.ts).
+const TRIAL_DAYS = 14
+
 export async function getOrCreateUser(phoneNumber: string): Promise<UserContext | null> {
   // Look up existing session
   const { data: session, error: sessionError } = await supabase
@@ -128,14 +132,20 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     return null
   }
 
+  // Starts on the 14-day free_trial (full access, no card required) — a
+  // scheduled job (trial-service.ts's expireTrials, run daily by
+  // scheduler.ts) transitions it to 'free' if not upgraded before
+  // trial_ends_at. receipt_limit -1 here means unlimited during the trial.
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString()
   const { data: newOrg, error: orgError } = await supabase
     .from('organizations')
     .insert({
       name: 'My Business',
       type: 'sme',
       owner_id: newProfile.id,
-      plan: 'free',
-      receipt_limit: 10,
+      plan: 'free_trial',
+      trial_ends_at: trialEndsAt,
+      receipt_limit: -1,
       currency: 'NGN',
     })
     .select()

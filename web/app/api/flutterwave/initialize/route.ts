@@ -2,19 +2,25 @@
 // Starts a Flutterwave payment for the selected plan.
 // Returns { link } — frontend redirects the user to Flutterwave checkout.
 //
-// Required env vars:
+// Required env vars (NEW — the old FLW_PLAN_FAMILY/FREELANCER/SME_STARTER/
+// AGENCY/SME_PRO/STUDIO vars are no longer read; flag to the account owner
+// that new recurring "payment plans" need creating in the Flutterwave
+// dashboard for Business and Business Pro before these go live — providers
+// generally don't let you silently reprice an existing plan ID that has
+// active subscribers, so these should be new plan objects, not renamed
+// ones):
 //   FLW_SECRET_KEY          — from Flutterwave dashboard → Settings → API
-//   FLW_PLAN_INDIVIDUAL     — Flutterwave payment plan ID for each tier
-//   FLW_PLAN_FAMILY         — (create plans in Flutterwave dashboard first)
-//   FLW_PLAN_FREELANCER
-//   FLW_PLAN_SME_STARTER
-//   FLW_PLAN_AGENCY
-//   FLW_PLAN_SME_PRO
-//   FLW_PLAN_STUDIO
+//   FLW_PLAN_INDIVIDUAL     — Flutterwave payment plan ID, ₦2,500/mo
+//   FLW_PLAN_BUSINESS       — Flutterwave payment plan ID, ₦5,000/mo
+//   FLW_PLAN_BUSINESS_PRO   — Flutterwave payment plan ID, ₦10,000/mo
+//
+// Enterprise is intentionally absent — it is never self-serve checkout,
+// only manually assigned via /admin (see app/api/admin/change-plan).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
+import { SELF_SERVE_PLAN_IDS, PLAN_CONFIG as PLANS, PlanId } from '@/lib/plans'
 
 function getAdmin() {
   return createClient(
@@ -25,22 +31,18 @@ function getAdmin() {
 }
 
 // NGN amounts (not kobo — Flutterwave uses whole numbers)
-const PLAN_CONFIG: Record<string, { planId?: string; amount: number; label: string }> = {
-  individual:  { planId: process.env.FLW_PLAN_INDIVIDUAL,  amount: 2500,  label: 'Individual'  },
-  family:      { planId: process.env.FLW_PLAN_FAMILY,      amount: 5000,  label: 'Family'      },
-  freelancer:  { planId: process.env.FLW_PLAN_FREELANCER,  amount: 5000,  label: 'Freelancer'  },
-  sme_starter: { planId: process.env.FLW_PLAN_SME_STARTER, amount: 7500,  label: 'SME Starter' },
-  agency:      { planId: process.env.FLW_PLAN_AGENCY,      amount: 12000, label: 'Agency'      },
-  sme_pro:     { planId: process.env.FLW_PLAN_SME_PRO,     amount: 15000, label: 'SME Pro'     },
-  studio:      { planId: process.env.FLW_PLAN_STUDIO,      amount: 25000, label: 'Studio'      },
+const FLW_PLAN_IDS: Partial<Record<PlanId, string | undefined>> = {
+  individual: process.env.FLW_PLAN_INDIVIDUAL,
+  business: process.env.FLW_PLAN_BUSINESS,
+  business_pro: process.env.FLW_PLAN_BUSINESS_PRO,
 }
 
 export async function POST(req: NextRequest) {
   try {
     const { plan_id } = await req.json() as { plan_id: string }
 
-    if (!plan_id || !PLAN_CONFIG[plan_id]) {
-      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+    if (!plan_id || !SELF_SERVE_PLAN_IDS.includes(plan_id as PlanId)) {
+      return NextResponse.json({ error: 'Invalid plan — this plan is not available for self-serve checkout' }, { status: 400 })
     }
 
     const supabase = await createServerClient()
@@ -62,7 +64,8 @@ export async function POST(req: NextRequest) {
     // Prefer the org this user owns — staff can belong to other orgs too
     const ownRow = members.find(m => m.role === 'owner') ?? members[0]
 
-    const config = PLAN_CONFIG[plan_id]
+    const plan = plan_id as PlanId
+    const config = { planId: FLW_PLAN_IDS[plan], amount: PLANS[plan].monthlyNgn, label: PLANS[plan].label }
     const orgId = ownRow.org_id
     const customerName = profileRes.data?.full_name ?? user.email ?? 'TrueFlow User'
     const txRef = `TF-${orgId.slice(0, 8)}-${Date.now()}`

@@ -25,8 +25,14 @@ import {
   ESTIMATE_DISCLAIMER,
   formatTaxDate,
 } from '@/lib/tax'
-import { Landmark, Calculator, ScrollText, Bell, ArrowRight, Plus, TrendingDown, TrendingUp } from 'lucide-react'
+import { Landmark, Calculator, ScrollText, Bell, ArrowRight, Plus, TrendingDown, TrendingUp, Lock } from 'lucide-react'
 import { toast } from 'sonner'
+import { canUseAdvancedTaxHub } from '@/lib/plans'
+
+// Advanced Tax Hub (Business Pro/Enterprise/free_trial) unlocks quarterly
+// and yearly reporting periods — Basic tiers (Individual/Business) are
+// capped to month-level periods, per the ticket's tier differentiation.
+const ADVANCED_ONLY_PERIODS: TaxPeriodKey[] = ['this_quarter', 'this_year']
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'One time' },
@@ -53,6 +59,7 @@ export default function TaxHubPage() {
   const { orgId } = useViewingContext()
   const [loading, setLoading] = useState(true)
   const [country, setCountry] = useState<TaxCountry>('Nigeria')
+  const [plan, setPlan] = useState<string | null>(null)
   const [rates, setRates] = useState<TaxRateReference[]>([])
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -72,7 +79,7 @@ export default function TaxHubPage() {
     if (!orgId) return
     async function load() {
       const [{ data: org }, { data: rateRows }, { data: receiptRows }, { data: invoiceRows }, { data: reminderRows }] = await Promise.all([
-        supabase.from('organizations').select('default_tax_country, currency').eq('id', orgId).single(),
+        supabase.from('organizations').select('default_tax_country, currency, plan').eq('id', orgId).single(),
         supabase.from('tax_rate_reference').select('*').order('country').order('tax_type'),
         supabase.from('receipts').select('*').eq('org_id', orgId),
         supabase.from('invoices').select('*').eq('org_id', orgId),
@@ -80,6 +87,7 @@ export default function TaxHubPage() {
       ])
 
       if (org?.default_tax_country) setCountry(org.default_tax_country as TaxCountry)
+      if (org?.plan) setPlan(org.plan)
       setRates((rateRows as TaxRateReference[]) ?? [])
       setReceipts((receiptRows as Receipt[]) ?? [])
       setInvoices((invoiceRows as Invoice[]) ?? [])
@@ -370,10 +378,30 @@ export default function TaxHubPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-500">Period</label>
-                <Select value={estimatePeriod} onValueChange={v => v && setEstimatePeriod(v as TaxPeriodKey)}>
+                <Select
+                  value={estimatePeriod}
+                  onValueChange={v => {
+                    if (!v) return
+                    if (ADVANCED_ONLY_PERIODS.includes(v as TaxPeriodKey) && !canUseAdvancedTaxHub(plan)) {
+                      toast.error('Quarterly and yearly reporting is available on Business Pro and above.')
+                      return
+                    }
+                    setEstimatePeriod(v as TaxPeriodKey)
+                  }}
+                >
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {PERIOD_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    {PERIOD_OPTIONS.map(o => {
+                      const locked = ADVANCED_ONLY_PERIODS.includes(o.value) && !canUseAdvancedTaxHub(plan)
+                      return (
+                        <SelectItem key={o.value} value={o.value} disabled={locked}>
+                          <span className="flex items-center gap-1.5">
+                            {o.label}
+                            {locked && <Lock size={11} className="text-gray-400" />}
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
               </div>

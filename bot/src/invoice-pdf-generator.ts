@@ -9,6 +9,21 @@
 import puppeteer from 'puppeteer'
 import { supabase } from './supabase'
 
+// Mirrors web/lib/plans.ts's invoiceBranding flag — bot and web are separate
+// deployments with no shared package (same precedent as timezone-util.ts),
+// so this is intentionally duplicated. Only Business Pro/Enterprise (and
+// the free_trial preview state) get the uploaded logo on generated
+// invoices; deprecated plan names are treated the same as web's
+// resolvePlan() would map them.
+const INVOICE_BRANDING_PLANS = new Set([
+  'business_pro', 'enterprise', 'free_trial',
+  // deprecated names that resolve to business_pro
+  'agency', 'sme_pro', 'studio',
+])
+function canUseInvoiceBranding(plan: string | null | undefined): boolean {
+  return !!plan && INVOICE_BRANDING_PLANS.has(plan)
+}
+
 interface InvoicePdfData {
   orgName: string
   orgAddress?: string | null
@@ -123,7 +138,7 @@ function buildInvoiceHtml(d: InvoicePdfData): string {
 export async function generateInvoicePdf(invoiceId: string): Promise<string | null> {
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .select('*, organizations(name, currency, address, logo_url, bank_account_name, bank_account_number, bank_name)')
+    .select('*, organizations(name, currency, address, logo_url, plan, bank_account_name, bank_account_number, bank_name)')
     .eq('id', invoiceId)
     .single()
 
@@ -137,7 +152,7 @@ export async function generateInvoicePdf(invoiceId: string): Promise<string | nu
   const html = buildInvoiceHtml({
     orgName: org?.name || 'Your Business',
     orgAddress: org?.address,
-    orgLogoUrl: org?.logo_url,
+    orgLogoUrl: canUseInvoiceBranding(org?.plan) ? org?.logo_url : null,
     invoiceNumber: invoice.invoice_number,
     clientName: invoice.client_name,
     lineItems: invoice.line_items || [],

@@ -7,11 +7,7 @@
 
 import { NextResponse } from 'next/server'
 import { requireAdmin, getAdminClient } from '@/lib/admin-auth'
-
-const PLAN_PRICES: Record<string, number> = {
-  free: 0, individual: 2500, family: 5000, freelancer: 5000,
-  sme_starter: 7500, agency: 12000, sme_pro: 15000, studio: 25000, enterprise: 0,
-}
+import { PLAN_CONFIG, resolvePlan } from '@/lib/plans'
 
 export async function GET() {
   const auth = await requireAdmin(['super', 'finance', 'readonly'])
@@ -74,13 +70,22 @@ export async function GET() {
     }
   })
 
-  // Plan distribution: org count + implied monthly revenue per tier
+  // Plan distribution: org count + implied monthly revenue per tier.
+  // resolvePlan() buckets any not-yet-migrated deprecated plan name (e.g.
+  // 'sme_starter') into its current equivalent so revenue isn't silently
+  // undercounted for orgs the migration hasn't reached.
   const planCounts: Record<string, number> = {}
   for (const o of (orgsRes.data ?? []) as any[]) {
-    planCounts[o.plan] = (planCounts[o.plan] ?? 0) + 1
+    const plan = resolvePlan(o.plan)
+    planCounts[plan] = (planCounts[plan] ?? 0) + 1
   }
   const plans = Object.entries(planCounts)
-    .map(([plan, count]) => ({ plan, count, monthlyRevenue: count * (PLAN_PRICES[plan] ?? 0) }))
+    .map(([plan, count]) => {
+      const price = PLAN_CONFIG[plan as keyof typeof PLAN_CONFIG]?.monthlyNgn ?? 0
+      // Enterprise's -1 means "Custom" (no fixed price), never a real
+      // negative revenue contribution — treat as 0 for this rollup.
+      return { plan, count, monthlyRevenue: count * Math.max(price, 0) }
+    })
     .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
 
   const andreaTotal = ((andreaRes.data ?? []) as any[]).reduce((s, r) => s + Number(r.amount), 0)

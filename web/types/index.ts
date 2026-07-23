@@ -1,7 +1,12 @@
 // types/index.ts
 // Shared TypeScript types for the TrueFlow web app
 
-export type Plan = 'free' | 'solo' | 'business' | 'pro' | 'enterprise'
+// lib/plans.ts's PlanId is now the canonical plan definition; this used to
+// be a separate, unused enum ('solo'/'pro') that never matched the real
+// plan names used by team/invite, admin/change-plan, or the Flutterwave
+// routes. Re-exported as `Plan` for existing call sites.
+import type { PlanId } from '@/lib/plans'
+export type Plan = PlanId
 export type Role = 'owner' | 'admin' | 'staff' | 'accountant'
 export type UploadedVia = 'whatsapp' | 'app' | 'web'
 export type ReceiptCategory =
@@ -29,6 +34,7 @@ export interface Organization {
   type: string
   owner_id: string
   plan: Plan
+  trial_ends_at?: string | null
   receipt_limit: number
   currency: string
   default_tax_country: string

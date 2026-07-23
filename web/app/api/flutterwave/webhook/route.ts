@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { SELF_SERVE_PLAN_IDS, PLAN_CONFIG, PlanId } from '@/lib/plans'
 
 function getAdmin() {
   return createClient(
@@ -16,22 +17,6 @@ function getAdmin() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
-}
-
-const PLAN_RECEIPT_LIMITS: Record<string, number> = {
-  free: 10, individual: -1, family: -1, freelancer: -1,
-  sme_starter: -1, agency: -1, sme_pro: -1, studio: -1, enterprise: -1,
-}
-
-const PLAN_CLIENT_LIMITS: Record<string, number> = {
-  free: 0, individual: 0, family: 0, freelancer: 10,
-  sme_starter: 10, agency: 50, sme_pro: 50, studio: -1, enterprise: -1,
-}
-
-const PLAN_LABELS: Record<string, string> = {
-  individual: 'Individual', family: 'Family', freelancer: 'Freelancer',
-  sme_starter: 'SME Starter', agency: 'Agency', sme_pro: 'SME Pro',
-  studio: 'Studio', enterprise: 'Enterprise',
 }
 
 async function verifyTransaction(transactionId: string): Promise<Record<string, unknown> | null> {
@@ -68,7 +53,7 @@ async function sendAndreaWhatsApp(
     const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER ?? 'whatsapp:+14155238886'
     if (!twilioSid || !twilioToken) return
 
-    const planLabel = PLAN_LABELS[planId] ?? planId
+    const planLabel = PLAN_CONFIG[planId as PlanId]?.label ?? planId
     const fmt = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
     const body =
@@ -143,12 +128,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ received: true })
       }
 
-      if (orgId && planId && PLAN_RECEIPT_LIMITS[planId] !== undefined) {
+      if (orgId && planId && SELF_SERVE_PLAN_IDS.includes(planId as PlanId)) {
+        const config = PLAN_CONFIG[planId as PlanId]
         await admin.from('organizations').update({
           plan: planId,
           paystack_subscription_status: 'active',
-          receipt_limit: PLAN_RECEIPT_LIMITS[planId],
-          client_limit: PLAN_CLIENT_LIMITS[planId] ?? 0,
+          receipt_limit: config.receiptLimit,
+          client_limit: config.clientLimit,
         }).eq('id', orgId)
 
         // Flutterwave sends amount in NGN directly (not kobo)
