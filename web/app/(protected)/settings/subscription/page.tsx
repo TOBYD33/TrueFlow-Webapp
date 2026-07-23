@@ -11,7 +11,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useViewingContext } from '@/components/ViewingContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Check, X, Heart, Sparkles } from 'lucide-react'
+import { Check, X, Heart, Sparkles, Zap, User, Briefcase, Users } from 'lucide-react'
 import {
   PLAN_CONFIG, resolvePlan, PlanId, BillingCycle, priceForCycle,
   QUARTERLY_DISCOUNT_PCT, YEARLY_DISCOUNT_PCT, canUseWhatsAppAutomation, WHATSAPP_TRIAL_DAYS,
@@ -128,11 +128,7 @@ function formatPriceParts(monthlyNgn: number, cycle: BillingCycle): { amount: st
 function planFeatureRows(id: PlanId): { label: string; value: string; ok: boolean }[] {
   const c = PLAN_CONFIG[id]
   return [
-    {
-      label: 'WhatsApp Automation',
-      value: id === 'free' ? `Active (${WHATSAPP_TRIAL_DAYS}-day trial)` : 'Active',
-      ok: true,
-    },
+    { label: 'WhatsApp Automation', value: 'Active', ok: true },
     {
       label: 'Scanning (Business Card & Receipt)',
       value: c.scanLimit === -1 ? 'Active' : `${c.scanLimit}x`,
@@ -153,6 +149,14 @@ function planFeatureRows(id: PlanId): { label: string; value: string; ok: boolea
     { label: 'Custom invoice (logo/branding)', value: c.invoiceBranding ? 'Active' : 'Inactive', ok: c.invoiceBranding },
     ...(c.supportPriority ? [{ label: 'Support Priority', value: 'Active', ok: true }] : []),
   ]
+}
+
+const PLAN_ICONS: Record<PlanId, { Icon: typeof Zap; bg: string; color: string }> = {
+  free: { Icon: Zap, bg: 'bg-gray-100', color: '#6b7280' },
+  individual: { Icon: User, bg: 'bg-[#6C63FF]/10', color: '#6C63FF' },
+  business: { Icon: Briefcase, bg: 'bg-[#6C63FF]/10', color: '#6C63FF' },
+  business_pro: { Icon: Users, bg: 'bg-[#00D4AA]/10', color: '#00A88A' },
+  enterprise: { Icon: Sparkles, bg: 'bg-[#6C63FF]/10', color: '#6C63FF' },
 }
 
 function BillingToggle({ cycle, onChange }: { cycle: BillingCycle; onChange: (c: BillingCycle) => void }) {
@@ -189,6 +193,8 @@ function PlanCard({
 }) {
   const c = PLAN_CONFIG[id]
   const isCurrent = resolvePlan(plan) === id
+  const { Icon, bg, color } = PLAN_ICONS[id]
+  const price = formatPriceParts(c.monthlyNgn, cycle)
 
   return (
     <div
@@ -196,46 +202,56 @@ function PlanCard({
         isCurrent ? 'border-[#00D4AA]/60 bg-[#00D4AA]/5' : c.mostPopular ? 'border-[#6C63FF] bg-white shadow-md' : 'border-gray-200 bg-white'
       }`}
     >
-      {c.mostPopular && !isCurrent && (
-        <span className="absolute -top-3 left-6 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-[#6C63FF]">
-          Most Popular
-        </span>
-      )}
-      <div className="flex items-start justify-between mb-1.5 gap-2">
-        <p className="font-semibold text-base text-gray-900 break-words">{c.displayLabel}</p>
-        {isCurrent && <Check size={15} className="text-[#00A88A] mt-0.5 flex-shrink-0" />}
-      </div>
-      <p className="text-xs text-gray-500 mb-5 leading-relaxed">{c.tagline}</p>
-      <p className="text-[#00A88A] font-bold mb-6 flex items-baseline gap-1 flex-wrap">
-        <span className="text-2xl">{formatPriceParts(c.monthlyNgn, cycle).amount}</span>
-        <span className="text-sm font-medium text-[#00A88A]/70">{formatPriceParts(c.monthlyNgn, cycle).suffix}</span>
-      </p>
-      <div className="space-y-3.5 mb-7 flex-1">
-        {planFeatureRows(id).map(row => (
-          <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-gray-500">{row.label}</span>
-            <span className={`font-medium flex items-center gap-1.5 shrink-0 ${row.ok ? 'text-gray-700' : 'text-gray-400'}`}>
-              {row.ok ? <Check size={11} className="text-[#00A88A]" /> : <X size={11} className="text-gray-300" />}
-              {row.value}
-            </span>
+      {/* Icon + title row */}
+      <div className="flex items-center justify-between mb-5 gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`w-9 h-9 rounded-full ${bg} flex items-center justify-center shrink-0`}>
+            <Icon size={16} style={{ color }} />
           </div>
-        ))}
+          <p className="font-semibold text-base text-gray-900 truncate">{c.displayLabel}</p>
+        </div>
+        {c.mostPopular && !isCurrent && (
+          <span className="shrink-0 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-[#6C63FF]">
+            Popular
+          </span>
+        )}
       </div>
+
+      {/* Price */}
+      <p className="text-gray-900 font-bold mb-5 flex items-baseline gap-1 flex-wrap">
+        <span className="text-3xl" style={{ color }}>{price.amount}</span>
+        {price.suffix && <span className="text-sm font-medium text-gray-400">{price.suffix}</span>}
+      </p>
+
+      {/* CTA */}
       {!isCurrent && c.selfServe && (
         <button
           onClick={() => onUpgrade(id)}
           disabled={upgrading === id}
-          className="block w-full text-center text-sm font-semibold h-10 leading-10 rounded-lg bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60 truncate px-2"
+          className="block w-full text-center text-sm font-semibold h-10 leading-10 rounded-lg bg-[#6C63FF] hover:bg-[#5A52E0] text-white transition-colors disabled:opacity-60 truncate px-2 mb-5"
         >
           {upgrading === id ? 'Redirecting…' : `Get ${c.label}`}
         </button>
       )}
-      {!isCurrent && id === 'free' && (
-        <p className="text-xs text-gray-400 text-center">No card required</p>
-      )}
       {isCurrent && (
-        <p className="text-xs text-[#00A88A] font-medium text-center">✓ Current plan</p>
+        <div className="w-full text-center text-sm font-semibold h-10 leading-10 rounded-lg bg-gray-100 text-gray-500 mb-5">
+          Current plan
+        </div>
       )}
+
+      {/* Tagline */}
+      <p className="text-xs text-gray-500 mb-5 leading-relaxed">{c.tagline}</p>
+
+      {/* Feature checklist */}
+      <div className="space-y-3.5 flex-1">
+        {planFeatureRows(id).map(row => (
+          <div key={row.label} className="flex items-center gap-2 text-xs">
+            {row.ok ? <Check size={13} className="text-[#00A88A] shrink-0" /> : <X size={13} className="text-gray-300 shrink-0" />}
+            <span className={`flex-1 min-w-0 ${row.ok ? 'text-gray-700' : 'text-gray-400'}`}>{row.label}</span>
+            <span className={`shrink-0 font-medium ${row.ok ? 'text-gray-500' : 'text-gray-300'}`}>{row.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
