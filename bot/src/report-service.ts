@@ -3,7 +3,7 @@
 // Also sends weekly and monthly summaries via WhatsApp.
 
 import { supabase } from './supabase'
-import { sendWhatsAppMessage } from './twilio-sender'
+import { notifyOwner } from './notification-service'
 import { MonthlySpending, BudgetStatus } from '../types'
 
 export async function getMonthlySpending(orgId: string): Promise<MonthlySpending> {
@@ -77,7 +77,7 @@ export async function sendWeeklySummaries() {
   // Get all active orgs with WhatsApp owners
   const { data: members, error } = await supabase
     .from('org_members')
-    .select('org_id, whatsapp_number, organizations(name, currency)')
+    .select('org_id, whatsapp_number, organizations(name, currency), profiles(email)')
     .eq('role', 'owner')
     .eq('whatsapp_active', true)
     .not('whatsapp_number', 'is', null)
@@ -117,7 +117,12 @@ export async function sendWeeklySummaries() {
         lines.push(`\n⚠️ *Over budget:* ${overBudget.map(b => b.category).join(', ')}`)
       }
 
-      await sendWhatsAppMessage(member.whatsapp_number, lines.join('\n'))
+      await notifyOwner({
+        whatsappNumber: member.whatsapp_number,
+        ownerEmail: (member.profiles as any)?.email,
+        message: lines.join('\n'),
+        emailSubject: `Your weekly summary — ${org?.name || 'TrueFlow'}`,
+      })
     } catch (err) {
       console.error(`sendWeeklySummaries: failed for ${member.org_id}:`, err)
     }
@@ -131,7 +136,7 @@ export async function sendMonthlyReports() {
 
   const { data: members, error } = await supabase
     .from('org_members')
-    .select('org_id, whatsapp_number, organizations(name, currency)')
+    .select('org_id, whatsapp_number, organizations(name, currency), profiles(email)')
     .eq('role', 'owner')
     .eq('whatsapp_active', true)
     .not('whatsapp_number', 'is', null)
@@ -170,7 +175,12 @@ export async function sendMonthlyReports() {
         `\nReply "export pdf" to get a full PDF report.`
       ].join('\n')
 
-      await sendWhatsAppMessage(member.whatsapp_number, message)
+      await notifyOwner({
+        whatsappNumber: member.whatsapp_number,
+        ownerEmail: (member.profiles as any)?.email,
+        message,
+        emailSubject: `Your monthly report — ${monthName}`,
+      })
     } catch (err) {
       console.error(`sendMonthlyReports: failed for ${member.org_id}:`, err)
     }

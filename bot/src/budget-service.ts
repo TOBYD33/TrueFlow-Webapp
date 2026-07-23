@@ -2,7 +2,7 @@
 // Create, update, and read budgets. Checks budget alerts at 80% and 100%.
 
 import { supabase } from './supabase'
-import { sendWhatsAppMessage } from './twilio-sender'
+import { notifyOwner } from './notification-service'
 import { getMonthlySpending } from './report-service'
 
 export async function setBudget(params: {
@@ -75,13 +75,14 @@ export async function checkBudgetAlerts() {
 
       const { data: owner } = await supabase
         .from('org_members')
-        .select('whatsapp_number')
+        .select('whatsapp_number, profiles(email)')
         .eq('org_id', org.id)
         .eq('role', 'owner')
         .eq('whatsapp_active', true)
         .single()
 
       if (!owner?.whatsapp_number) continue
+      const ownerEmail = (owner.profiles as any)?.email
 
       for (const budget of budgets) {
         const spent = spendingMap[budget.category] || 0
@@ -90,10 +91,10 @@ export async function checkBudgetAlerts() {
         if (pct >= 100 && pct < 105) {
           // Fire once near the 100% threshold to avoid repeated alerts
           const msg = `🔴 *Budget Alert: ${budget.category}*\n\nYou've hit your ${org.currency} ${Number(budget.amount).toLocaleString()} budget for ${budget.category}. Every new expense in this category is over budget.`
-          await sendWhatsAppMessage(owner.whatsapp_number, msg)
+          await notifyOwner({ whatsappNumber: owner.whatsapp_number, ownerEmail, message: msg, emailSubject: `Budget alert: ${budget.category}` })
         } else if (pct >= 80 && pct < 85) {
           const msg = `🟡 *Budget Warning: ${budget.category}*\n\nYou've used *${Math.round(pct)}%* of your ${org.currency} ${Number(budget.amount).toLocaleString()} budget. ${org.currency} ${(Number(budget.amount) - spent).toLocaleString()} remaining.`
-          await sendWhatsAppMessage(owner.whatsapp_number, msg)
+          await notifyOwner({ whatsappNumber: owner.whatsapp_number, ownerEmail, message: msg, emailSubject: `Budget warning: ${budget.category}` })
         }
       }
     } catch (err) {

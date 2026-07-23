@@ -6,6 +6,7 @@
 
 import { supabase } from './supabase'
 import { sendWhatsAppMessage } from './twilio-sender'
+import { notifyOwner } from './notification-service'
 
 // Reminders with no explicit time fire at this time of day (WAT)
 const DEFAULT_FIRE_TIME = '08:00'
@@ -135,7 +136,7 @@ export async function fireDueReminders() {
 
   const { data: reminders, error } = await supabase
     .from('reminders')
-    .select(`*, organizations(id, name, currency, org_members(whatsapp_number, role, profiles(full_name)))`)
+    .select(`*, organizations(id, name, currency, org_members(whatsapp_number, role, profiles(full_name, email)))`)
     .lte('due_date', today)
     .eq('status', 'active')
 
@@ -162,7 +163,12 @@ export async function fireDueReminders() {
       : `🔔 ${greeting}*Reminder: ${reminder.title}*\n\nThis is due now.`
 
     try {
-      await sendWhatsAppMessage(owner.whatsapp_number, message)
+      await notifyOwner({
+        whatsappNumber: owner.whatsapp_number,
+        ownerEmail: (owner as any)?.profiles?.email,
+        message,
+        emailSubject: overdue ? `Overdue: ${reminder.title}` : `Reminder: ${reminder.title}`,
+      })
     } catch (err) {
       console.error(`fireDueReminders: send failed for reminder ${reminder.id}:`, err)
       continue // keep status active — retry next minute
@@ -187,7 +193,7 @@ export async function fireAdvanceReminders() {
 
   const { data: reminders } = await supabase
     .from('reminders')
-    .select(`*, organizations(org_members(whatsapp_number, role))`)
+    .select(`*, organizations(org_members(whatsapp_number, role, profiles(email)))`)
     .eq('due_date', targetStr)
     .eq('status', 'active')
 
@@ -196,7 +202,12 @@ export async function fireAdvanceReminders() {
     if (!owner?.whatsapp_number) continue
 
     const message = `⏰ *Upcoming in 3 days: ${reminder.title}*\n\nDue on ${reminder.due_date}. Want me to help you prepare?`
-    await sendWhatsAppMessage(owner.whatsapp_number, message)
+    await notifyOwner({
+      whatsappNumber: owner.whatsapp_number,
+      ownerEmail: (owner as any)?.profiles?.email,
+      message,
+      emailSubject: `Upcoming in 3 days: ${reminder.title}`,
+    })
   }
 }
 

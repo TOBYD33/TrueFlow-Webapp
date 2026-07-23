@@ -12,6 +12,7 @@ import { supabase } from './supabase'
 interface InvoicePdfData {
   orgName: string
   orgAddress?: string | null
+  orgLogoUrl?: string | null
   invoiceNumber: string
   clientName: string
   lineItems: { description: string; quantity: number; unit_price: number; total: number }[]
@@ -38,6 +39,8 @@ function buildInvoiceHtml(d: InvoicePdfData): string {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111827; font-size: 13px; padding: 40px; }
   .header { display: flex; justify-content: space-between; margin-bottom: 32px; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .org-logo { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; flex-shrink: 0; }
   .org-name { font-size: 20px; font-weight: 700; }
   .org-address { font-size: 12px; color: #6b7280; margin-top: 4px; }
   .invoice-word { font-size: 28px; font-weight: 700; color: #6C63FF; text-align: right; }
@@ -60,9 +63,12 @@ function buildInvoiceHtml(d: InvoicePdfData): string {
 </style></head>
 <body>
   <div class="header">
-    <div>
-      <div class="org-name">${d.orgName}</div>
-      ${d.orgAddress ? `<div class="org-address">${d.orgAddress}</div>` : ''}
+    <div class="header-left">
+      ${d.orgLogoUrl ? `<img src="${d.orgLogoUrl}" alt="${d.orgName}" class="org-logo" />` : ''}
+      <div>
+        <div class="org-name">${d.orgName}</div>
+        ${d.orgAddress ? `<div class="org-address">${d.orgAddress}</div>` : ''}
+      </div>
     </div>
     <div>
       <div class="invoice-word">INVOICE</div>
@@ -117,7 +123,7 @@ function buildInvoiceHtml(d: InvoicePdfData): string {
 export async function generateInvoicePdf(invoiceId: string): Promise<string | null> {
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .select('*, organizations(name, currency, address, bank_account_name, bank_account_number, bank_name)')
+    .select('*, organizations(name, currency, address, logo_url, bank_account_name, bank_account_number, bank_name)')
     .eq('id', invoiceId)
     .single()
 
@@ -131,6 +137,7 @@ export async function generateInvoicePdf(invoiceId: string): Promise<string | nu
   const html = buildInvoiceHtml({
     orgName: org?.name || 'Your Business',
     orgAddress: org?.address,
+    orgLogoUrl: org?.logo_url,
     invoiceNumber: invoice.invoice_number,
     clientName: invoice.client_name,
     lineItems: invoice.line_items || [],
