@@ -40,12 +40,10 @@ export const webhookRouter = Router()
 webhookRouter.post('/whatsapp', async (req: Request, res: Response) => {
   res.set('Content-Type', 'text/xml')
 
-  if (process.env.NODE_ENV === 'production') {
-    if (!verifyTwilioSignature(req)) {
-      console.warn('webhook: invalid Twilio signature — request rejected')
-      res.status(403).send('<Response></Response>')
-      return
-    }
+  if (!verifyTwilioSignature(req)) {
+    console.warn('webhook: invalid Twilio signature — request rejected')
+    res.status(403).send('<Response></Response>')
+    return
   }
 
   const body = req.body as TwilioWebhookBody

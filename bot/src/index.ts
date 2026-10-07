@@ -9,7 +9,7 @@ import { webhookRouter } from './webhook'
 import { startScheduler } from './scheduler'
 
 const app = express()
-const PORT = process.env.PORT || 3000
+const PORT = process.env.TRUEFLOW_BOT_PORT || process.env.PORT || 3000
 
 // Parse URL-encoded bodies — Twilio sends webhooks as application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: false }))
@@ -26,8 +26,9 @@ app.use('/webhook', webhookRouter)
 app.listen(PORT, () => {
   console.log(`TrueFlow bot running on port ${PORT} ✅`)
   console.log(`Supabase URL: ${process.env.SUPABASE_URL}`)
-  console.log(`Anthropic key length: ${process.env.ANTHROPIC_API_KEY?.length}, starts: ${process.env.ANTHROPIC_API_KEY?.substring(0, 25)}, ends: ${process.env.ANTHROPIC_API_KEY?.slice(-10)}`)
-  startScheduler()
+  console.log(`AI configured: ${Boolean(process.env.ANTHROPIC_API_KEY)}`)
+  if (process.env.SCHEDULER_ENABLED !== 'false') startScheduler()
+  else console.log('Scheduler disabled for local verification')
 })
 
 export default app
