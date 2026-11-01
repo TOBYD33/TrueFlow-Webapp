@@ -1,3 +1,4 @@
+import { isSimpleGreeting, buildGreeting } from './greetings'
 // message-handler.ts
 // Orchestrates the full message handling flow for every incoming WhatsApp message.
 // Images are downloaded ONCE and analyzed in a SINGLE Claude Vision call to avoid
@@ -441,6 +442,12 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
       )
       if (setupReply) return buildTextResponse(setupReply)
     }
+  }
+
+  // Keep greetings out of the AI/action pipeline, after permission and pending-flow routing.
+  // A greeting is not an onboarding first action and must not send its follow-up sequence.
+  if (!hasImage && isSimpleGreeting(messageText)) {
+    return buildTextResponse(buildGreeting(user.full_name))
   }
 
   // ── Step 4: Get AI response ───────────────────────────────────────────────

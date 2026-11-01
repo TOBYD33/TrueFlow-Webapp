@@ -1,3 +1,4 @@
+import { isSimpleGreeting } from './greetings'
 // webhook.ts
 // Receives Twilio POST to /webhook/whatsapp, verifies signature, calls message handler.
 //
@@ -132,7 +133,8 @@ webhookRouter.post('/whatsapp', async (req: Request, res: Response) => {
   res.send(buildEmptyResponse())
 
   let settled = false
-  const thinkingTimer = setTimeout(() => {
+  // Even slow account/pending-flow lookups should not send a thinking message for a greeting.
+  const thinkingTimer = isSimpleGreeting(body.Body || '') ? null : setTimeout(() => {
     if (settled) return
     const msg = THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)]
     sendWhatsAppMessage(phoneNumber, msg).catch(() => {})
@@ -141,13 +143,13 @@ webhookRouter.post('/whatsapp', async (req: Request, res: Response) => {
   handleMessage(body)
     .then(twiml => {
       settled = true
-      clearTimeout(thinkingTimer)
+      if (thinkingTimer) clearTimeout(thinkingTimer)
       const text = extractTextFromTwiml(twiml)
       if (text) return sendWhatsAppMessage(phoneNumber, text)
     })
     .catch(err => {
       settled = true
-      clearTimeout(thinkingTimer)
+      if (thinkingTimer) clearTimeout(thinkingTimer)
       console.error('webhook: async text handler failed:', err)
       sendWhatsAppMessage(
         phoneNumber,
