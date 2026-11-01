@@ -61,12 +61,13 @@ export async function generateAndSendPDF(orgId: string, whatsappNumber: string):
       return
     }
 
-    const { data: urlData } = supabase.storage.from('reports').getPublicUrl(filename)
-    const publicUrl = urlData.publicUrl
+    const {data:urlData,error:signError}=await supabase.storage.from('reports').createSignedUrl(filename,7*24*3600)
+    if(signError||!urlData)throw new Error('Could not create a private report link')
+    const publicUrl=urlData.signedUrl
 
     await sendWhatsAppMessage(
       whatsappNumber,
-      `📋 *Your ${monthName} Report is ready!*\n\n${publicUrl}\n\nThis link is valid for 30 days.`
+      `📋 *Your ${monthName} Report is ready!*\n\n${publicUrl}\n\nThis private link is valid for 7 days.`
     )
   } catch (err) {
     console.error('generateAndSendPDF failed:', err)

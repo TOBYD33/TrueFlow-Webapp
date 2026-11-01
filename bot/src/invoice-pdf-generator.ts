@@ -44,7 +44,7 @@ function buildInvoiceHtml(d: InvoicePdfData): string {
   .org-logo { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; flex-shrink: 0; }
   .org-name { font-size: 20px; font-weight: 700; }
   .org-address { font-size: 12px; color: #6b7280; margin-top: 4px; }
-  .invoice-word { font-size: 28px; font-weight: 700; color: #6C63FF; text-align: right; }
+  .invoice-word { font-size: 28px; font-weight: 700; color: #287846; text-align: right; }
   .invoice-number { font-size: 12px; color: #6b7280; text-align: right; font-family: monospace; }
   .meta { display: flex; justify-content: space-between; background: #f9fafb; border-radius: 8px; padding: 18px; margin-bottom: 28px; }
   .meta-label { font-size: 10px; text-transform: uppercase; color: #9ca3af; font-weight: 600; }
@@ -55,9 +55,9 @@ function buildInvoiceHtml(d: InvoicePdfData): string {
   tbody td.right { text-align: right; }
   .totals { display: flex; justify-content: flex-end; margin-bottom: 28px; }
   .totals-row { display: flex; justify-content: space-between; width: 240px; padding: 4px 0; }
-  .totals-row.grand { font-weight: 700; font-size: 15px; border-top: 2px solid #111827; padding-top: 8px; color: #6C63FF; }
-  .bank-box { background: #f0f0ff; border: 1px solid #6C63FF33; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-  .bank-box h4 { font-size: 11px; text-transform: uppercase; color: #6C63FF; margin-bottom: 8px; }
+  .totals-row.grand { font-weight: 700; font-size: 15px; border-top: 2px solid #111827; padding-top: 8px; color: #287846; }
+  .bank-box { background: #EEF6EF; border: 1px solid #28784633; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .bank-box h4 { font-size: 11px; text-transform: uppercase; color: #287846; margin-bottom: 8px; }
   .bank-row { display: flex; gap: 24px; font-size: 13px; }
   .bank-row div span { display: block; font-size: 10px; color: #6b7280; text-transform: uppercase; }
   .footer { font-size: 11px; color: #9ca3af; text-align: center; margin-top: 20px; }
@@ -170,8 +170,9 @@ export async function generateInvoicePdf(invoiceId: string): Promise<string | nu
       return null
     }
 
-    const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(filename)
-    const publicUrl = urlData.publicUrl
+    const {data:urlData,error:signError}=await supabase.storage.from('invoices').createSignedUrl(filename,7*24*3600)
+    if(signError||!urlData)return null
+    const publicUrl=urlData.signedUrl
 
     await supabase.from('invoices').update({ pdf_url: publicUrl }).eq('id', invoiceId)
 

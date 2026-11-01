@@ -76,6 +76,8 @@ Rules:
 
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
     const parsed = JSON.parse(text.trim()) as ScannedReceipt
+    if (typeof parsed.amount !== 'number' || !Number.isFinite(parsed.amount) || parsed.amount <= 0 || (parsed.tax_amount != null && (!Number.isFinite(parsed.tax_amount) || parsed.tax_amount < 0 || parsed.tax_amount > parsed.amount))) return null
+    if (parsed.currency && parsed.currency.toUpperCase() !== currency.toUpperCase()) return null
     parsed.currency = currency
 
     // Upload image to Supabase Storage
@@ -85,9 +87,8 @@ Rules:
       .from('receipts')
       .upload(storagePath, imageResponse.data, { contentType })
 
-    const imageStorageUrl = uploadError
-      ? imageUrl
-      : supabase.storage.from('receipts').getPublicUrl(storagePath).data.publicUrl
+    if (uploadError) return null
+    const imageStorageUrl = `storage:receipts/${storagePath}`
 
     // Save receipt to database
     const { error: insertError } = await supabase.from('receipts').insert({
@@ -106,7 +107,7 @@ Rules:
       is_verified: false
     })
 
-    if (insertError) console.error('scanReceipt: insert failed:', insertError)
+    if (insertError) {console.error('scanReceipt: insert failed:', insertError);return null}
 
     return parsed
   } catch (err) {
@@ -123,6 +124,8 @@ export async function saveFromAnalysis(
   currency: string
 ): Promise<ScannedReceipt | null> {
   try {
+    if (!Number.isFinite(analysis.amount) || !analysis.amount || analysis.amount <= 0 || (analysis.tax_amount != null && (!Number.isFinite(analysis.tax_amount) || analysis.tax_amount < 0 || analysis.tax_amount > analysis.amount))) return null
+    if (analysis.currency && analysis.currency.toUpperCase() !== currency.toUpperCase()) return null
     const timestamp = Date.now()
     const storagePath = `receipts/${orgId}/${timestamp}.jpg`
 
@@ -130,9 +133,8 @@ export async function saveFromAnalysis(
       .from('receipts')
       .upload(storagePath, analysis.buffer, { contentType: analysis.contentType })
 
-    const imageStorageUrl = uploadError
-      ? null
-      : supabase.storage.from('receipts').getPublicUrl(storagePath).data.publicUrl
+    if (uploadError) return null
+    const imageStorageUrl = `storage:receipts/${storagePath}`
 
     const date = analysis.date || new Date().toISOString().split('T')[0]
 
@@ -152,7 +154,7 @@ export async function saveFromAnalysis(
       is_verified: false
     })
 
-    if (insertError) console.error('saveFromAnalysis: insert failed:', insertError)
+    if (insertError) {console.error('saveFromAnalysis: insert failed:', insertError);return null}
 
     return {
       vendor_name: analysis.vendor_name,
