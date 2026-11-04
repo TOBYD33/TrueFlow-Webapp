@@ -39,20 +39,16 @@ export async function addInventoryItem(params: {
   sku?: string
   category?: string
 }) {
-  const { data, error } = await supabase
-    .from('inventory_items')
-    .insert({
-      org_id: params.orgId,
-      name: params.name,
-      quantity_on_hand: params.quantity,
-      unit_cost: params.unitCost || null,
-      unit_price: params.unitPrice || null,
-      sku: params.sku || null,
-      category: params.category || null
-    })
-    .select()
-    .single()
+  if (!Number.isFinite(params.quantity) || params.quantity < 0) throw new Error('Invalid opening quantity')
+  const { data: id, error } = await supabase.rpc('create_inventory_item', {
+    p_org_id: params.orgId, p_name: params.name, p_sku: params.sku ?? null,
+    p_category: params.category ?? null, p_opening_qty: params.quantity,
+    p_unit_cost: params.unitCost ?? null, p_unit_price: params.unitPrice ?? null,
+    p_threshold: 5, p_description: null, p_actor: null,
+  })
   if (error) throw new Error(error.message)
+  const { data, error: readError } = await supabase.from('inventory_items').select('*').eq('id', id).single()
+  if (readError) throw new Error(readError.message)
   return data
 }
 

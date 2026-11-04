@@ -1,0 +1,191 @@
+{
+  "version": "2026-11-trials-v1",
+  "currency": "NGN",
+  "interval": "monthly",
+  "trialDays": 14,
+  "headline": "Simple plans for every flow.",
+  "supportingCopy": "Start with a 14-day free trial, then choose the plan that fits your life or business.",
+  "supportEmail": "hello@gettrueflow.com",
+  "proContactPath": "/business-pro",
+  "offers": [
+    {
+      "id": "free",
+      "eyebrow": "TRY TRUEFLOW",
+      "label": "14-day free trial",
+      "displayLabel": "14-day free trial",
+      "monthlyNgn": 0,
+      "priceNote": "For 14 days",
+      "tagline": "Explore TrueFlow before choosing your plan.",
+      "cta": "Start free trial",
+      "selfServe": false,
+      "modules": [
+        "receipts",
+        "budgets",
+        "reminders",
+        "reports",
+        "clients",
+        "projects",
+        "invoices",
+        "income",
+        "assistant"
+      ],
+      "limits": {
+        "receipts": 10,
+        "scans": 10,
+        "clients": 5,
+        "ai": null,
+        "storageBytes": null,
+        "messages": null
+      },
+      "staffLimit": 0
+    },
+    {
+      "id": "individual",
+      "eyebrow": "FOR YOU",
+      "label": "Individual",
+      "displayLabel": "Individual",
+      "monthlyNgn": 2500,
+      "priceNote": "/month",
+      "tagline": "Keep your personal expenses, budgets, and important reminders organised.",
+      "cta": "Choose Individual",
+      "selfServe": true,
+      "modules": [
+        "receipts",
+        "budgets",
+        "reminders",
+        "reports",
+        "assistant"
+      ],
+      "limits": {
+        "receipts": null,
+        "scans": null,
+        "clients": 0,
+        "ai": null,
+        "storageBytes": null,
+        "messages": null
+      },
+      "staffLimit": 0
+    },
+    {
+      "id": "business",
+      "eyebrow": "FOR YOUR BUSINESS",
+      "label": "Business Starter",
+      "displayLabel": "Business Starter",
+      "monthlyNgn": 4000,
+      "priceNote": "/month",
+      "tagline": "Keep your business expenses, clients, invoices, and project records together.",
+      "cta": "Choose Business Starter",
+      "selfServe": true,
+      "modules": [
+        "receipts",
+        "budgets",
+        "reminders",
+        "reports",
+        "clients",
+        "projects",
+        "invoices",
+        "income",
+        "assistant"
+      ],
+      "limits": {
+        "receipts": null,
+        "scans": null,
+        "clients": null,
+        "ai": null,
+        "storageBytes": null,
+        "messages": null
+      },
+      "staffLimit": 0
+    },
+    {
+      "id": "business_pro",
+      "eyebrow": "FOR YOUR TEAM",
+      "label": "Business (Pro)",
+      "displayLabel": "Business (Pro)",
+      "monthlyNgn": -1,
+      "priceNote": "Custom pricing",
+      "tagline": "A tailored setup for teams that need shared access, industry workflows, and integrations.",
+      "cta": "Contact us",
+      "selfServe": false,
+      "modules": [],
+      "limits": {},
+      "staffLimit": null
+    }
+  ],
+  "trialPolicy": {
+    "allowanceSource": "Existing free-tier 10-receipt and five-client caps; fresh receipt/scan allowance per trial period, five active clients per workspace.",
+    "existingUsers": "All workspaces present when migration runs retain their existing access and limits. No automatic conversion to an expiring trial.",
+    "expired": "Records remain. Authorised read and export continue; new financial writes, scanning, assistant processing and scheduled delivery stop.",
+    "restarts": "Fresh trial period and separate allowance grant. Historical records and usage remain. Past-due reminders and completed jobs are not replayed."
+  },
+  "catalogue": [
+    {
+      "id": "managed-invoice-collections",
+      "kind": "addon",
+      "title": "Managed invoice collections",
+      "status": "Planned",
+      "description": "Business-defined deadlines and reviewed payment follow-up. Requires the invoice collections release and configured delivery channels.",
+      "dependencies": [
+        "Business Starter or an agreed Pro package",
+        "Invoice collections migration and provider delivery checks"
+      ],
+      "includedPlans": [],
+      "modules": [
+        "invoices"
+      ],
+      "purchaseReady": false
+    },
+    {
+      "id": "project-workspace",
+      "kind": "addon",
+      "title": "Project workspace",
+      "status": "Planned",
+      "description": "Tasks, linked job costs and project progress. Basic project records remain part of Business Starter.",
+      "dependencies": [
+        "Project workspace release and permissions"
+      ],
+      "includedPlans": [],
+      "modules": [
+        "projects"
+      ],
+      "purchaseReady": false
+    },
+    {
+      "id": "service-business",
+      "kind": "industry",
+      "title": "Service businesses and freelancers",
+      "status": "Planned",
+      "description": "A proposed package for client work, deposits, invoices and project costs. Existing base records can be used today; a tailored industry package needs consultation.",
+      "dependencies": [
+        "Requirements review",
+        "Explicit module and team entitlements"
+      ],
+      "includedPlans": [],
+      "modules": [
+        "clients",
+        "projects",
+        "invoices",
+        "receipts"
+      ],
+      "purchaseReady": false
+    },
+    {
+      "id": "order-business",
+      "kind": "industry",
+      "title": "Order-based small businesses",
+      "status": "Planned",
+      "description": "A proposed workflow for orders, customer deposits, materials and delivery commitments. No order-management integration is advertised as available.",
+      "dependencies": [
+        "Workflow discovery",
+        "Agreed integrations and commercial terms"
+      ],
+      "includedPlans": [],
+      "modules": [
+        "clients",
+        "projects",
+        "receipts"
+      ],
+      "purchaseReady": false
+    }
+  ]
+}

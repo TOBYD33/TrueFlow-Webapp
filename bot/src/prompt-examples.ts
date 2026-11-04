@@ -1,8 +1,8 @@
 // prompt-examples.ts
-// Single source of truth for "how to talk to Tello" example templates —
+// Single source of truth for "how to talk to TrueFlow" example templates —
 // used by the WhatsApp help/examples command, the reactive fallback when
 // a message can't be understood, and mirrored in web/lib/prompt-examples.ts
-// for the in-app Tello chat's empty state. Bot and web are separate
+// for the in-app TrueFlow chat's empty state. Bot and web are separate
 // deployments with no shared package (same precedent as timezone-util.ts
 // and plan-gates.ts), so this file is intentionally duplicated — keep both
 // copies' CATEGORIES array in sync by hand when editing examples.

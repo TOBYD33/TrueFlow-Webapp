@@ -1,3 +1,4 @@
+import {futureProcessingAllowed} from './commercial'
 // report-service.ts
 // Generates spending summaries and budget status for AI context and scheduled reports.
 // Also sends weekly and monthly summaries via WhatsApp.
@@ -90,6 +91,7 @@ export async function sendWeeklySummaries() {
   // same summary twice to the same WhatsApp number back to back.
   const seen = new Set<string>()
   for (const member of members || []) {
+    if(!(await futureProcessingAllowed(member.org_id)))continue;
     const dedupeKey = `${member.org_id}:${member.whatsapp_number}`
     if (seen.has(dedupeKey)) continue
     seen.add(dedupeKey)
@@ -146,6 +148,7 @@ export async function sendMonthlyReports() {
   // Same dedupe as sendWeeklySummaries — see comment there.
   const seenMonthly = new Set<string>()
   for (const member of members || []) {
+    if(!(await futureProcessingAllowed(member.org_id)))continue;
     const dedupeKey = `${member.org_id}:${member.whatsapp_number}`
     if (seenMonthly.has(dedupeKey)) continue
     seenMonthly.add(dedupeKey)

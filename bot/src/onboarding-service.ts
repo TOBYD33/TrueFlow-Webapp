@@ -1,3 +1,4 @@
+import {futureProcessingAllowed} from './commercial'
 // onboarding-service.ts
 // Conversational first-contact onboarding: name -> business/family/personal
 // -> [business name, business accounts only] -> capability list -> first
@@ -49,15 +50,13 @@ export async function startOnboarding(phoneNumber: string): Promise<string> {
   return "Hey! I'm TrueFlow 👋\nWhat should I call you?"
 }
 
-function capabilityList(includeBusinessCard: boolean): string {
+function capabilityList(business: boolean): string {
   const lines = [
     '📷 Scan receipts, just send a photo',
-    '💰 Track client payments',
-    '📊 Set budgets by category, like a Budget for Family Trip',
-    '⏰ Reminders for bills, deadlines, even birthdays',
-    '🗂️ Manage clients and projects',
+    '📊 Set budgets by category',
+    '⏰ Reminders for bills, deadlines, and birthdays on eligible plans',
   ]
-  if (includeBusinessCard) lines.push('🪪 Scan a business card to save a new lead automatically')
+  if (business) lines.push('🗂️ Client and project tools are available on eligible business plans')
   return lines.join('\n')
 }
 
@@ -98,7 +97,8 @@ export async function handleOnboardingReply(
     }
     const businessName = messageText.trim().slice(0, 120)
 
-    await supabase.from('organizations').update({ name: businessName }).eq('id', orgId)
+    const { data: savedBusiness, error: businessError } = await supabase.from('organizations').update({ name: businessName }).eq('id', orgId).select('id, name').single()
+    if (businessError || !savedBusiness) return { handled: true, step, reply: 'I could not save the business name. Please send it again so we can finish setup.' }
     await supabase.from('whatsapp_sessions').update({ onboarding_step: null }).eq('phone_number', phoneNumber)
 
     return { handled: true, step, reply: `${businessName} ✅ Thanks — updated!` }
@@ -110,7 +110,8 @@ export async function handleOnboardingReply(
     }
     const businessName = messageText.trim().slice(0, 120)
 
-    await supabase.from('organizations').update({ name: businessName }).eq('id', orgId)
+    const { data: savedBusiness, error: businessError } = await supabase.from('organizations').update({ name: businessName }).eq('id', orgId).select('id, name').single()
+    if (businessError || !savedBusiness) return { handled: true, step, reply: 'I could not save the business name. Please send it again so we can finish setup.' }
     await supabase.from('whatsapp_sessions').update({ onboarding_step: 'awaiting_first_action' }).eq('phone_number', phoneNumber)
 
     return {
@@ -119,7 +120,7 @@ export async function handleOnboardingReply(
       reply:
         `${businessName} ✅\n\nHere's what we can do together:\n${capabilityList(true)}\n\n` +
         `Let's try it. Got a receipt handy? Send a photo.\n\n` +
-        `No receipt nearby? Tell me something to remind you about instead, like 'remind me to pay rent Friday.'\n\n` +
+        `No receipt nearby? Set a simple budget, or tell me something to remind you about instead, like 'remind me to pay rent Friday.'\n\n` +
         `(You can always type "help" to see examples of what to say.)`,
     }
   }
@@ -143,7 +144,8 @@ export async function handleOnboardingReply(
     }
   }
 
-  await supabase.from('organizations').update({ type }).eq('id', orgId)
+  const { data: savedType, error: typeError } = await supabase.from('organizations').update({ type }).eq('id', orgId).select('id').single()
+  if (typeError || !savedType) return { handled: true, step, reply: 'I could not save your account type. Please try again.' }
 
   // Business accounts get one more question before the capability list —
   // organizations.name otherwise never gets captured anywhere else.
@@ -164,7 +166,7 @@ export async function handleOnboardingReply(
     reply:
       `Here's what we can do together:\n${capabilityList(false)}\n\n` +
       `Let's try it. Got a receipt handy? Send a photo.\n\n` +
-      `No receipt nearby? Tell me something to remind you about instead, like 'remind me to pay rent Friday.'`,
+      `No receipt nearby? Set a simple budget, or tell me something to remind you about instead, like 'remind me to pay rent Friday.'`,
   }
 }
 
@@ -212,6 +214,7 @@ export async function nudgeMissingBusinessNames(): Promise<void> {
   if (error) { console.error('nudgeMissingBusinessNames: query failed:', error); return }
 
   for (const org of orgs || []) {
+    if(!(await futureProcessingAllowed(org.id)))continue;
     try {
       const owner = (org as any).org_members?.find((m: any) => m.role === 'owner')
       if (!owner?.whatsapp_number) continue

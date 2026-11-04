@@ -2,7 +2,7 @@
 // Deterministic "I want to log in" handling — checked before AI routing so
 // it works with zero API cost and never depends on Claude recognizing it
 // (this is exactly the bug reported: a user asked "I want to login" and
-// Tello answered "no login needed" instead of pointing them anywhere).
+// TrueFlow answered "no login needed" instead of pointing them anywhere).
 //
 // Sends BOTH access paths in one reply:
 //   1. A one-time magic link (same mechanism as the post-onboarding

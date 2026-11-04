@@ -135,16 +135,12 @@ export async function continueGuidedSetup(
       if (userReply.toUpperCase() !== 'NO') {
         const amount = parseFloat(userReply.replace(/[^0-9.]/g, ''))
         if (amount > 0) {
-          await supabase.rpc('increment_client_earned', {
-            p_client_id: setupState.client_id,
-            p_amount: amount
-          })
-          if (setupState.project_id) {
-            await supabase.rpc('increment_project_received', {
-              p_project_id: setupState.project_id,
-              p_amount: amount
-            })
-          }
+          const { error } = await supabase.rpc('record_client_payment', { p_id: crypto.randomUUID(), p_payment: {
+            org_id: setupState.org_id, client_id: setupState.client_id,
+            project_id: setupState.project_id ?? null, amount, payment_type: 'deposit',
+            payment_date: new Date().toISOString().split('T')[0],
+          } })
+          if (error) throw new Error(`Could not record deposit: ${error.message}`)
         }
       }
       await advanceState(phoneNumber, { ...setupState, step: 'invoice' })

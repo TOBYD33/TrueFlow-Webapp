@@ -4,6 +4,7 @@
 import { createClient } from '@supabase/supabase-js'
 import * as dotenv from 'dotenv'
 import ws from 'ws'
+import {flowFetch} from './flow-context'
 
 dotenv.config({ override: true })
 
@@ -17,5 +18,5 @@ if (!supabaseUrl || !supabaseServiceKey) {
 // Use service role key — bot runs server-side and needs to bypass RLS
 // Pass ws transport for Node.js < 22 which lacks native WebSocket
 export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  realtime: { transport: ws as any }
+  realtime: { transport: ws as any }, global:{fetch:flowFetch}
 })

@@ -1,3 +1,4 @@
+import {futureProcessingAllowed} from './commercial'
 // invoice-overdue-service.ts
 // Transitions a sent-but-unpaid invoice to 'overdue' the day after its due
 // date passes, and notifies the org. NEW as of the notification bell
@@ -15,13 +16,16 @@ import { notifyOrgMembers } from './notifications'
 import { dateStrInTimezone, addDaysToDateStr } from './timezone-util'
 
 export async function checkOverdueInvoices(): Promise<void> {
+  const managedFilter = process.env.TRUEFLOW_INVOICE_COLLECTIONS_ENABLED === 'true'
   const yesterday = addDaysToDateStr(dateStrInTimezone('Africa/Lagos', new Date()), -1)
 
-  const { data: invoices, error } = await supabase
+  let query = supabase
     .from('invoices')
     .select('id, org_id, invoice_number, client_name, total_amount, currency, due_date, status')
     .eq('status', 'sent')
     .eq('due_date', yesterday)
+  if (managedFilter) query = query.eq('collection_version', 0)
+  const {data: invoices, error} = await query
 
   if (error) {
     console.error('checkOverdueInvoices query failed:', error)
@@ -29,6 +33,7 @@ export async function checkOverdueInvoices(): Promise<void> {
   }
 
   for (const invoice of invoices || []) {
+    if(!(await futureProcessingAllowed(invoice.org_id)))continue;
     try {
       const { error: updateError } = await supabase
         .from('invoices')

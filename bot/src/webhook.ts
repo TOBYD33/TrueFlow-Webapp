@@ -1,4 +1,7 @@
+import {getOrCreateUser} from './user-service'
+import {botClaim} from './commercial'
 import { isSimpleGreeting } from './greetings'
+import {prepareVoiceDraft} from './flow-drafts'
 // webhook.ts
 // Receives Twilio POST to /webhook/whatsapp, verifies signature, calls message handler.
 //
@@ -60,6 +63,7 @@ webhookRouter.post('/whatsapp', async (req: Request, res: Response) => {
   const phoneNumber = body.From.replace('whatsapp:', '')
 
   if (isVoiceNote) {
+    try{const user=await getOrCreateUser(phoneNumber);if(!user||!user.whatsapp_active||user.org_status==='suspended'||['viewer','accountant'].includes(user.role))throw new Error('Your account does not have permission to process voice requests.');await botClaim(user.org_id,'ai','voice:'+body.MessageSid)}catch(e){res.send(buildTextResponse(e instanceof Error?e.message:'Voice processing is unavailable.'));return}
     // Same timeout constraint as images — transcription can take a few
     // seconds, so ack immediately and process in the background.
     res.send(buildTextResponse('🎙️ Listening to your voice note...'))
@@ -75,27 +79,12 @@ webhookRouter.post('/whatsapp', async (req: Request, res: Response) => {
         return
       }
 
-      // Feed the transcript into the EXACT same pipeline a typed text
-      // message goes through — construct a body where Body is the
-      // transcript and every media field is cleared, so handleMessage
-      // (which derives hasImage/imageUrl straight from these same fields)
-      // treats this identically to the user having typed it themselves.
-      // No separate classification or DB-write logic lives here or ever
-      // should — that would be a second, divergent pipeline.
-      const textBody: TwilioWebhookBody = {
-        ...body,
-        Body: transcript,
-        NumMedia: '0',
-        MediaUrl0: undefined,
-        MediaContentType0: undefined,
-      }
-
+      // Voice notes always create reviewed drafts. Never run the text action executor on a transcript.
       try {
-        const twiml = await handleMessage(textBody)
-        const text = extractTextFromTwiml(twiml)
-        if (text) await sendWhatsAppMessage(phoneNumber, text)
+        const reply = await prepareVoiceDraft(phoneNumber,transcript)
+        await sendWhatsAppMessage(phoneNumber,reply)
       } catch (err) {
-        console.error('webhook: voice note text-pipeline handling failed:', err)
+        console.error('webhook: voice draft preparation failed:', err)
         await sendWhatsAppMessage(
           phoneNumber,
           `Sorry, I had trouble with that. Please try again or type it instead.`

@@ -14,7 +14,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
     .select(`
       *,
       organizations(id, name, plan, currency, receipt_limit, default_tax_country, status, created_at),
-      profiles(id, full_name, merged_into_id)
+      profiles(id, full_name, merged_into_id, status)
     `)
     .eq('phone_number', phoneNumber)
     .single()
@@ -36,7 +36,7 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
       resolvedUserId = profile.merged_into_id
       const { data: primaryProfile } = await supabase
         .from('profiles')
-        .select('id, full_name, merged_into_id')
+        .select('id, full_name, merged_into_id, status')
         .eq('id', resolvedUserId)
         .maybeSingle()
       if (primaryProfile) profile = primaryProfile
@@ -63,9 +63,10 @@ export async function getOrCreateUser(phoneNumber: string): Promise<UserContext 
       .select('role, whatsapp_active, can_see_clients, can_see_income, can_export')
       .eq('org_id', session.org_id)
       .eq('user_id', resolvedUserId)
-      .is('removed_at', null)
+      .is('removed_at', null).is('invite_token',null)
       .single()
 
+    if(!member || profile?.status==='suspended')return null
     return {
       user_id: resolvedUserId,
       org_id: session.org_id,

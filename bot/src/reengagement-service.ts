@@ -1,3 +1,4 @@
+import {futureProcessingAllowed} from './commercial'
 // reengagement-service.ts
 // Feature 1: Inactivity Re-Engagement. Decaying schedule — 24h, 3d, 7d,
 // then monthly indefinitely — NOT a daily ping forever. Anchors the first
@@ -63,7 +64,7 @@ function buildFreeformMessage(name: string | null, summary: PendingSummary): str
   if (summary.hasAnyPending) {
     return `${greeting}, you have ${contextualLine(summary)} waiting. Come take a look whenever you're ready 👋`
   }
-  return `${greeting} — haven't seen you in a while. Tello's here whenever you need to log something 👋`
+  return `${greeting} — haven't seen you in a while. TrueFlow's here whenever you need to log something 👋`
 }
 
 export async function runInactivityReengagement(): Promise<void> {
@@ -75,6 +76,7 @@ export async function runInactivityReengagement(): Promise<void> {
   if (error) { console.error('runInactivityReengagement: query failed:', error); return }
 
   for (const row of owners || []) {
+    if(!(await futureProcessingAllowed(row.org_id)))continue;
     const profile = (row as any).profiles
     const orgId = (row as any).org_id as string
     const whatsappNumber = (row as any).whatsapp_number as string | null

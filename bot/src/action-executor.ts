@@ -1,3 +1,4 @@
+import {flowEnabled} from './flow-context'
 // action-executor.ts
 // Parses and executes action strings Claude includes at the end of its replies.
 // e.g. "SET_BUDGET:Transport:120000" → writes budget to Supabase
@@ -17,6 +18,7 @@ import { setClientBirthday } from './client-birthday-service'
 import { recordClientPayment } from './client-payment-service'
 import { startInvoiceCreation } from './invoice-setup-service'
 import { calculateTaxEstimate, formatEstimateReply, setTaxCountry, TAX_COUNTRIES, DEFAULT_INCOME_TAX_TYPE, TaxCountry, TaxPeriodKey } from './tax-service'
+import { resolveTimezone } from './timezone-util'
 import { supabase } from './supabase'
 import { canUseAutomatedReminders } from './plan-gates'
 
@@ -38,6 +40,13 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
     const type = parts[0]
 
     try {
+      if(flowEnabled()){
+        const rules=await supabase.rpc('flow_access_snapshot',{p_actor:user.user_id,p_org:user.org_id});if(rules.error)throw new Error('Current module access is unavailable.')
+        const gates:Record<string,[string,string]>={SET_BUDGET:['budgets','create'],SET_REMINDER:['reminders','create'],ARCHIVE_REMINDER:['reminders','archive'],RESTORE_REMINDER:['reminders','edit'],STOP_RECURRING_REMINDER:['reminders','edit'],DELETE_REMINDER_PERMANENTLY:['reminders','archive'],EDIT_REMINDER:['reminders','edit'],EXPORT_PDF:['reports','export'],SHOW_BUDGETS:['budgets','view'],UPDATE_INVENTORY:['inventory','edit'],SHOW_INVENTORY:['inventory','view'],LOG_PAYMENT:['income','create'],GENERATE_INVOICE:['invoices','create'],CREATE_INVOICE:['invoices','create'],START_CLIENT_SETUP:['clients','create'],GET_TAX_ESTIMATE:['tax','view'],SET_TAX_REMINDER:['reminders','create'],SWITCH_TAX_COUNTRY:['tax','manage'],SET_CLIENT_SOURCE:['clients','edit'],SET_CLIENT_PAYING:['clients','edit'],SET_CLIENT_BIRTHDAY:['clients','edit']}
+        const gate=gates[type];if(!gate)throw new Error('Unsupported action. Nothing was saved.')
+        const permission=rules.data?.[gate[0]];if(!permission?.enabled||!permission.actions.includes(gate[1])||(gate[1]!=='create'&&!permission.actions.includes('view')))throw new Error('Current module permission denied.')
+        if(type==='EDIT_REMINDER')throw new Error('Prepare and confirm a reviewed correction at https://app.gettrueflow.com/capture.')
+      }
       switch (type) {
         case 'SET_BUDGET': {
           // SET_BUDGET:Transport:120000
@@ -54,13 +63,16 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
           }
           // SET_REMINDER:Pay VAT:2025-06-21:monthly:2030
           // Last part is an optional time as HHMM digits (24h WAT)
-          const [, title, date, recurrence, timeRaw] = parts
+          const [, title, date, recurrence, timeRaw, explicitTimezone] = parts
           let dueTime: string | undefined
+          if (!timeRaw) throw new PastDueReminderError('Please confirm an exact reminder time and timezone before saving.')
           if (timeRaw) {
             const digits = timeRaw.replace(/\D/g, '').padStart(4, '0')
             const hh = parseInt(digits.slice(0, 2)), mm = parseInt(digits.slice(2, 4))
             if (digits.length === 4 && hh < 24 && mm < 60) {
               dueTime = `${digits.slice(0, 2)}:${digits.slice(2, 4)}`
+            } else {
+              throw new PastDueReminderError('Choose a valid reminder time.')
             }
           }
           // If a business card was just scanned and this reply looks like
@@ -73,7 +85,7 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
             .maybeSingle()
           const clientId = sessionRow?.pending_lead_id ?? undefined
 
-          const saved = await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', dueTime, clientId })
+          const saved = await setReminder({ orgId: user.org_id, title, dueDate: date, recurrence: recurrence || 'once', dueTime, clientId, timezone: explicitTimezone || resolveTimezone(user.whatsapp_number) })
 
           if (clientId) {
             await supabase.from('whatsapp_sessions').update({ pending_lead_id: null }).eq('phone_number', user.whatsapp_number)
@@ -82,8 +94,8 @@ export async function executeActions(actions: string[], user: any): Promise<Acti
           // Confirmation is built from the row Supabase actually returned,
           // not from the AI's own text — this is the fix: the bot can now
           // only claim a reminder was set once the write is verified.
-          const timeLabel = saved?.due_time ? ` at ${saved.due_time.slice(0, 5)}` : ''
-          notifications.push(`✅ *Reminder set!* ${title} — ${date}${timeLabel}`)
+          const timeLabel = ` at ${saved.local_time} (${saved.timezone})`
+          notifications.push(`✅ *Reminder set!* ${title} — ${saved.local_date}${timeLabel}`)
           break
         }
         case 'ARCHIVE_REMINDER': {

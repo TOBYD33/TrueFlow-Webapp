@@ -2,19 +2,15 @@
 // Downloads a WhatsApp voice note (audio/ogg, Opus codec) from its Twilio
 // media URL and transcribes it to text.
 //
-// Service choice: OpenAI's Whisper API (whisper-1) — cheapest of the three
-// options considered ($0.006/min, vs. Deepgram/AssemblyAI's per-minute
-// pricing plus a separate account/SDK to integrate), and simplest given the
-// existing stack: a single REST call with a multipart body, no new SDK
-// beyond `form-data` (already a project dependency for this exact purpose).
-// Requires OPENAI_API_KEY in the environment — add it to .env and Railway;
-// this module fails gracefully (returns null) if it's missing or the call
-// errors, never throws into the caller.
+// Uses the existing Whisper integration. Provider/media errors return null; no fake transcript.
 
 import axios from 'axios'
 import FormData from 'form-data'
 
 export async function transcribeVoiceNote(mediaUrl: string): Promise<string | null> {
+  let url:URL
+  try{url=new URL(mediaUrl)}catch{return null}
+  if(url.protocol!=='https:'||url.hostname!=='api.twilio.com'||!url.pathname.startsWith('/2010-04-01/Accounts/'+process.env.TWILIO_ACCOUNT_SID+'/Messages/'))return null
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     console.error('transcribeVoiceNote: OPENAI_API_KEY is not set — cannot transcribe')
@@ -27,6 +23,7 @@ export async function transcribeVoiceNote(mediaUrl: string): Promise<string | nu
     const audioResponse = await axios.get(mediaUrl, {
       responseType: 'arraybuffer',
       timeout: 15000,
+      maxContentLength:10*1024*1024, maxBodyLength:10*1024*1024, maxRedirects:0,
       auth: {
         username: process.env.TWILIO_ACCOUNT_SID!,
         password: process.env.TWILIO_AUTH_TOKEN!,
@@ -53,7 +50,7 @@ export async function transcribeVoiceNote(mediaUrl: string): Promise<string | nu
     const transcript = String(transcriptionResponse.data?.text || '').trim()
     return transcript.length > 0 ? transcript : null
   } catch (err) {
-    console.error('transcribeVoiceNote failed:', err)
+    console.error('transcribeVoiceNote: provider or media request failed')
     return null
   }
 }

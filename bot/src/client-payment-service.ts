@@ -2,8 +2,6 @@
 // Records a client payment and atomically updates client + project balances via Supabase RPC.
 
 import { supabase } from './supabase'
-import { incrementClientEarned } from './client-service'
-import { incrementProjectReceived } from './project-service'
 
 export interface RecordPaymentParams {
   orgId: string
@@ -34,7 +32,7 @@ export async function recordClientPayment(params: RecordPaymentParams): Promise<
     notes,
   } = params
 
-  const { error } = await supabase.from('client_payments').insert({
+  const { error } = await supabase.rpc('record_client_payment', { p_id: crypto.randomUUID(), p_payment: {
     org_id: orgId,
     client_id: clientId,
     project_id: projectId ?? null,
@@ -46,13 +44,9 @@ export async function recordClientPayment(params: RecordPaymentParams): Promise<
     receipt_image_url: receiptImageUrl ?? null,
     ai_transcript: aiTranscript ?? null,
     notes: notes ?? null,
-  })
+  } })
 
   if (error) throw new Error(`recordClientPayment insert failed: ${error.message}`)
 
-  // Atomically update totals via RPC functions
-  await incrementClientEarned(clientId, amount)
-  if (projectId) {
-    await incrementProjectReceived(projectId, amount)
-  }
+  // The payment trigger updates balances atomically with this insert.
 }

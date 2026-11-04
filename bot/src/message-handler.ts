@@ -1,4 +1,8 @@
+import {botCommercial,botClaim,pricingSummary} from './commercial'
 import { isSimpleGreeting, buildGreeting } from './greetings'
+import {flowAssistantAllowed} from './flow-context'
+import {runFlowActor} from './flow-context'
+import {handleDraftReply,prepareCorrectionDraft} from './flow-drafts'
 // message-handler.ts
 // Orchestrates the full message handling flow for every incoming WhatsApp message.
 // Images are downloaded ONCE and analyzed in a SINGLE Claude Vision call to avoid
@@ -23,6 +27,8 @@ import { analyzeImage, buildMissingFieldsNote } from './image-analyzer'
 import { handleIncomingPayment } from './smart-transfer'
 import { saveFromAnalysis } from './receipt-scanner'
 import { getAIResponse } from './ai-assistant'
+import { resolveReminderDate } from './reminder-time'
+import { resolveTimezone } from './timezone-util'
 import { executeActions } from './action-executor'
 import { buildTextResponse, buildEmptyResponse } from './twiml-builder'
 import { sendWhatsAppMessage } from './twilio-sender'
@@ -63,6 +69,8 @@ async function processAccompanyingText(
   const text = messageText.trim()
   if (!text) return null
 
+  if(!await flowAssistantAllowed(user.user_id,user.org_id))return 'Assistant access is unavailable for your account.'
+  const correction=await prepareCorrectionDraft(user,text);if(correction)return correction
   const { actions } = await getAIResponse({
     phoneNumber,
     orgId: user.org_id,
@@ -157,6 +165,8 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     return buildTextResponse('Sorry, I could not set up your account. Please try again.')
   }
 
+  return runFlowActor(user.user_id,user.org_id,async()=>{
+
   // ── Permission Gate 1: Organization suspended ────────────────────────────
   if (user.org_status === 'suspended') {
     return buildTextResponse(
@@ -180,16 +190,14 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     )
   }
 
-  // ── Permission Gate 4: Free plan's WhatsApp trial window expired ────────
-  // Grandfathers every org created before WHATSAPP_TRIAL_ENFORCEMENT_START,
-  // so this new gate never silently cuts off an already-active free account.
-  if (!canUseWhatsAppAutomation(user.plan, user.org_created_at)) {
-    return buildTextResponse(
-      "⏳ Your 14-day WhatsApp trial has ended.\n" +
-      "Upgrade at app.gettrueflow.com/settings/subscription to keep using TrueFlow on WhatsApp — " +
-      "your data is safe and waiting for you either way."
-    )
-  }
+  let commercial
+  try{commercial=await botCommercial(user.org_id)}catch{return buildTextResponse('Workspace access status is unavailable. Please try the web application.')}
+  if(/^(?:pricing|plans|how much|subscription prices)[?!. ]*$/i.test(messageText))return buildTextResponse(pricingSummary())
+  if(commercial&&!commercial.active)return buildTextResponse('Your trial or subscription has ended. Records remain available for authorised review and export. Choose your next step at app.gettrueflow.com/settings/subscription. No automatic charge is made.')
+  if(!commercial&&!canUseWhatsAppAutomation(user.plan,user.org_created_at))return buildTextResponse('Your previous WhatsApp access period has ended. Your records are preserved. Review app.gettrueflow.com/settings/subscription.')
+
+  const draftReply=await handleDraftReply(user,messageText)
+  if(draftReply)return buildTextResponse(draftReply)
 
   // Build permission context to pass to AI
   const userPermissions = {
@@ -235,8 +243,8 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   // before "saved as a new lead"). Only the aha-moment turn actually risks
   // this race, so only that turn needs to change delivery mechanism — every
   // other reply keeps returning plain TwiML as before.
-  async function deliverAndCloseOut(text: string): Promise<string> {
-    if (wasOnboarding) {
+  async function deliverAndCloseOut(text: string, firstWinSucceeded = false): Promise<string> {
+    if (wasOnboarding && firstWinSucceeded) {
       await sendWhatsAppMessage(phoneNumber, text)
       await closeOutOnboardingIfNeeded()
       return buildEmptyResponse()
@@ -315,6 +323,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
       return buildTextResponse('Please send a photo of your receipt or payment proof. I can only scan images.')
     }
 
+    await botClaim(user.org_id,'scans','image')
     const analysis = await analyzeImage(imageUrl)
 
     if (!analysis) {
@@ -369,7 +378,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
         ? `${leadLine}\n\n${extra}`
         : `${leadLine}\n\nWant me to set a follow-up reminder? Just say when, like 'remind me in 3 days.'`
 
-      return await deliverAndCloseOut(confirmation)
+      return await deliverAndCloseOut(confirmation, true)
     }
 
     if (analysis.direction === 'incoming') {
@@ -391,11 +400,11 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     }
 
     // Outgoing expense — check free tier limit
-    if (user.plan === 'free') {
+    if ((!commercial || commercial.legacy) && user.plan === 'free') {
       const count = await getMonthlyReceiptCount(user.org_id)
       if (count >= FREE_TIER_LIMIT) {
         return buildTextResponse(
-          `⚠️ You've reached your *${FREE_TIER_LIMIT} receipt limit* for this month on the Free plan.\n\nUpgrade for unlimited receipts: ${process.env.PRICING_PAGE_URL || 'trueflow.com/pricing'}`
+          `⚠️ You've reached your *${FREE_TIER_LIMIT} preserved receipt limit*.\n\nReview current plans and allowances: ${process.env.PRICING_PAGE_URL || 'trueflow.com/pricing'}`
         )
       }
     }
@@ -403,6 +412,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     scannedReceipt = await saveFromAnalysis(analysis, user.org_id, user.user_id, user.currency)
 
     if (scannedReceipt) {
+      if(commercial&&!commercial.legacy)return buildTextResponse(`Receipt saved: ${analysis.vendor_name||'Expense'} · ${user.currency} ${Number(analysis.amount).toLocaleString()}. Review it at app.gettrueflow.com/receipts. A screenshot is not bank verification.`)
       const missingNote = buildMissingFieldsNote(analysis)
       if (missingNote) {
         const vendor = analysis.vendor_name || 'Unknown vendor'
@@ -422,7 +432,7 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
         const extra = await processAccompanyingText(phoneNumber, messageText, user, userPermissions)
         if (extra) confirmation = `${confirmation}\n\n${extra}`
 
-        return await deliverAndCloseOut(confirmation)
+        return await deliverAndCloseOut(confirmation, true)
       }
     } else {
       return buildTextResponse(
@@ -443,6 +453,9 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
       if (setupReply) return buildTextResponse(setupReply)
     }
   }
+
+  if(!await flowAssistantAllowed(user.user_id,user.org_id))return buildTextResponse('Assistant access is unavailable for your account.')
+  const correction=await prepareCorrectionDraft(user,messageText);if(correction)return buildTextResponse(correction)
 
   // Keep greetings out of the AI/action pipeline, after permission and pending-flow routing.
   // A greeting is not an onboarding first action and must not send its follow-up sequence.
@@ -469,15 +482,21 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
   // capability. Applies identically to typed text and voice transcripts,
   // since both reach here through the exact same pipeline (see webhook.ts).
   const hadUnrecognizedIntent = actions.includes('UNRECOGNIZED_INTENT')
-  const realActions = actions.filter(a => a !== 'UNRECOGNIZED_INTENT')
+  const realActions = actions.filter(a => a !== 'UNRECOGNIZED_INTENT').map(action => {
+    const parts = action.split(':')
+    if (parts[0] === 'SET_REMINDER') parts[2] = resolveReminderDate(parts[2], messageText, parts[5] || resolveTimezone(user.whatsapp_number))
+    return parts.join(':')
+  })
 
   // ── Step 5: Execute any actions Claude detected ───────────────────────────
   let finalReply = reply
+  let firstWinSucceeded = false
   if (hadUnrecognizedIntent) {
     finalReply = [reply, buildFallbackExamplesReply(messageText)].filter(Boolean).join('\n\n')
   }
   if (realActions.length > 0) {
     const { notifications, failures } = await executeActions(realActions, user)
+    firstWinSucceeded = failures.length === 0 && notifications.some(note => note.startsWith('✅')) && realActions.some(action => /^(SET_REMINDER|SET_BUDGET):/.test(action))
 
     // Claude's own reply text is generated BEFORE any write happens, so it
     // can (and did) claim success for actions that actually failed. Once
@@ -494,5 +513,6 @@ export async function handleMessage(body: TwilioWebhookBody): Promise<string> {
     }
   }
 
-  return await deliverAndCloseOut(finalReply)
+  return await deliverAndCloseOut(finalReply, firstWinSucceeded)
+  },body.MessageSid)
 }

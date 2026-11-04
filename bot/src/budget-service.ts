@@ -1,3 +1,4 @@
+import {futureProcessingAllowed} from './commercial'
 // budget-service.ts
 // Create, update, and read budgets. Checks budget alerts at 80% and 100%.
 
@@ -54,6 +55,7 @@ export async function checkBudgetAlerts() {
   if (error) { console.error('checkBudgetAlerts: orgs query failed:', error); return }
 
   for (const org of orgs || []) {
+    if(!(await futureProcessingAllowed(org.id)))continue;
     try {
       const now = new Date()
       const month = now.getMonth() + 1

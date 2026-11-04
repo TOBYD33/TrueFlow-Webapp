@@ -1,9 +1,11 @@
+import {futureProcessingAllowed} from './commercial'
 // reminder-service.ts
 // Manages reminders: create, list upcoming, fire due ones, reschedule recurring.
 // Reminders support an optional due_time (WAT). fireDueReminders runs every
 // minute and fires anything whose date+time has passed, including overdue
 // reminders missed while the server was down.
 
+import { prepareReminder, nextReminderDate, localDateTime, STORAGE_TIMEZONE, ReminderValidationError } from './reminder-time'
 import { supabase } from './supabase'
 import { sendWhatsAppMessage } from './twilio-sender'
 import { notifyOwner } from './notification-service'
@@ -32,7 +34,7 @@ function lagosTimeStr(d: Date): string {
 // reminders are exempt: their first occurrence legitimately CAN look "past"
 // relative to today (e.g. "every 5th of the month" set on the 20th), and
 // the scheduler already advances those correctly.
-export class PastDueReminderError extends Error {}
+export class PastDueReminderError extends ReminderValidationError {}
 
 export async function setReminder(params: {
   orgId: string
@@ -41,20 +43,16 @@ export async function setReminder(params: {
   recurrence: string
   category?: string
   dueTime?: string // 'HH:MM' 24h WAT
+  timezone?: string
   clientId?: string // links a follow-up reminder to a lead/client record
 }) {
-  if (params.recurrence === 'once') {
-    const nowD = lagosNow()
-    const today = lagosDateStr(nowD)
-    const nowTime = lagosTimeStr(nowD)
-    const isPastDate = params.dueDate < today
-    const isPastTimeToday = params.dueDate === today && !!params.dueTime && params.dueTime < nowTime
-    if (isPastDate || isPastTimeToday) {
-      throw new PastDueReminderError(
-        `Resolved date/time (${params.dueDate}${params.dueTime ? ' ' + params.dueTime : ''}) is already in the past.`
-      )
-    }
+  let schedule
+  try {
+    schedule = prepareReminder(params.dueDate, params.dueTime, params.recurrence, params.timezone || STORAGE_TIMEZONE)
+  } catch (error) {
+    throw new PastDueReminderError(error instanceof Error ? error.message : 'Invalid reminder date.')
   }
+  params = { ...params, dueDate: schedule.due_date, dueTime: schedule.due_time }
 
   // Upsert-by-intent: if an active reminder with the same title and date
   // already exists, update it instead of creating a duplicate. The AI can
@@ -66,7 +64,7 @@ export async function setReminder(params: {
     .eq('org_id', params.orgId)
     .eq('due_date', params.dueDate)
     .eq('status', 'active')
-    .ilike('title', params.title)
+    .eq('title', params.title)
     .maybeSingle()
 
   if (existing) {
@@ -82,7 +80,7 @@ export async function setReminder(params: {
       .select()
       .single()
     if (updErr) throw new Error(updErr.message)
-    return updated
+    return { ...updated, local_date: schedule.local_date, local_time: schedule.local_time, timezone: schedule.timezone }
   }
 
   const { data, error } = await supabase
@@ -107,7 +105,7 @@ export async function setReminder(params: {
     .single()
 
   if (error) throw new Error(error.message)
-  return data
+  return { ...data, local_date: schedule.local_date, local_time: schedule.local_time, timezone: schedule.timezone }
 }
 
 export async function getUpcomingReminders(orgId: string, daysAhead: number) {
@@ -131,7 +129,7 @@ export async function getUpcomingReminders(orgId: string, daysAhead: number) {
 }
 
 // ── Archive / Restore / Stop-recurring / Permanent delete / Edit ─────────
-// Shared by the web Reminders page and Tello/WhatsApp (action-executor.ts),
+// Shared by the web Reminders page and TrueFlow/WhatsApp (action-executor.ts),
 // so both surfaces stay behaviourally identical — see the notification-bell
 // build's precedent (notifications.ts) for the same "one function, two
 // callers" shape.
@@ -193,7 +191,7 @@ export async function stopRecurringReminderByTitle(orgId: string, title: string)
   const reminder = await findActiveReminderByTitle(orgId, title)
   if (!reminder) throw new ReminderNotFoundError(`No active reminder matching "${title}"`)
   if (reminder.recurrence === 'once') return reminder // nothing to stop
-  const { error } = await supabase.from('reminders').update({ recurrence: 'once' }).eq('id', reminder.id)
+  const { error } = await supabase.from('reminders').update({ recurrence: 'once', status: 'dismissed', archived_at: new Date().toISOString() }).eq('id', reminder.id)
   if (error) throw new Error(error.message)
   return reminder
 }
@@ -229,6 +227,13 @@ export async function editReminderByTitle(orgId: string, title: string, updates:
   if (updates.dueDate) patch.due_date = updates.dueDate
   if (updates.dueTime !== undefined) patch.due_time = updates.dueTime
   if (updates.recurrence) patch.recurrence = updates.recurrence
+  if (updates.dueDate || updates.dueTime !== undefined) {
+    try {
+      const schedule = prepareReminder(updates.dueDate || reminder.due_date, updates.dueTime || reminder.due_time || undefined, updates.recurrence || reminder.recurrence, STORAGE_TIMEZONE)
+      patch.due_date = schedule.due_date
+      patch.due_time = schedule.due_time
+    } catch (error) { throw new PastDueReminderError(error instanceof Error ? error.message : 'Invalid reminder date.') }
+  }
   const { data, error } = await supabase.from('reminders').update(patch).eq('id', reminder.id).select().single()
   if (error) throw new Error(error.message)
   return data
@@ -249,6 +254,7 @@ export async function fireDueReminders() {
   if (error) { console.error('fireDueReminders query failed:', error); return }
 
   for (const reminder of reminders || []) {
+    if(!(await futureProcessingAllowed(reminder.org_id,reminder.due_date+'T'+(reminder.due_time||DEFAULT_FIRE_TIME).slice(0,5)+':00+01:00')))continue;
     // Today's reminders wait until their time (or the default) has passed.
     // Past-date reminders are overdue — fire immediately.
     if (reminder.due_date === today) {
@@ -261,7 +267,10 @@ export async function fireDueReminders() {
     // The user explicitly dismissed this occurrence — still advance (or
     // terminate) it below, same as normal, but skip notifying about it.
     if (reminder.archived_at) {
-      const nextDate = getNextDate(reminder.due_date, reminder.recurrence)
+      let nextDate = getNextDate(reminder.due_date, reminder.recurrence)
+    while (nextDate !== reminder.due_date && (nextDate < today || (nextDate === today && (reminder.due_time || DEFAULT_FIRE_TIME).slice(0, 5) <= nowTime))) {
+      nextDate = getNextDate(nextDate, reminder.recurrence)
+    }
       if (nextDate !== reminder.due_date) {
         await supabase.from('reminders').update({ due_date: nextDate, archived_at: null }).eq('id', reminder.id)
       } else {
@@ -307,7 +316,10 @@ export async function fireDueReminders() {
     // archived_at is cleared on advance — archiving only ever hides the
     // occurrence that was due, not the series, so the next occurrence
     // should show up normally in the Active view again.
-    const nextDate = getNextDate(reminder.due_date, reminder.recurrence)
+    let nextDate = getNextDate(reminder.due_date, reminder.recurrence)
+    while (nextDate !== reminder.due_date && (nextDate < today || (nextDate === today && (reminder.due_time || DEFAULT_FIRE_TIME).slice(0, 5) <= nowTime))) {
+      nextDate = getNextDate(nextDate, reminder.recurrence)
+    }
     if (nextDate !== reminder.due_date) {
       await supabase.from('reminders').update({ due_date: nextDate, archived_at: null }).eq('id', reminder.id)
     } else {
@@ -330,6 +342,7 @@ export async function fireAdvanceReminders() {
     .is('archived_at', null)
 
   for (const reminder of reminders || []) {
+    if(!(await futureProcessingAllowed(reminder.org_id,reminder.due_date+'T'+(reminder.due_time||DEFAULT_FIRE_TIME).slice(0,5)+':00+01:00')))continue;
     const owner = reminder.organizations?.org_members?.find((m: any) => m.role === 'owner')
     if (!owner?.whatsapp_number) continue
 
@@ -351,12 +364,5 @@ export async function fireAdvanceReminders() {
 }
 
 function getNextDate(current: string, recurrence: string): string {
-  const date = new Date(current)
-  switch (recurrence) {
-    case 'daily':   date.setDate(date.getDate() + 1); break
-    case 'weekly':  date.setDate(date.getDate() + 7); break
-    case 'monthly': date.setMonth(date.getMonth() + 1); break
-    case 'yearly':  date.setFullYear(date.getFullYear() + 1); break
-  }
-  return date.toISOString().split('T')[0]
+  return nextReminderDate(current, recurrence)
 }

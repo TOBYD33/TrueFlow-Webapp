@@ -1,3 +1,4 @@
+import {futureProcessingAllowed} from './commercial'
 // daily-brief-service.ts
 // Feature 2: Daily Brief. Sends once per day, at a consistent LOCAL time
 // per user (default 7am, configurable via DAILY_BRIEF_LOCAL_HOUR), to
@@ -86,6 +87,7 @@ export async function runDailyBrief(): Promise<void> {
   if (error) { console.error('runDailyBrief: query failed:', error); return }
 
   for (const row of owners || []) {
+    if(!(await futureProcessingAllowed(row.org_id)))continue;
     const profile = (row as any).profiles
     const orgId = (row as any).org_id as string
     const whatsappNumber = (row as any).whatsapp_number as string | null

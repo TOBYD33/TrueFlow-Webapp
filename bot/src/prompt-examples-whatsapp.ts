@@ -1,7 +1,7 @@
 // prompt-examples-whatsapp.ts
 // WhatsApp-specific formatting on top of the shared prompt-examples.ts data:
 // the plain-text category menu, per-category example replies, and the
-// reactive-fallback reply for a message Tello couldn't understand.
+// reactive-fallback reply for a message TrueFlow couldn't understand.
 //
 // Native interactive list/button messages (Requirement 3.1) would need
 // Twilio Content API templates set up in the Twilio console first — FLAGGED,
@@ -74,7 +74,7 @@ export async function clearHelpMenu(phoneNumber: string): Promise<void> {
   await supabase.from('whatsapp_sessions').update({ setup_state: null }).eq('phone_number', phoneNumber)
 }
 
-// Requirement 2: reactive fallback when Tello can't map a message (typed
+// Requirement 2: reactive fallback when TrueFlow can't map a message (typed
 // or a voice transcript — both go through the exact same text pipeline,
 // see webhook.ts) to any known action.
 export function buildFallbackExamplesReply(messageText: string): string {

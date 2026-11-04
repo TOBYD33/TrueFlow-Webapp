@@ -1,3 +1,5 @@
+import {botClaim,pricingSummary} from './commercial'
+import {flowEnabled} from './flow-context'
 // ai-assistant.ts
 // Core conversational AI engine.
 // Every message — image or text — passes through Claude with full financial context.
@@ -20,7 +22,7 @@ business owners. You track both money going OUT (expenses) and money coming IN (
 
 WHAT YOU CAN DO:
 • Expense receipts — user sends a photo of a receipt and you log the expense
-• Client payments — user forwards a bank transfer screenshot and you log the income (Smart Transfer Recognition)
+• Payment screenshots require review; they do not verify bank receipt or automatically credit a balance.
 • Set budgets and reminders
 • Answer financial questions
 • Export spending reports as PDF
@@ -37,7 +39,7 @@ with no password needed — a "login"/"log in"/"web app"/"dashboard" request is
 handled automatically before you ever see this message, so you will not
 normally need to answer this yourself. If it ever does reach you, never say
 there's no login or that the web app doesn't exist — tell them to go to
-app.gettrueflow.com/login and sign in with this WhatsApp number to get a code.
+app.gettrueflow.com/login and use the currently available email sign-in method.
 
 YOUR PERSONALITY:
 - Warm and conversational — like a smart friend who happens to be an accountant
@@ -76,7 +78,7 @@ confirmations when a save silently fails.
 
 Available actions:
 ACTION:SET_BUDGET:{category}:{amount}
-ACTION:SET_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}:{HHMM}
+ACTION:SET_REMINDER:{title}:{YYYY-MM-DD}:{recurrence}:{HHMM}:{IANA_timezone}
   (YYYY-MM-DD — ALWAYS compute this from the CURRENT DATE AND TIME block
    given in your context below, never from memory, never from an example
    date shown anywhere in these instructions, and never left as a guess.
@@ -305,6 +307,7 @@ export async function getAIResponse(params: AIParams): Promise<{
   actions: string[]
 }> {
   const { phoneNumber, orgId, orgName, userName, userMessage, currency, plan, defaultTaxCountry, scannedReceipt, userPermissions } = params
+  await botClaim(orgId,'ai','assistant')
 
   // Role context block — tells the AI what this specific user is allowed to access
   const roleContext = userPermissions ? `
@@ -316,7 +319,7 @@ If the user asks about clients, income, or projects and canSeeClients is NO, pol
 ` : ''
 
   // Load conversation history (last 10 exchanges = 20 messages)
-  const history = await getConversationHistory(phoneNumber, 20)
+  const history = flowEnabled()?[]:await getConversationHistory(phoneNumber, 20)
 
   // Load financial context in parallel
   const [spending, budgets, reminders, allTaxRates, clients] = await Promise.all([
@@ -365,6 +368,7 @@ If the user asks about clients, income, or projects and canSeeClients is NO, pol
   const contextBlock = `
 [CURRENT DATE AND TIME — GROUND ALL DATE/TIME RESOLUTION ON THIS, NEVER GUESS OR COPY AN EXAMPLE DATE FROM YOUR INSTRUCTIONS]
 Right now it is ${dayName}, ${todayStr}, ${timeStr} (${userTimezone}).
+The phone-derived timezone is an initial suggestion, especially for multi-zone countries. Ask the user to confirm date, time, and timezone before saving. Append the confirmed IANA timezone after HHMM in SET_REMINDER.
 "today" = ${todayStr}
 "tomorrow" = ${tomorrowStr}
 "yesterday" = ${yesterdayStr}
@@ -472,7 +476,7 @@ ${defaultCountryEstimates.filter(Boolean).length > 0
   const response = await claude.messages.create({
     model: 'claude-opus-4-6',
     max_tokens: 500,
-    system: roleContext ? `${SYSTEM_PROMPT}\n\n${roleContext}` : SYSTEM_PROMPT,
+    system: pricingSummary()+"\n"+(roleContext ? `${SYSTEM_PROMPT}\n\n${roleContext}` : SYSTEM_PROMPT),
     messages
   })
 
@@ -497,18 +501,4 @@ ${defaultCountryEstimates.filter(Boolean).length > 0
   return { reply: cleanReply, actions }
 }
 
-export async function getWelcomeMessage(userName: string): Promise<string> {
-  const response = await claude.messages.create({
-    model: 'claude-opus-4-6',
-    max_tokens: 300,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `New user just joined TrueFlow. Their name/number is: ${userName}. Write a warm welcome message (3-4 lines max). Tell them they can scan receipts by sending a photo, set budgets, set reminders, and ask any financial question. Keep it WhatsApp-friendly with *bold* for key points.`
-      }
-    ]
-  })
-
-  return response.content[0].type === 'text' ? response.content[0].text : 'Welcome to TrueFlow! 👋'
-}
+export async function getWelcomeMessage(userName:string):Promise<string>{return `Hi ${userName.split(' ')[0]} 👋 Welcome to TrueFlow. You can record expenses, save budgets and reminders, and review your records in the web app. Your workspace trial and current service availability appear in your account.`}
